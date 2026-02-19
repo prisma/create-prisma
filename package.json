@@ -6,9 +6,9 @@
   "bin": {
     "create-prisma": "bin/create-prisma.js"
   },
-  "main": "./dist/cli.js",
+  "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/cli.js"
+    ".": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -21,11 +21,11 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "start": "node ./dist/cli.js",
+    "start": "node ./dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0"
+    "@clack/prompts": "^0.11.0",
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
