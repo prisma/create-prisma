@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "bun run build && bun publish --access public"
+    "release": "bun run build && npm publish --access public --provenance"
   },
   "dependencies": {
     "@clack/prompts": "^1.0.0",

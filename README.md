@@ -73,7 +73,7 @@ When `postgresql` is selected, `init` can provision Prisma Postgres via `create-
 - `bun run typecheck` - TypeScript checks only
 - `bun run changeset` - Create a changeset entry
 - `bun run version-packages` - Apply version/changelog updates from changesets
-- `bun run release` - Build and publish with `bun publish`
+- `bun run release` - Build and publish with `npm publish --provenance`
 
 ## Changelog Workflow
 
@@ -81,5 +81,5 @@ This repo uses Changesets and GitHub Actions:
 
 1. Create a changeset in your PR via `bun run changeset`.
 2. Merge to `main`.
-3. The `Changesets` workflow opens/updates a release PR with version and `CHANGELOG.md` updates.
-4. Merge the release PR to trigger automated publish via `bun publish`.
+3. The `Release` workflow opens/updates a release PR with version and `CHANGELOG.md` updates.
+4. Merge the release PR to trigger automated publish via npm trusted publishing (OIDC, no npm token secret).
