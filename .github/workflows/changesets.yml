@@ -4,13 +4,18 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: changesets-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  version:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -28,7 +33,11 @@ jobs:
         uses: changesets/action@v1
         with:
           version: bun run version-packages
+          publish: bun run release
           commit: "chore: version packages"
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+          BUN_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

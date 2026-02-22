@@ -8,4 +8,4 @@ This folder tracks release notes and version bumps for `create-prisma`.
    - `bun run changeset`
 2. Commit the generated markdown file.
 3. After merge to `main`, the Changesets GitHub Action opens or updates a release PR.
-4. Merging that PR updates `CHANGELOG.md` and package versions.
+4. Merging that PR updates `CHANGELOG.md` and package versions, then publishes with `bun publish`.

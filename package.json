@@ -1,7 +1,7 @@
 {
   "name": "create-prisma",
-  "version": "0.2.0",
-  "description": "Modern Bun-first CLI to scaffold Prisma setup with adapter-aware templates.",
+  "version": "0.1.0",
+  "description": "Modern Prisma init CLI with adapter-aware templates and great DX.",
   "private": false,
   "type": "module",
   "bin": {
@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "changeset publish"
+    "release": "bun run build && bun publish --access public"
   },
   "dependencies": {
     "@clack/prompts": "^1.0.0",

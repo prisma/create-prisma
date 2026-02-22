@@ -1,6 +1,6 @@
 # create-prisma
 
-A modern Bun-first CLI for Prisma 7 initialization with adapter-aware templates.
+A modern CLI for Prisma 7 initialization with adapter-aware templates.
 
 ## Stack
 
@@ -73,7 +73,7 @@ When `postgresql` is selected, `init` can provision Prisma Postgres via `create-
 - `bun run typecheck` - TypeScript checks only
 - `bun run changeset` - Create a changeset entry
 - `bun run version-packages` - Apply version/changelog updates from changesets
-- `bun run release` - Publish with Changesets
+- `bun run release` - Build and publish with `bun publish`
 
 ## Changelog Workflow
 
@@ -82,4 +82,4 @@ This repo uses Changesets and GitHub Actions:
 1. Create a changeset in your PR via `bun run changeset`.
 2. Merge to `main`.
 3. The `Changesets` workflow opens/updates a release PR with version and `CHANGELOG.md` updates.
-4. Merge that release PR to cut the next release metadata.
+4. Merge the release PR to trigger automated publish via `bun publish`.
