@@ -1,0 +1,44 @@
+import "dotenv/config";
+import { PrismaClient } from "./generated/client";
+{{#if usePgAdapter}}
+import { PrismaPg } from "@prisma/adapter-pg";
+{{/if}}
+{{#if useMariaDbAdapter}}
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+{{/if}}
+{{#if useSqliteAdapter}}
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+{{/if}}
+{{#if useMssqlAdapter}}
+import { PrismaMssql } from "@prisma/adapter-mssql";
+{{/if}}
+
+declare global {
+  var prisma: PrismaClient | undefined;
+}
+
+{{#if usePgAdapter}}
+const adapter = new PrismaPg({
+  connectionString: process.env.{{envVar}} ?? "",
+});
+{{/if}}
+{{#if useMariaDbAdapter}}
+const adapter = new PrismaMariaDb(process.env.{{envVar}} ?? "");
+{{/if}}
+{{#if useSqliteAdapter}}
+const adapter = new PrismaBetterSqlite3({
+  url: process.env.{{envVar}} ?? "file:./dev.db",
+});
+{{/if}}
+{{#if useMssqlAdapter}}
+const adapter = new PrismaMssql(process.env.{{envVar}} ?? "");
+{{/if}}
+
+const prisma = globalThis.prisma ?? new PrismaClient({ adapter });
+
+if (process.env.NODE_ENV !== "production") {
+  globalThis.prisma = prisma;
+}
+
+export { prisma };
+export default prisma;
