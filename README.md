@@ -32,6 +32,12 @@ Or set package manager non-interactively:
 create-prisma init --package-manager pnpm --install
 ```
 
+Run fully non-interactive with defaults:
+
+```bash
+create-prisma init --yes
+```
+
 Use Prisma Postgres auto-provisioning for PostgreSQL:
 
 ```bash
@@ -56,6 +62,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 Supported providers in this flow: `postgresql`, `mysql`, `sqlite`, `sqlserver`, `cockroachdb`.
 Supported package managers: `bun`, `pnpm`, `npm`.
 Package manager prompt auto-detects from `package.json`/lockfiles/user agent and uses that as the initial selection.
+`--yes` accepts defaults (`postgresql`, detected package manager, Prisma Postgres enabled for PostgreSQL, install enabled) and skips prompts.
 When `postgresql` is selected, `init` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
 
 ## Scripts

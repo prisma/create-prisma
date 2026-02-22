@@ -15,9 +15,8 @@ import {
   writePrismaDependencies,
 } from "../tasks/install";
 import {
-  getCreateDbCommandString,
+  getCreateDbCommand,
   provisionPrismaPostgres,
-  type PrismaPostgresResult,
 } from "../tasks/prisma-postgres";
 import {
   DatabaseProviderSchema,
@@ -30,12 +29,17 @@ import {
 import {
   detectPackageManager,
   getInstallCommand,
+  getPrismaCliCommand,
 } from "../utils/package-manager";
+
+const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
+const DEFAULT_PRISMA_POSTGRES = true;
+const DEFAULT_INSTALL = true;
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
   const databaseProvider = await select({
     message: "Select your database",
-    initialValue: "postgresql",
+    initialValue: DEFAULT_DATABASE_PROVIDER,
     options: [
       { value: "postgresql", label: "PostgreSQL", hint: "Default" },
       { value: "mysql", label: "MySQL" },
@@ -51,18 +55,6 @@ async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined
   }
 
   return DatabaseProviderSchema.parse(databaseProvider);
-}
-
-function getPrismaCommand(packageManager: PackageManager, args: string): string {
-  switch (packageManager) {
-    case "pnpm":
-      return `pnpm dlx prisma ${args}`;
-    case "bun":
-      return `bunx --bun prisma ${args}`;
-    case "npm":
-    default:
-      return `npx prisma ${args}`;
-  }
 }
 
 function getPackageManagerHint(
@@ -130,8 +122,7 @@ async function promptForDependencyInstall(
   return Boolean(shouldInstall);
 }
 
-async function promptForPrismaPostgres(
-): Promise<boolean | undefined> {
+async function promptForPrismaPostgres(): Promise<boolean | undefined> {
   const shouldUsePrismaPostgres = await confirm({
     message:
       "Use Prisma Postgres and auto-generate DATABASE_URL with create-db?",
@@ -186,22 +177,27 @@ function formatCreatedPath(filePath: string): string {
 
 export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<void> {
   const input = InitCommandInputSchema.parse(rawInput);
+  const useDefaults = input.yes === true;
 
   intro("Create Prisma");
 
-  const databaseProvider = input.provider ?? (await promptForDatabaseProvider());
+  const databaseProvider =
+    input.provider ??
+    (useDefaults ? DEFAULT_DATABASE_PROVIDER : await promptForDatabaseProvider());
   if (!databaseProvider) {
     return;
   }
 
   let databaseUrl = input.databaseUrl;
   let shouldUsePrismaPostgres = false;
-  let prismaPostgresResult: PrismaPostgresResult | undefined;
+  let claimUrl: string | undefined;
+  let deletionDate: string | undefined;
   let prismaPostgresWarning: string | undefined;
 
   if (databaseProvider === "postgresql" && !databaseUrl) {
     const prismaPostgresChoice =
-      input.prismaPostgres ?? (await promptForPrismaPostgres());
+      input.prismaPostgres ??
+      (useDefaults ? DEFAULT_PRISMA_POSTGRES : await promptForPrismaPostgres());
     if (prismaPostgresChoice === undefined) {
       return;
     }
@@ -209,24 +205,30 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
     shouldUsePrismaPostgres = prismaPostgresChoice;
   }
 
-  const packageManager =
+  const detectedPackageManager = await detectPackageManager();
+  const finalPackageManager =
     input.packageManager ??
-    (await promptForPackageManager(await detectPackageManager()));
-  if (!packageManager) {
+    (useDefaults
+      ? detectedPackageManager
+      : await promptForPackageManager(detectedPackageManager));
+  if (!finalPackageManager) {
     return;
   }
-  const installCommand = getInstallCommand(packageManager);
+  const installCommand = getInstallCommand(finalPackageManager);
 
   if (shouldUsePrismaPostgres) {
-    const createDbCommand = getCreateDbCommandString(packageManager);
+    const createDbCommand = getCreateDbCommand(finalPackageManager);
     const prismaPostgresSpinner = spinner();
     prismaPostgresSpinner.start(
       `Provisioning Prisma Postgres with ${createDbCommand}...`
     );
 
     try {
-      prismaPostgresResult = await provisionPrismaPostgres(packageManager);
+      const prismaPostgresResult =
+        await provisionPrismaPostgres(finalPackageManager);
       databaseUrl = prismaPostgresResult.databaseUrl;
+      claimUrl = prismaPostgresResult.claimUrl;
+      deletionDate = prismaPostgresResult.deletionDate;
       prismaPostgresSpinner.stop("Prisma Postgres database provisioned.");
     } catch (error) {
       const errorMessage =
@@ -234,8 +236,9 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
       prismaPostgresSpinner.stop("Could not provision Prisma Postgres.");
       prismaPostgresWarning = `Prisma Postgres provisioning failed: ${errorMessage}`;
 
-      const shouldContinue =
-        await promptContinueWithDefaultPostgresUrl();
+      const shouldContinue = useDefaults
+        ? true
+        : await promptContinueWithDefaultPostgresUrl();
       if (shouldContinue === undefined) {
         return;
       }
@@ -253,18 +256,19 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
   dependencySpinner.stop("Updated package.json.");
 
   const shouldInstall =
-    input.install ?? (await promptForDependencyInstall(packageManager));
+    input.install ??
+    (useDefaults
+      ? DEFAULT_INSTALL
+      : await promptForDependencyInstall(finalPackageManager));
   if (shouldInstall === undefined) {
     return;
   }
 
-  let installStatus = `Skipped ${installCommand}.`;
   if (shouldInstall) {
     const installSpinner = spinner();
     installSpinner.start(`Running ${installCommand}...`);
-    await installProjectDependencies(packageManager);
+    await installProjectDependencies(finalPackageManager);
     installSpinner.stop("Dependencies installed.");
-    installStatus = `Installed dependencies with ${installCommand}.`;
   }
 
   const initSpinner = spinner();
@@ -272,7 +276,7 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
   const initResult = await initializePrismaFiles({
     provider: databaseProvider,
     databaseUrl,
-    claimUrl: prismaPostgresResult?.claimUrl,
+    claimUrl,
   });
   initSpinner.stop("Prisma files ready.");
 
@@ -293,18 +297,18 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
     );
   }
   if (!shouldInstall) {
-    summaryLines.push(`- ${installStatus}`);
+    summaryLines.push(`- Skipped ${installCommand}.`);
   }
 
   const postgresLines: string[] = [];
-  if (prismaPostgresResult) {
+  if (shouldUsePrismaPostgres && !prismaPostgresWarning) {
     postgresLines.push("- Prisma Postgres: provisioned with create-db");
-    if (prismaPostgresResult.claimUrl) {
+    if (claimUrl) {
       postgresLines.push("- Claim URL saved to CLAIM_URL in .env");
     }
-    if (prismaPostgresResult.deletionDate) {
+    if (deletionDate) {
       postgresLines.push(
-        `- Auto-delete (if unclaimed): ${prismaPostgresResult.deletionDate}`
+        `- Auto-delete (if unclaimed): ${deletionDate}`
       );
     }
   } else if (prismaPostgresWarning) {
@@ -315,8 +319,10 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
   if (!shouldInstall) {
     nextSteps.push(`- ${installCommand}`);
   }
-  nextSteps.push(`- ${getPrismaCommand(packageManager, "generate")}`);
-  nextSteps.push(`- ${getPrismaCommand(packageManager, "migrate dev")}`);
+  nextSteps.push(`- ${getPrismaCliCommand(finalPackageManager, ["generate"])}`);
+  nextSteps.push(
+    `- ${getPrismaCliCommand(finalPackageManager, ["migrate", "dev"])}`
+  );
 
   outro(`Setup complete.
 ${summaryLines.join("\n")}

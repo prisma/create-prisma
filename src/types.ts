@@ -21,6 +21,10 @@ export const DatabaseUrlSchema = z
   .min(1, "Please enter a valid database URL");
 
 export const InitCommandInputSchema = z.object({
+  yes: z
+    .boolean()
+    .optional()
+    .describe("Skip prompts and accept default choices"),
   provider: DatabaseProviderSchema.optional().describe("Database provider"),
   packageManager: PackageManagerSchema.optional().describe(
     "Package manager used for dependency installation"

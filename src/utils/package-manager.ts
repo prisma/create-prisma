@@ -6,6 +6,11 @@ import {
   type PackageManager,
 } from "../types";
 
+type CommandAndArgs = {
+  command: string;
+  args: string[];
+};
+
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
   if (userAgent?.startsWith("pnpm")) {
     return "pnpm";
@@ -93,9 +98,63 @@ export function getInstallCommand(packageManager: PackageManager): string {
 
 export function getInstallArgs(
   packageManager: PackageManager
-): { command: string; args: string[] } {
+): CommandAndArgs {
   return {
     command: packageManager,
     args: ["install"],
   };
+}
+
+function getPackageExecutor(packageManager: PackageManager): CommandAndArgs {
+  switch (packageManager) {
+    case "pnpm":
+      return { command: "pnpm", args: ["dlx"] };
+    case "bun":
+      return { command: "bunx", args: [] };
+    case "npm":
+    default:
+      return { command: "npx", args: [] };
+  }
+}
+
+export function getPackageExecutionArgs(
+  packageManager: PackageManager,
+  commandArgs: string[]
+): CommandAndArgs {
+  const executor = getPackageExecutor(packageManager);
+  return {
+    command: executor.command,
+    args: [...executor.args, ...commandArgs],
+  };
+}
+
+export function getPackageExecutionCommand(
+  packageManager: PackageManager,
+  commandArgs: string[]
+): string {
+  const execution = getPackageExecutionArgs(packageManager, commandArgs);
+  return [execution.command, ...execution.args].join(" ");
+}
+
+function getPrismaCliArgs(
+  packageManager: PackageManager,
+  prismaArgs: string[]
+): CommandAndArgs {
+  if (packageManager === "bun") {
+    return getPackageExecutionArgs(packageManager, [
+      "--bun",
+      "prisma",
+      ...prismaArgs,
+    ]);
+  }
+
+  return getPackageExecutionArgs(packageManager, ["prisma", ...prismaArgs]);
+}
+
+export function getPrismaCliCommand(
+  packageManager: PackageManager,
+  prismaArgs: string[]
+): string {
+  const execution = getPrismaCliArgs(packageManager, prismaArgs);
+  return [execution.command, ...execution.args].join(" ");
 }

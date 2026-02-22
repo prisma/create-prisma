@@ -1,6 +1,10 @@
 import { execa } from "execa";
 
 import type { PackageManager } from "../types";
+import {
+  getPackageExecutionArgs,
+  getPackageExecutionCommand,
+} from "../utils/package-manager";
 
 type CreateDbJsonPayload = {
   success?: boolean;
@@ -12,34 +16,14 @@ type CreateDbJsonPayload = {
   claimURL?: string;
   deletionDate?: string;
   deletionAt?: string;
-  region?: string;
-  name?: string;
-  projectId?: string;
-  projectID?: string;
 };
 
-export type PrismaPostgresResult = {
+type PrismaPostgresResult = {
   databaseUrl: string;
   claimUrl?: string;
   deletionDate?: string;
-  region?: string;
-  name?: string;
-  projectId?: string;
 };
-
-function getCreateDbCommandArgs(
-  packageManager: PackageManager
-): { command: string; args: string[] } {
-  switch (packageManager) {
-    case "pnpm":
-      return { command: "pnpm", args: ["dlx", "create-db@latest", "--json"] };
-    case "bun":
-      return { command: "bunx", args: ["create-db@latest", "--json"] };
-    case "npm":
-    default:
-      return { command: "npx", args: ["create-db@latest", "--json"] };
-  }
-}
+const CREATE_DB_COMMAND_ARGS = ["create-db@latest", "--json"] as const;
 
 function parseCreateDbJson(rawOutput: string): CreateDbJsonPayload {
   const trimmed = rawOutput.trim();
@@ -92,16 +76,14 @@ function extractErrorMessage(
   return fallback;
 }
 
-export function getCreateDbCommandString(packageManager: PackageManager): string {
-  const command = getCreateDbCommandArgs(packageManager);
-  return [command.command, ...command.args].join(" ");
-}
-
 export async function provisionPrismaPostgres(
   packageManager: PackageManager,
   projectDir = process.cwd()
 ): Promise<PrismaPostgresResult> {
-  const command = getCreateDbCommandArgs(packageManager);
+  const command = getPackageExecutionArgs(packageManager, [
+    ...CREATE_DB_COMMAND_ARGS,
+  ]);
+  const commandString = getCreateDbCommand(packageManager);
 
   let stdout: string;
   try {
@@ -114,7 +96,7 @@ export async function provisionPrismaPostgres(
     if (error instanceof Error && "stderr" in error) {
       const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
       const message = stderr.length > 0 ? stderr : error.message;
-      throw new Error(`Failed to run ${getCreateDbCommandString(packageManager)}: ${message}`);
+      throw new Error(`Failed to run ${commandString}: ${message}`);
     }
 
     throw error;
@@ -144,24 +126,13 @@ export async function provisionPrismaPostgres(
         ? payload.deletionAt
         : undefined;
 
-  const projectId =
-    typeof payload.projectId === "string" && payload.projectId.length > 0
-      ? payload.projectId
-      : typeof payload.projectID === "string" && payload.projectID.length > 0
-        ? payload.projectID
-        : undefined;
-
-  const name =
-    typeof payload.name === "string" && payload.name.length > 0
-      ? payload.name
-      : undefined;
-
   return {
     databaseUrl,
     claimUrl,
     deletionDate,
-    region: payload.region,
-    name,
-    projectId,
   };
+}
+
+export function getCreateDbCommand(packageManager: PackageManager): string {
+  return getPackageExecutionCommand(packageManager, [...CREATE_DB_COMMAND_ARGS]);
 }
