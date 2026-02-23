@@ -30,7 +30,6 @@ import {
   DatabaseProviderSchema,
   InitCommandInputSchema,
   PackageManagerSchema,
-  SchemaPresetSchema,
   type DatabaseProvider,
   type InitCommandInput,
   type PackageManager,
@@ -217,34 +216,6 @@ async function promptForPrismaFilesMode(
   return mode;
 }
 
-async function promptForSchemaPreset(
-  defaultSchemaPreset: SchemaPreset
-): Promise<SchemaPreset | undefined> {
-  const schemaPreset = await select({
-    message: "Choose schema preset",
-    initialValue: defaultSchemaPreset,
-    options: [
-      {
-        value: "empty",
-        label: "Empty",
-        hint: "Datasource only",
-      },
-      {
-        value: "basic",
-        label: "Basic",
-        hint: "Adds a User model",
-      },
-    ],
-  });
-
-  if (isCancel(schemaPreset)) {
-    cancel("Cancelled.");
-    return undefined;
-  }
-
-  return SchemaPresetSchema.parse(schemaPreset);
-}
-
 function formatEnvStatus(
   status: "created" | "appended" | "existing" | "updated",
   envPath: string,
@@ -353,13 +324,7 @@ export async function runInitCommand(
   }
 
   const schemaPreset =
-    input.schemaPreset ??
-    (useDefaults
-      ? DEFAULT_SCHEMA_PRESET
-      : await promptForSchemaPreset(DEFAULT_SCHEMA_PRESET));
-  if (!schemaPreset) {
-    return;
-  }
+    input.schemaPreset ?? DEFAULT_SCHEMA_PRESET;
 
   let databaseUrl = input.databaseUrl;
   let shouldUsePrismaPostgres = false;

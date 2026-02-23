@@ -1,6 +1,5 @@
 import {
   cancel,
-  intro,
   isCancel,
   log,
   select,
@@ -14,7 +13,6 @@ import { scaffoldCreateTemplate } from "../templates/render-create-template";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
-  SchemaPresetSchema,
   type CreateCommandInput,
   type CreateTemplate,
   type InitCommandInput,
@@ -82,34 +80,6 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
   return CreateTemplateSchema.parse(template);
 }
 
-async function promptForSchemaPreset(
-  defaultSchemaPreset: SchemaPreset
-): Promise<SchemaPreset | undefined> {
-  const schemaPreset = await select({
-    message: "Choose schema preset",
-    initialValue: defaultSchemaPreset,
-    options: [
-      {
-        value: "basic",
-        label: "Basic",
-        hint: "Adds a User model and sample /users route",
-      },
-      {
-        value: "empty",
-        label: "Empty",
-        hint: "Datasource only",
-      },
-    ],
-  });
-
-  if (isCancel(schemaPreset)) {
-    cancel("Cancelled.");
-    return undefined;
-  }
-
-  return SchemaPresetSchema.parse(schemaPreset);
-}
-
 async function isDirectoryEmpty(directoryPath: string): Promise<boolean> {
   if (!(await fs.pathExists(directoryPath))) {
     return true;
@@ -138,13 +108,7 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
   }
 
   const schemaPreset =
-    input.schemaPreset ??
-    (useDefaults
-      ? DEFAULT_SCHEMA_PRESET
-      : await promptForSchemaPreset(DEFAULT_SCHEMA_PRESET));
-  if (!schemaPreset) {
-    return;
-  }
+    input.schemaPreset ?? DEFAULT_SCHEMA_PRESET;
 
   const targetDirectory = path.resolve(process.cwd(), projectName);
   const targetExists = await fs.pathExists(targetDirectory);
@@ -157,8 +121,6 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     );
     return;
   }
-
-  intro("Create Prisma");
 
   const scaffoldSpinner = spinner();
   scaffoldSpinner.start(`Scaffolding ${template} project...`);
