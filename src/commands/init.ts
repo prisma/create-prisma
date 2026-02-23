@@ -165,10 +165,11 @@ async function promptContinueWithDefaultPostgresUrl(): Promise<boolean | undefin
 
 async function promptForPrismaFilesMode(
   existingFiles: string[],
-  canReuseExistingPrismaFiles: boolean
+  canReuseExistingPrismaFiles: boolean,
+  baseDir: string
 ): Promise<PrismaFilesMode | undefined> {
   const existingFileList = existingFiles
-    .map((filePath) => formatCreatedPath(filePath))
+    .map((filePath) => formatCreatedPath(filePath, baseDir))
     .join(", ");
 
   const mode = await select({
@@ -219,9 +220,10 @@ async function promptForPrismaFilesMode(
 function formatEnvStatus(
   status: "created" | "appended" | "existing" | "updated",
   envPath: string,
-  envVarName: string
+  envVarName: string,
+  baseDir: string
 ): string {
-  const relativeEnvPath = path.relative(process.cwd(), envPath) || ".env";
+  const relativeEnvPath = path.relative(baseDir, envPath) || ".env";
   switch (status) {
     case "created":
       return `Created ${relativeEnvPath} with ${envVarName}`;
@@ -238,9 +240,10 @@ function formatEnvStatus(
 
 function formatGitignoreStatus(
   status: "created" | "appended" | "existing",
-  gitignorePath: string
+  gitignorePath: string,
+  baseDir: string
 ): string {
-  const relativePath = path.relative(process.cwd(), gitignorePath) || ".gitignore";
+  const relativePath = path.relative(baseDir, gitignorePath) || ".gitignore";
   switch (status) {
     case "created":
       return `Created ${relativePath} with prisma/generated`;
@@ -253,8 +256,8 @@ function formatGitignoreStatus(
   }
 }
 
-function formatCreatedPath(filePath: string): string {
-  return path.relative(process.cwd(), filePath);
+function formatCreatedPath(filePath: string, baseDir: string): string {
+  return path.relative(baseDir, filePath);
 }
 
 function formatFileAction(action: PrismaFilesMode): "Created" | "Wrote" | "Kept existing" {
@@ -287,8 +290,11 @@ export async function runInitCommand(
   rawInput: InitCommandInput = {},
   options: {
     skipIntro?: boolean;
+    prependNextSteps?: string[];
+    projectDir?: string;
   } = {}
 ): Promise<void> {
+  const projectDir = path.resolve(options.projectDir ?? process.cwd());
   const input = InitCommandInputSchema.parse(rawInput);
   const useDefaults = input.yes === true;
   const verbose = input.verbose === true;
@@ -299,15 +305,16 @@ export async function runInitCommand(
   }
 
   let prismaFilesMode: PrismaFilesMode = "create";
-  const existingPrismaFiles = findExistingPrismaFiles(process.cwd());
-  const canReuseExistingPrismaFiles = canReusePrismaFiles(process.cwd());
+  const existingPrismaFiles = findExistingPrismaFiles(projectDir);
+  const canReuseExistingPrismaFiles = canReusePrismaFiles(projectDir);
   if (existingPrismaFiles.length > 0) {
     if (useDefaults) {
       prismaFilesMode = canReuseExistingPrismaFiles ? "reuse" : "overwrite";
     } else {
       const selectedMode = await promptForPrismaFilesMode(
         existingPrismaFiles,
-        canReuseExistingPrismaFiles
+        canReuseExistingPrismaFiles,
+        projectDir
       );
       if (!selectedMode) {
         return;
@@ -343,7 +350,7 @@ export async function runInitCommand(
     shouldUsePrismaPostgres = prismaPostgresChoice;
   }
 
-  const detectedPackageManager = await detectPackageManager();
+  const detectedPackageManager = await detectPackageManager(projectDir);
   const finalPackageManager =
     input.packageManager ??
     (useDefaults
@@ -388,7 +395,7 @@ export async function runInitCommand(
     }
   }
 
-  await writePrismaDependencies(databaseProvider);
+  await writePrismaDependencies(databaseProvider, projectDir);
 
   const shouldInstall =
     input.install ??
@@ -403,7 +410,7 @@ export async function runInitCommand(
     if (verbose) {
       log.step(`Running ${installCommand}`);
       try {
-        await installProjectDependencies(finalPackageManager, process.cwd(), {
+        await installProjectDependencies(finalPackageManager, projectDir, {
           verbose,
         });
         log.success("Dependencies installed.");
@@ -415,7 +422,7 @@ export async function runInitCommand(
       const installSpinner = spinner();
       installSpinner.start(`Running ${installCommand}...`);
       try {
-        await installProjectDependencies(finalPackageManager, process.cwd(), {
+        await installProjectDependencies(finalPackageManager, projectDir, {
           verbose,
         });
         installSpinner.stop("Dependencies installed.");
@@ -437,6 +444,7 @@ export async function runInitCommand(
       claimUrl,
       schemaPreset,
       prismaFilesMode,
+      projectDir,
     });
   } catch (error) {
     initSpinner.stop("Could not prepare Prisma files.");
@@ -466,7 +474,7 @@ export async function runInitCommand(
     try {
       const generateArgs = getPrismaCliArgs(finalPackageManager, ["generate"]);
       await execa(generateArgs.command, generateArgs.args, {
-        cwd: process.cwd(),
+        cwd: projectDir,
         stdio: verbose ? "inherit" : "pipe",
       });
       didGenerateClient = true;
@@ -487,24 +495,24 @@ export async function runInitCommand(
 
   const fileActionLabel = formatFileAction(initResult.prismaFilesMode);
   const summaryLines: string[] = [
-    `- ${fileActionLabel} ${formatCreatedPath(initResult.schemaPath)}`,
-    `- ${fileActionLabel} ${formatCreatedPath(initResult.configPath)}`,
-    `- ${fileActionLabel} ${formatCreatedPath(initResult.singletonPath)}`,
+    `- ${fileActionLabel} ${formatCreatedPath(initResult.schemaPath, projectDir)}`,
+    `- ${fileActionLabel} ${formatCreatedPath(initResult.configPath, projectDir)}`,
+    `- ${fileActionLabel} ${formatCreatedPath(initResult.singletonPath, projectDir)}`,
   ];
 
   if (initResult.envStatus !== "existing") {
     summaryLines.push(
-      `- ${formatEnvStatus(initResult.envStatus, initResult.envPath, "DATABASE_URL")}`
+      `- ${formatEnvStatus(initResult.envStatus, initResult.envPath, "DATABASE_URL", projectDir)}`
     );
   }
   if (initResult.claimEnvStatus) {
     summaryLines.push(
-      `- ${formatEnvStatus(initResult.claimEnvStatus, initResult.envPath, "CLAIM_URL")}`
+      `- ${formatEnvStatus(initResult.claimEnvStatus, initResult.envPath, "CLAIM_URL", projectDir)}`
     );
   }
   if (initResult.gitignoreStatus !== "existing") {
     summaryLines.push(
-      `- ${formatGitignoreStatus(initResult.gitignoreStatus, initResult.gitignorePath)}`
+      `- ${formatGitignoreStatus(initResult.gitignoreStatus, initResult.gitignorePath, projectDir)}`
     );
   }
   if (!shouldInstall) {
@@ -513,18 +521,11 @@ export async function runInitCommand(
   if (!shouldGenerate) {
     summaryLines.push("- Skipped Prisma Client generation.");
   }
-  summaryLines.push(`- Schema preset: ${schemaPreset}`);
 
   const postgresLines: string[] = [];
   if (shouldUsePrismaPostgres && !prismaPostgresWarning) {
-    postgresLines.push("- Prisma Postgres: provisioned with create-db");
-    if (claimUrl) {
-      postgresLines.push("- Claim URL saved to CLAIM_URL in .env");
-    }
     if (deletionDate) {
-      postgresLines.push(
-        `- Auto-delete (if unclaimed): ${deletionDate}`
-      );
+      postgresLines.push(`- Prisma Postgres auto-delete (if unclaimed): ${deletionDate}`);
     }
   } else if (prismaPostgresWarning) {
     postgresLines.push(`- ${prismaPostgresWarning}`);
@@ -533,7 +534,7 @@ export async function runInitCommand(
     postgresLines.push(`- ${generateWarning}`);
   }
 
-  const nextSteps: string[] = [];
+  const nextSteps: string[] = [...(options.prependNextSteps ?? [])];
   if (!shouldInstall) {
     nextSteps.push(`- ${installCommand}`);
   }

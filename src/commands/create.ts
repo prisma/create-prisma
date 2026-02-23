@@ -156,23 +156,10 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     schemaPreset,
   };
 
-  const previousDirectory = process.cwd();
-  process.chdir(targetDirectory);
-  try {
-    await runInitCommand(initInput, {
-      skipIntro: true,
-    });
-  } finally {
-    process.chdir(previousDirectory);
-  }
-
-  const didWritePrismaSchema = await fs.pathExists(
-    path.join(targetDirectory, "prisma/schema.prisma")
-  );
-  if (!didWritePrismaSchema) {
-    return;
-  }
-
-  log.info(`Project ready in ${formatPathForDisplay(targetDirectory)}.`);
-  log.info(`Run: cd ${formatPathForDisplay(targetDirectory)}`);
+  const cdStep = `- cd ${formatPathForDisplay(targetDirectory)}`;
+  await runInitCommand(initInput, {
+    skipIntro: true,
+    prependNextSteps: [cdStep],
+    projectDir: targetDirectory,
+  });
 }
