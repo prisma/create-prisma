@@ -2,6 +2,14 @@
   "name": "create-prisma",
   "version": "0.1.2",
   "description": "Create and initialize Prisma 7 projects with first-party templates and great DX.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/create-prisma"
+  },
+  "homepage": "https://github.com/prisma/create-prisma",
+  "bugs": {
+    "url": "https://github.com/prisma/create-prisma/issues"
+  },
   "private": false,
   "type": "module",
   "bin": {
