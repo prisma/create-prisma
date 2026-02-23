@@ -61,6 +61,42 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Setup Node.js
+        if: steps.check-version.outputs.exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Ensure npm version for trusted publishing
+        if: steps.check-version.outputs.exists == 'false'
+        run: |
+          npm install -g npm@11.5.1
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+
+      - name: Setup Bun
+        if: steps.check-version.outputs.exists == 'false'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun run typecheck
+
+      - name: Build
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun run build
+
+      - name: Publish to npm
+        if: steps.check-version.outputs.exists == 'false'
+        run: npm publish --access public
+
       - name: Create and push git tag
         if: steps.check-version.outputs.exists == 'false'
         run: |
@@ -74,23 +110,6 @@ jobs:
             echo "Tag v$VERSION already exists, skipping"
           fi
 
-      - name: Setup Node.js
-        if: steps.check-version.outputs.exists == 'false'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.14.0"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Setup Bun
-        if: steps.check-version.outputs.exists == 'false'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        if: steps.check-version.outputs.exists == 'false'
-        run: bun install --frozen-lockfile
-
       - name: Create GitHub Release
         if: steps.check-version.outputs.exists == 'false'
         run: |
@@ -102,18 +121,6 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Typecheck
-        if: steps.check-version.outputs.exists == 'false'
-        run: bun run typecheck
-
-      - name: Build
-        if: steps.check-version.outputs.exists == 'false'
-        run: bun run build
-
-      - name: Publish to npm
-        if: steps.check-version.outputs.exists == 'false'
-        run: npm publish --access public
 
       - name: Release summary
         if: steps.check-version.outputs.exists == 'false'
