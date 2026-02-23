@@ -1,4 +1,4 @@
-name: Release
+name: Publish
 
 on:
   push:
@@ -12,11 +12,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: changesets-${{ github.ref }}
+  group: publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Create release PR
+      - name: Create publish PR
         uses: changesets/action@v1
         with:
           version: bun run version-packages
