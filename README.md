@@ -17,7 +17,7 @@ A modern Prisma 7 CLI with first-party project templates and great init DX.
 Run directly with Bun:
 
 ```bash
-bunx @prisma/create-prisma@latest
+bunx create-prisma@latest
 ```
 
 Create a new project (default command):
@@ -114,7 +114,7 @@ When `postgresql` is selected, `init` can provision Prisma Postgres via `create-
 - `bun run typecheck` - TypeScript checks only
 - `bun run changeset` - Create a changeset entry
 - `bun run version-packages` - Apply version/changelog updates from changesets
-- `bun run release` - Build and publish with `npm publish --provenance`
+- `bun run release` - Build and publish with `npm publish`
 
 ## Changelog Workflow
 
@@ -122,5 +122,5 @@ This repo uses Changesets and GitHub Actions:
 
 1. Create a changeset in your PR via `bun run changeset`.
 2. Merge to `main`.
-3. The `Release` workflow opens/updates a release PR with version and `CHANGELOG.md` updates.
+3. The `Publish` workflow opens/updates a release PR with version and `CHANGELOG.md` updates.
 4. Merge the release PR to trigger automated publish via npm trusted publishing (OIDC, no npm token secret).
