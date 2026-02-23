@@ -1,0 +1,34 @@
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+{{#if useBasicSchema}}
+import { prisma } from "../prisma";
+{{/if}}
+
+const app = new Hono();
+
+app.get("/", (c) => {
+  return c.json({
+    message: "hello from create-prisma + hono",
+  });
+});
+{{#if useBasicSchema}}
+
+app.get("/users", async (c) => {
+  const users = await prisma.user.findMany({
+    take: 10,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return c.json(users);
+});
+{{/if}}
+
+const port = 3000;
+serve({
+  fetch: app.fetch,
+  port,
+});
+
+console.log(`Server running at http://localhost:${port}`);
