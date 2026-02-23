@@ -2,15 +2,17 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import { scaffoldInitTemplates } from "../templates/render-init-templates";
-import type { DatabaseProvider } from "../types";
+import type { DatabaseProvider, SchemaPreset } from "../types";
 
 export type EnvStatus = "created" | "appended" | "existing" | "updated";
 type EnvWriteMode = "keep-existing" | "upsert";
+type FileAppendStatus = "created" | "appended" | "existing";
 
 export type InitPrismaOptions = {
   provider: DatabaseProvider;
   databaseUrl?: string;
   claimUrl?: string;
+  schemaPreset?: SchemaPreset;
   prismaFilesMode?: PrismaFilesMode;
   projectDir?: string;
 };
@@ -36,6 +38,8 @@ export type InitPrismaResult = {
   prismaFilesMode: PrismaFilesMode;
   envPath: string;
   envStatus: EnvStatus;
+  gitignorePath: string;
+  gitignoreStatus: FileAppendStatus;
   claimEnvStatus?: EnvStatus;
 };
 
@@ -138,6 +142,35 @@ async function ensureEnvVarInEnv(
   return { envPath, status: "appended" };
 }
 
+function hasGitignoreEntry(content: string, entry: string): boolean {
+  const escapedEntry = escapeRegExp(entry);
+  const escapedWithLeadingSlash = escapeRegExp(`/${entry}`);
+  return new RegExp(
+    `(^|\\n)\\s*(?:${escapedEntry}|${escapedWithLeadingSlash})\\s*(?=\\n|$)`
+  ).test(content);
+}
+
+async function ensureGitignoreEntry(
+  projectDir: string,
+  entry: string
+): Promise<{ gitignorePath: string; status: FileAppendStatus }> {
+  const gitignorePath = path.join(projectDir, ".gitignore");
+
+  if (!(await fs.pathExists(gitignorePath))) {
+    await fs.writeFile(gitignorePath, `${entry}\n`, "utf8");
+    return { gitignorePath, status: "created" };
+  }
+
+  const existingContent = await fs.readFile(gitignorePath, "utf8");
+  if (hasGitignoreEntry(existingContent, entry)) {
+    return { gitignorePath, status: "existing" };
+  }
+
+  const separator = existingContent.endsWith("\n") ? "" : "\n";
+  await fs.appendFile(gitignorePath, `${separator}${entry}\n`, "utf8");
+  return { gitignorePath, status: "appended" };
+}
+
 export async function initializePrismaFiles(
   options: InitPrismaOptions
 ): Promise<InitPrismaResult> {
@@ -165,7 +198,12 @@ export async function initializePrismaFiles(
   const singletonPath = path.join(projectDir, "prisma/index.ts");
 
   if (prismaFilesMode !== "reuse") {
-    await scaffoldInitTemplates(projectDir, options.provider);
+    await scaffoldInitTemplates(
+      projectDir,
+      options.provider,
+      "DATABASE_URL",
+      options.schemaPreset ?? "empty"
+    );
   }
 
   const databaseUrl =
@@ -194,6 +232,11 @@ export async function initializePrismaFiles(
     claimEnvStatus = claimResult.status;
   }
 
+  const gitignoreResult = await ensureGitignoreEntry(
+    projectDir,
+    "prisma/generated"
+  );
+
   return {
     schemaPath,
     configPath,
@@ -201,6 +244,8 @@ export async function initializePrismaFiles(
     prismaFilesMode,
     envPath: envResult.envPath,
     envStatus: envResult.status,
+    gitignorePath: gitignoreResult.gitignorePath,
+    gitignoreStatus: gitignoreResult.status,
     claimEnvStatus,
   };
 }

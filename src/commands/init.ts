@@ -30,9 +30,11 @@ import {
   DatabaseProviderSchema,
   InitCommandInputSchema,
   PackageManagerSchema,
+  SchemaPresetSchema,
   type DatabaseProvider,
   type InitCommandInput,
   type PackageManager,
+  type SchemaPreset,
 } from "../types";
 import {
   detectPackageManager,
@@ -42,6 +44,7 @@ import {
 } from "../utils/package-manager";
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
+const DEFAULT_SCHEMA_PRESET: SchemaPreset = "empty";
 const DEFAULT_PRISMA_POSTGRES = true;
 const DEFAULT_INSTALL = true;
 const DEFAULT_GENERATE = true;
@@ -214,6 +217,34 @@ async function promptForPrismaFilesMode(
   return mode;
 }
 
+async function promptForSchemaPreset(
+  defaultSchemaPreset: SchemaPreset
+): Promise<SchemaPreset | undefined> {
+  const schemaPreset = await select({
+    message: "Choose schema preset",
+    initialValue: defaultSchemaPreset,
+    options: [
+      {
+        value: "empty",
+        label: "Empty",
+        hint: "Datasource only",
+      },
+      {
+        value: "basic",
+        label: "Basic",
+        hint: "Adds a User model",
+      },
+    ],
+  });
+
+  if (isCancel(schemaPreset)) {
+    cancel("Cancelled.");
+    return undefined;
+  }
+
+  return SchemaPresetSchema.parse(schemaPreset);
+}
+
 function formatEnvStatus(
   status: "created" | "appended" | "existing" | "updated",
   envPath: string,
@@ -231,6 +262,23 @@ function formatEnvStatus(
       return `Updated ${envVarName} in ${relativeEnvPath}`;
     default:
       return `Updated ${relativeEnvPath}`;
+  }
+}
+
+function formatGitignoreStatus(
+  status: "created" | "appended" | "existing",
+  gitignorePath: string
+): string {
+  const relativePath = path.relative(process.cwd(), gitignorePath) || ".gitignore";
+  switch (status) {
+    case "created":
+      return `Created ${relativePath} with prisma/generated`;
+    case "appended":
+      return `Added prisma/generated to ${relativePath}`;
+    case "existing":
+      return `Kept existing prisma/generated ignore in ${relativePath}`;
+    default:
+      return `Updated ${relativePath}`;
   }
 }
 
@@ -264,13 +312,20 @@ function getCommandErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<void> {
+export async function runInitCommand(
+  rawInput: InitCommandInput = {},
+  options: {
+    skipIntro?: boolean;
+  } = {}
+): Promise<void> {
   const input = InitCommandInputSchema.parse(rawInput);
   const useDefaults = input.yes === true;
   const verbose = input.verbose === true;
   const shouldGenerate = input.generate ?? DEFAULT_GENERATE;
 
-  intro("Create Prisma");
+  if (!options.skipIntro) {
+    intro("Create Prisma");
+  }
 
   let prismaFilesMode: PrismaFilesMode = "create";
   const existingPrismaFiles = findExistingPrismaFiles(process.cwd());
@@ -294,6 +349,15 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
     input.provider ??
     (useDefaults ? DEFAULT_DATABASE_PROVIDER : await promptForDatabaseProvider());
   if (!databaseProvider) {
+    return;
+  }
+
+  const schemaPreset =
+    input.schemaPreset ??
+    (useDefaults
+      ? DEFAULT_SCHEMA_PRESET
+      : await promptForSchemaPreset(DEFAULT_SCHEMA_PRESET));
+  if (!schemaPreset) {
     return;
   }
 
@@ -406,6 +470,7 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
       provider: databaseProvider,
       databaseUrl,
       claimUrl,
+      schemaPreset,
       prismaFilesMode,
     });
   } catch (error) {
@@ -472,12 +537,18 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
       `- ${formatEnvStatus(initResult.claimEnvStatus, initResult.envPath, "CLAIM_URL")}`
     );
   }
+  if (initResult.gitignoreStatus !== "existing") {
+    summaryLines.push(
+      `- ${formatGitignoreStatus(initResult.gitignoreStatus, initResult.gitignorePath)}`
+    );
+  }
   if (!shouldInstall) {
     summaryLines.push(`- Skipped ${installCommand}.`);
   }
   if (!shouldGenerate) {
     summaryLines.push("- Skipped Prisma Client generation.");
   }
+  summaryLines.push(`- Schema preset: ${schemaPreset}`);
 
   const postgresLines: string[] = [];
   if (shouldUsePrismaPostgres && !prismaPostgresWarning) {

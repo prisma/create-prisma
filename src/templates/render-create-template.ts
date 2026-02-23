@@ -4,16 +4,11 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { DatabaseProvider, SchemaPreset } from "../types";
+import type { CreateTemplate, SchemaPreset } from "../types";
 
-type InitTemplateContext = {
-  envVar: string;
-  provider: DatabaseProvider;
+type CreateTemplateContext = {
+  projectName: string;
   schemaPreset: SchemaPreset;
-  usePgAdapter: boolean;
-  useMariaDbAdapter: boolean;
-  useSqliteAdapter: boolean;
-  useMssqlAdapter: boolean;
   useBasicSchema: boolean;
 };
 
@@ -37,10 +32,10 @@ function findPackageRoot(startDir: string): string {
   throw new Error(`Unable to locate package root from: ${startDir}`);
 }
 
-function getInitTemplatesDir(): string {
+function getCreateTemplateDir(template: CreateTemplate): string {
   const currentFilePath = fileURLToPath(import.meta.url);
   const packageRoot = findPackageRoot(path.dirname(currentFilePath));
-  const templatePath = path.join(packageRoot, "templates/init");
+  const templatePath = path.join(packageRoot, "templates/create", template);
 
   if (!existsSync(templatePath)) {
     throw new Error(`Template directory not found at: ${templatePath}`);
@@ -63,7 +58,7 @@ async function getTemplateFilesRecursively(dir: string): Promise<string[]> {
       }
 
       return [entryPath];
-    }),
+    })
   );
 
   return files.flat();
@@ -73,42 +68,31 @@ function stripHbsExtension(filePath: string): string {
   return filePath.endsWith(".hbs") ? filePath.slice(0, -4) : filePath;
 }
 
-function createTemplateContext(
-  provider: DatabaseProvider,
-  envVar: string,
-  schemaPreset: SchemaPreset
-): InitTemplateContext {
-  return {
-    envVar,
-    provider,
-    schemaPreset,
-    usePgAdapter: provider === "postgresql" || provider === "cockroachdb",
-    useMariaDbAdapter: provider === "mysql",
-    useSqliteAdapter: provider === "sqlite",
-    useMssqlAdapter: provider === "sqlserver",
-    useBasicSchema: schemaPreset === "basic",
-  };
-}
-
 function ensureTrailingNewline(content: string): string {
   return content.endsWith("\n") ? content : `${content}\n`;
 }
 
-export type ScaffoldedInitTemplatePaths = {
-  schemaPath: string;
-  configPath: string;
-  singletonPath: string;
-};
+function createTemplateContext(
+  projectName: string,
+  schemaPreset: SchemaPreset
+): CreateTemplateContext {
+  return {
+    projectName,
+    schemaPreset,
+    useBasicSchema: schemaPreset === "basic",
+  };
+}
 
-export async function scaffoldInitTemplates(
-  projectDir: string,
-  provider: DatabaseProvider,
-  envVar = "DATABASE_URL",
-  schemaPreset: SchemaPreset = "empty"
-): Promise<ScaffoldedInitTemplatePaths> {
-  const templateRoot = getInitTemplatesDir();
+export async function scaffoldCreateTemplate(opts: {
+  projectDir: string;
+  projectName: string;
+  template: CreateTemplate;
+  schemaPreset: SchemaPreset;
+}): Promise<void> {
+  const { projectDir, projectName, template, schemaPreset } = opts;
+  const templateRoot = getCreateTemplateDir(template);
   const templateFiles = await getTemplateFilesRecursively(templateRoot);
-  const context = createTemplateContext(provider, envVar, schemaPreset);
+  const context = createTemplateContext(projectName, schemaPreset);
 
   for (const templateFilePath of templateFiles) {
     const relativeTemplatePath = path.relative(templateRoot, templateFilePath);
@@ -116,7 +100,7 @@ export async function scaffoldInitTemplates(
     const outputPath = path.join(projectDir, relativeOutputPath);
     const templateContent = await fs.readFile(templateFilePath, "utf8");
     const outputContent = relativeTemplatePath.endsWith(".hbs")
-      ? Handlebars.compile<InitTemplateContext>(templateContent, {
+      ? Handlebars.compile<CreateTemplateContext>(templateContent, {
           noEscape: true,
           strict: true,
         })(context)
@@ -124,10 +108,4 @@ export async function scaffoldInitTemplates(
 
     await fs.outputFile(outputPath, ensureTrailingNewline(outputContent), "utf8");
   }
-
-  return {
-    schemaPath: path.join(projectDir, "prisma/schema.prisma"),
-    configPath: path.join(projectDir, "prisma.config.ts"),
-    singletonPath: path.join(projectDir, "prisma/index.ts"),
-  };
 }

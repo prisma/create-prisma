@@ -1,6 +1,6 @@
 # create-prisma
 
-A modern CLI for Prisma 7 initialization with adapter-aware templates.
+A modern Prisma 7 CLI with first-party project templates and great init DX.
 
 ## Stack
 
@@ -20,13 +20,25 @@ Run directly with Bun:
 bunx create-prisma@latest
 ```
 
-Initialize explicitly in the current project:
+Create a new project (default command):
+
+```bash
+create-prisma
+```
+
+Create a Hono project non-interactively:
+
+```bash
+create-prisma --name my-api --template hono --provider postgresql
+```
+
+Initialize Prisma explicitly in the current project:
 
 ```bash
 create-prisma init
 ```
 
-Or set package manager non-interactively:
+Set package manager non-interactively:
 
 ```bash
 create-prisma init --package-manager pnpm --install
@@ -71,13 +83,20 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)
 - runs `prisma generate` automatically after scaffolding
 
-`init` prompts for database choice, package manager, and whether to install dependencies now.
+`create` is the default command and currently supports:
+- template: `hono`
+- project name via `--name`
+- schema presets via `--schema-preset empty|basic` (default: `basic`)
+
+`init` configures Prisma in the current project and supports schema presets too (default: `empty`).
+Both commands prompt for database choice, package manager, and whether to install dependencies now.
 Supported providers in this flow: `postgresql`, `mysql`, `sqlite`, `sqlserver`, `cockroachdb`.
 Supported package managers: `bun`, `pnpm`, `npm`.
 Package manager prompt auto-detects from `package.json`/lockfiles/user agent and uses that as the initial selection.
 `--yes` accepts defaults (`postgresql`, detected package manager, Prisma Postgres enabled for PostgreSQL, install enabled) and skips prompts.
 `--no-generate` skips automatic `prisma generate`.
 `--verbose` prints full install/generate command output; default mode keeps output concise.
+`--force` (create only) allows scaffolding in a non-empty target directory.
 If Prisma files already exist, `init` asks whether to keep existing files or overwrite them.
 When `postgresql` is selected, `init` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
 
