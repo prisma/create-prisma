@@ -1,6 +1,6 @@
 {
   "name": "create-prisma",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Create and initialize Prisma 7 projects with first-party templates and great DX.",
   "private": false,
   "type": "module",
