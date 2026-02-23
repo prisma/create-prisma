@@ -112,15 +112,17 @@ When `postgresql` is selected, `init` can provision Prisma Postgres via `create-
 - `bun run dev` - Watch mode build
 - `bun run start` - Run built CLI
 - `bun run typecheck` - TypeScript checks only
-- `bun run changeset` - Create a changeset entry
-- `bun run version-packages` - Apply version/changelog updates from changesets
-- `bun run release` - Build and publish with `npm publish`
+- `bun run bump` - Create a release PR (interactive semver bump)
+- `bun run bump -- patch|minor|major|x.y.z` - Non-interactive bump
+- `bun run bump -- --dry-run patch` - Preview next version without changing files
+- `bun run release-notes` - Generate GitHub release notes via `changelogithub`
 
-## Changelog Workflow
+## Release Workflow
 
-This repo uses Changesets and GitHub Actions:
+This repo uses a manual, script-driven release flow:
 
-1. Create a changeset in your PR via `bun run changeset`.
-2. Merge to `main`.
-3. The `Publish` workflow opens/updates a release PR with version and `CHANGELOG.md` updates.
-4. Merge the release PR to trigger automated publish via npm trusted publishing (OIDC, no npm token secret).
+1. Run `bun run bump` (or pass `patch|minor|major|x.y.z`).
+2. The script creates a `release/vX.Y.Z` branch and a PR with commit `chore(release): X.Y.Z`.
+3. Merge that PR to `main` with squash (keep commit title `chore(release): X.Y.Z`).
+4. GitHub Actions creates the `vX.Y.Z` tag and GitHub Release notes via `changelogithub`.
+5. GitHub Actions publishes only for `chore(release):` commits, using npm trusted publishing (OIDC, no npm token secret).
