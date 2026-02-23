@@ -32,6 +32,12 @@ Create a Hono project non-interactively:
 create-prisma --name my-api --template hono --provider postgresql
 ```
 
+Create a Next.js project non-interactively:
+
+```bash
+create-prisma --name my-web --template next --provider postgresql
+```
+
 Initialize Prisma explicitly in the current project:
 
 ```bash
@@ -84,7 +90,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - runs `prisma generate` automatically after scaffolding
 
 `create` is the default command and currently supports:
-- template: `hono`
+- templates: `hono`, `next`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 

@@ -10,7 +10,7 @@ export const databaseProviders = [
 
 export const packageManagers = ["npm", "pnpm", "bun"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
-export const createTemplates = ["hono"] as const;
+export const createTemplates = ["hono", "next"] as const;
 
 export const DatabaseProviderSchema = z.enum(databaseProviders);
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
@@ -26,7 +26,7 @@ export const DatabaseUrlSchema = z
   .trim()
   .min(1, "Please enter a valid database URL");
 
-export const InitCommandInputSchema = z.object({
+export const CommonCommandOptionsSchema = z.object({
   yes: z
     .boolean()
     .optional()
@@ -35,6 +35,9 @@ export const InitCommandInputSchema = z.object({
     .boolean()
     .optional()
     .describe("Show verbose command output during setup"),
+});
+
+export const PrismaSetupOptionsSchema = z.object({
   provider: DatabaseProviderSchema.optional().describe("Database provider"),
   packageManager: PackageManagerSchema.optional().describe(
     "Package manager used for dependency installation"
@@ -59,16 +62,12 @@ export const InitCommandInputSchema = z.object({
   ),
 });
 
+export const InitCommandInputSchema = CommonCommandOptionsSchema.merge(
+  PrismaSetupOptionsSchema
+);
 export type InitCommandInput = z.infer<typeof InitCommandInputSchema>;
-export const CreateCommandInputSchema = z.object({
-  yes: z
-    .boolean()
-    .optional()
-    .describe("Skip prompts and accept default choices"),
-  verbose: z
-    .boolean()
-    .optional()
-    .describe("Show verbose command output during setup"),
+
+export const CreateScaffoldOptionsSchema = z.object({
   name: z
     .string()
     .trim()
@@ -80,27 +79,9 @@ export const CreateCommandInputSchema = z.object({
     .boolean()
     .optional()
     .describe("Allow scaffolding into a non-empty target directory"),
-  provider: DatabaseProviderSchema.optional().describe("Database provider"),
-  packageManager: PackageManagerSchema.optional().describe(
-    "Package manager used for dependency installation"
-  ),
-  prismaPostgres: z
-    .boolean()
-    .optional()
-    .describe(
-      "Provision Prisma Postgres with create-db when provider is postgresql"
-    ),
-  databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
-  install: z
-    .boolean()
-    .optional()
-    .describe("Install dependencies with selected package manager"),
-  generate: z
-    .boolean()
-    .optional()
-    .describe("Generate Prisma Client after scaffolding"),
-  schemaPreset: SchemaPresetSchema.optional().describe(
-    "Schema preset to scaffold in prisma/schema.prisma"
-  ),
 });
+
+export const CreateCommandInputSchema = CommonCommandOptionsSchema.merge(
+  CreateScaffoldOptionsSchema
+).merge(PrismaSetupOptionsSchema);
 export type CreateCommandInput = z.infer<typeof CreateCommandInputSchema>;

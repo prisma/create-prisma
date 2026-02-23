@@ -1,0 +1,40 @@
+{{#if useBasicSchema}}
+import { prisma } from "../prisma";
+{{/if}}
+
+export default async function Home() {
+{{#if useBasicSchema}}
+  const users = await prisma.user.findMany({
+    take: 10,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+{{/if}}
+
+  return (
+    <main>
+      <h1>create-prisma + next</h1>
+      <p>Project is ready with Next.js App Router and Prisma 7.</p>
+{{#if useBasicSchema}}
+      <h2>Users</h2>
+      {users.length === 0 ? (
+        <p>No users yet. Run the <code>db:migrate</code> script, then create one.</p>
+      ) : (
+        <ul>
+          {users.map((user) => (
+            <li key={user.id}>
+              <strong>{user.email}</strong>
+              {user.name ? <span> - {user.name}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+{{else}}
+      <p>
+        Edit <code>prisma/schema.prisma</code>, then run the <code>db:migrate</code> script.
+      </p>
+{{/if}}
+    </main>
+  );
+}

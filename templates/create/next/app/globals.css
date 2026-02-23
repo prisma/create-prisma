@@ -1,0 +1,47 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  background: #0b0d10;
+  color: #e8edf2;
+}
+
+main {
+  width: min(860px, 100%);
+  margin: 0 auto;
+  padding: 4rem 1.25rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 2.8rem);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin-top: 2rem;
+}
+
+p,
+li {
+  line-height: 1.65;
+  color: #c7ced8;
+}
+
+ul {
+  padding-left: 1.15rem;
+}
+
+code {
+  padding: 0.12rem 0.4rem;
+  border-radius: 6px;
+  background: #171b21;
+  color: #dbe5f4;
+}

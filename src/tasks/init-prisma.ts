@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 
+import { PRISMA_POSTGRES_TEMPORARY_NOTICE } from "./prisma-postgres";
 import { scaffoldInitTemplates } from "../templates/render-init-templates";
 import type { DatabaseProvider, SchemaPreset } from "../types";
 
@@ -97,6 +98,13 @@ function hasEnvVar(content: string, envVarName: string): boolean {
   return new RegExp(`(^|\\n)\\s*${escapedName}\\s*=`).test(content);
 }
 
+function hasEnvComment(content: string, comment: string): boolean {
+  const escapedComment = escapeRegExp(comment);
+  return new RegExp(`(^|\\n)\\s*#\\s*${escapedComment}\\s*(?=\\n|$)`).test(
+    content
+  );
+}
+
 async function ensureEnvVarInEnv(
   projectDir: string,
   envVarName: string,
@@ -140,6 +148,27 @@ async function ensureEnvVarInEnv(
   await fs.appendFile(envPath, insertion, "utf8");
 
   return { envPath, status: "appended" };
+}
+
+async function ensureEnvComment(
+  projectDir: string,
+  comment: string
+): Promise<void> {
+  const envPath = path.join(projectDir, ".env");
+  const commentLine = `# ${comment}`;
+
+  if (!(await fs.pathExists(envPath))) {
+    await fs.writeFile(envPath, `${commentLine}\n`, "utf8");
+    return;
+  }
+
+  const existingContent = await fs.readFile(envPath, "utf8");
+  if (hasEnvComment(existingContent, comment)) {
+    return;
+  }
+
+  const separator = existingContent.endsWith("\n") ? "" : "\n";
+  await fs.appendFile(envPath, `${separator}${commentLine}\n`, "utf8");
 }
 
 function hasGitignoreEntry(content: string, entry: string): boolean {
@@ -226,10 +255,11 @@ export async function initializePrismaFiles(
       options.claimUrl,
       {
         mode: "upsert",
-        comment: "Added by create-prisma init",
+        comment: PRISMA_POSTGRES_TEMPORARY_NOTICE,
       }
     );
     claimEnvStatus = claimResult.status;
+    await ensureEnvComment(projectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
   }
 
   const gitignoreResult = await ensureGitignoreEntry(

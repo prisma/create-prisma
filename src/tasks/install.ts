@@ -13,7 +13,16 @@ import { getInstallArgs } from "../utils/package-manager";
 export type DependencyWriteResult = {
   dependencies: string[];
   devDependencies: string[];
+  scripts: string[];
+  addedScripts: string[];
+  existingScripts: string[];
 };
+
+const prismaScriptMap = {
+  "db:generate": "prisma generate",
+  "db:push": "prisma db push",
+  "db:migrate": "prisma migrate dev",
+} as const;
 
 function getVersion(packageName: string): string | undefined {
   return dependencyVersionMap[packageName as AvailableDependency];
@@ -34,15 +43,24 @@ export async function addPackageDependency(opts: {
   devDependencies?: string[];
   customDependencies?: Record<string, string>;
   customDevDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+  scriptMode?: "if-missing" | "upsert";
   projectDir: string;
-}): Promise<void> {
+}): Promise<{
+  addedScripts: string[];
+  existingScripts: string[];
+}> {
   const {
     dependencies = [],
     devDependencies = [],
     customDependencies = {},
     customDevDependencies = {},
+    scripts = {},
+    scriptMode = "upsert",
     projectDir,
   } = opts;
+  const addedScripts: string[] = [];
+  const existingScripts: string[] = [];
 
   const pkgJsonPath = path.join(projectDir, "package.json");
   if (!(await fs.pathExists(pkgJsonPath))) {
@@ -55,6 +73,7 @@ export async function addPackageDependency(opts: {
 
   if (!pkgJson.dependencies) pkgJson.dependencies = {};
   if (!pkgJson.devDependencies) pkgJson.devDependencies = {};
+  if (!pkgJson.scripts) pkgJson.scripts = {};
 
   for (const pkgName of unique(dependencies)) {
     const version = getVersion(pkgName);
@@ -84,12 +103,39 @@ export async function addPackageDependency(opts: {
     pkgJson.devDependencies[pkgName] = version;
   }
 
+  for (const [scriptName, command] of Object.entries(scripts)) {
+    if (scriptMode === "if-missing") {
+      if (
+        typeof pkgJson.scripts[scriptName] !== "string" ||
+        pkgJson.scripts[scriptName].trim().length === 0
+      ) {
+        pkgJson.scripts[scriptName] = command;
+        addedScripts.push(scriptName);
+      } else {
+        existingScripts.push(scriptName);
+      }
+      continue;
+    }
+
+    if (pkgJson.scripts[scriptName] === command) {
+      existingScripts.push(scriptName);
+    } else {
+      addedScripts.push(scriptName);
+    }
+    pkgJson.scripts[scriptName] = command;
+  }
+
   pkgJson.dependencies = sortRecord(pkgJson.dependencies);
   pkgJson.devDependencies = sortRecord(pkgJson.devDependencies);
 
   await fs.writeJson(pkgJsonPath, pkgJson, {
     spaces: 2,
   });
+
+  return {
+    addedScripts,
+    existingScripts,
+  };
 }
 
 export async function writePrismaDependencies(
@@ -101,15 +147,20 @@ export async function writePrismaDependencies(
   const { adapterPackage } = getDbPackages(provider);
   dependencies.push(adapterPackage);
 
-  await addPackageDependency({
+  const scriptWriteResult = await addPackageDependency({
     dependencies,
     devDependencies,
+    scripts: prismaScriptMap,
+    scriptMode: "if-missing",
     projectDir,
   });
 
   return {
     dependencies,
     devDependencies,
+    scripts: Object.keys(prismaScriptMap),
+    addedScripts: scriptWriteResult.addedScripts,
+    existingScripts: scriptWriteResult.existingScripts,
   };
 }
 

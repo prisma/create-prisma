@@ -1,7 +1,7 @@
 {
   "name": "create-prisma",
   "version": "0.1.0",
-  "description": "Modern Prisma init CLI with adapter-aware templates and great DX.",
+  "description": "Create and initialize Prisma 7 projects with first-party templates and great DX.",
   "private": false,
   "type": "module",
   "bin": {

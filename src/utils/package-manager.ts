@@ -96,6 +96,21 @@ export function getInstallCommand(packageManager: PackageManager): string {
   return `${packageManager} install`;
 }
 
+export function getRunScriptCommand(
+  packageManager: PackageManager,
+  scriptName: string
+): string {
+  switch (packageManager) {
+    case "bun":
+      return `bun run ${scriptName}`;
+    case "pnpm":
+      return `pnpm run ${scriptName}`;
+    case "npm":
+    default:
+      return `npm run ${scriptName}`;
+  }
+}
+
 export function getInstallArgs(
   packageManager: PackageManager
 ): CommandAndArgs {

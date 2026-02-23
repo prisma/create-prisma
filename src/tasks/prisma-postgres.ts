@@ -14,15 +14,15 @@ type CreateDbJsonPayload = {
   databaseUrl?: string;
   claimUrl?: string;
   claimURL?: string;
-  deletionDate?: string;
-  deletionAt?: string;
 };
 
 type PrismaPostgresResult = {
   databaseUrl: string;
   claimUrl?: string;
-  deletionDate?: string;
 };
+
+export const PRISMA_POSTGRES_TEMPORARY_NOTICE =
+  "Prisma Postgres is temporary for 24 hours. Claim this database before it expires using CLAIM_URL.";
 const CREATE_DB_COMMAND_ARGS = ["create-db@latest", "--json"] as const;
 
 function parseCreateDbJson(rawOutput: string): CreateDbJsonPayload {
@@ -119,17 +119,9 @@ export async function provisionPrismaPostgres(
         ? payload.claimURL
         : undefined;
 
-  const deletionDate =
-    typeof payload.deletionDate === "string" && payload.deletionDate.length > 0
-      ? payload.deletionDate
-      : typeof payload.deletionAt === "string" && payload.deletionAt.length > 0
-        ? payload.deletionAt
-        : undefined;
-
   return {
     databaseUrl,
     claimUrl,
-    deletionDate,
   };
 }
 

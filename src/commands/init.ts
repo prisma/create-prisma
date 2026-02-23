@@ -40,6 +40,7 @@ import {
   getInstallCommand,
   getPrismaCliArgs,
   getPrismaCliCommand,
+  getRunScriptCommand,
 } from "../utils/package-manager";
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
@@ -336,7 +337,6 @@ export async function runInitCommand(
   let databaseUrl = input.databaseUrl;
   let shouldUsePrismaPostgres = false;
   let claimUrl: string | undefined;
-  let deletionDate: string | undefined;
   let prismaPostgresWarning: string | undefined;
 
   if (databaseProvider === "postgresql" && !databaseUrl) {
@@ -373,7 +373,6 @@ export async function runInitCommand(
         await provisionPrismaPostgres(finalPackageManager);
       databaseUrl = prismaPostgresResult.databaseUrl;
       claimUrl = prismaPostgresResult.claimUrl;
-      deletionDate = prismaPostgresResult.deletionDate;
       prismaPostgresSpinner.stop("Prisma Postgres database provisioned.");
     } catch (error) {
       const errorMessage =
@@ -395,7 +394,10 @@ export async function runInitCommand(
     }
   }
 
-  await writePrismaDependencies(databaseProvider, projectDir);
+  const dependencyWriteResult = await writePrismaDependencies(
+    databaseProvider,
+    projectDir
+  );
 
   const shouldInstall =
     input.install ??
@@ -459,12 +461,12 @@ export async function runInitCommand(
     initSpinner.stop("Prisma files ready.");
   }
 
-  const generateCommand = getPrismaCliCommand(finalPackageManager, [
-    "generate",
-  ]);
   let generateWarning: string | undefined;
   let didGenerateClient = false;
   if (shouldGenerate) {
+    const generateCommand = getPrismaCliCommand(finalPackageManager, [
+      "generate",
+    ]);
     if (verbose) {
       log.step(`Running ${generateCommand}`);
     }
@@ -515,19 +517,28 @@ export async function runInitCommand(
       `- ${formatGitignoreStatus(initResult.gitignoreStatus, initResult.gitignorePath, projectDir)}`
     );
   }
+  if (dependencyWriteResult.addedScripts.length > 0) {
+    summaryLines.push(
+      `- Added package.json scripts: ${dependencyWriteResult.addedScripts.join(", ")}`
+    );
+  } else if (dependencyWriteResult.scripts.length > 0) {
+    summaryLines.push(
+      `- Kept existing package.json scripts: ${dependencyWriteResult.scripts.join(", ")}`
+    );
+  }
   if (!shouldInstall) {
     summaryLines.push(`- Skipped ${installCommand}.`);
+  } else {
+    summaryLines.push(`- Installed dependencies with ${installCommand}.`);
   }
   if (!shouldGenerate) {
     summaryLines.push("- Skipped Prisma Client generation.");
+  } else if (didGenerateClient) {
+    summaryLines.push("- Prisma Client generated.");
   }
 
   const postgresLines: string[] = [];
-  if (shouldUsePrismaPostgres && !prismaPostgresWarning) {
-    if (deletionDate) {
-      postgresLines.push(`- Prisma Postgres auto-delete (if unclaimed): ${deletionDate}`);
-    }
-  } else if (prismaPostgresWarning) {
+  if (prismaPostgresWarning) {
     postgresLines.push(`- ${prismaPostgresWarning}`);
   }
   if (generateWarning) {
@@ -539,11 +550,9 @@ export async function runInitCommand(
     nextSteps.push(`- ${installCommand}`);
   }
   if (!didGenerateClient || !shouldGenerate) {
-    nextSteps.push(`- ${generateCommand}`);
+    nextSteps.push(`- ${getRunScriptCommand(finalPackageManager, "db:generate")}`);
   }
-  nextSteps.push(
-    `- ${getPrismaCliCommand(finalPackageManager, ["migrate", "dev"])}`
-  );
+  nextSteps.push(`- ${getRunScriptCommand(finalPackageManager, "db:migrate")}`);
 
   outro(`Setup complete.
 ${summaryLines.join("\n")}

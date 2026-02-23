@@ -69,6 +69,11 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         label: "Hono",
         hint: "Bun + TypeScript API starter",
       },
+      {
+        value: "next",
+        label: "Next.js",
+        hint: "App Router + TypeScript starter",
+      },
     ],
   });
 
