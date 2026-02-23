@@ -25,6 +25,10 @@ export const InitCommandInputSchema = z.object({
     .boolean()
     .optional()
     .describe("Skip prompts and accept default choices"),
+  verbose: z
+    .boolean()
+    .optional()
+    .describe("Show verbose command output during setup"),
   provider: DatabaseProviderSchema.optional().describe("Database provider"),
   packageManager: PackageManagerSchema.optional().describe(
     "Package manager used for dependency installation"
@@ -40,6 +44,10 @@ export const InitCommandInputSchema = z.object({
     .boolean()
     .optional()
     .describe("Install dependencies with selected package manager"),
+  generate: z
+    .boolean()
+    .optional()
+    .describe("Generate Prisma Client after scaffolding"),
 });
 
 export type InitCommandInput = z.infer<typeof InitCommandInputSchema>;

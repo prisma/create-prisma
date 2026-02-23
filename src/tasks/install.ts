@@ -115,11 +115,15 @@ export async function writePrismaDependencies(
 
 export async function installProjectDependencies(
   packageManager: PackageManager,
-  projectDir = process.cwd()
+  projectDir = process.cwd(),
+  options: {
+    verbose?: boolean;
+  } = {}
 ): Promise<void> {
+  const verbose = options.verbose === true;
   const installCommand = getInstallArgs(packageManager);
   await execa(installCommand.command, installCommand.args, {
     cwd: projectDir,
-    stdio: "inherit",
+    stdio: verbose ? "inherit" : "pipe",
   });
 }

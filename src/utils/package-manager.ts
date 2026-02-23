@@ -136,7 +136,7 @@ export function getPackageExecutionCommand(
   return [execution.command, ...execution.args].join(" ");
 }
 
-function getPrismaCliArgs(
+export function getPrismaCliArgs(
   packageManager: PackageManager,
   prismaArgs: string[]
 ): CommandAndArgs {

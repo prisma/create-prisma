@@ -3,13 +3,21 @@ import {
   confirm,
   intro,
   isCancel,
+  log,
   outro,
   select,
   spinner,
 } from "@clack/prompts";
+import { execa } from "execa";
 import path from "node:path";
 
-import { initializePrismaFiles } from "../tasks/init-prisma";
+import {
+  canReusePrismaFiles,
+  findExistingPrismaFiles,
+  initializePrismaFiles,
+  type InitPrismaResult,
+  type PrismaFilesMode,
+} from "../tasks/init-prisma";
 import {
   installProjectDependencies,
   writePrismaDependencies,
@@ -29,12 +37,14 @@ import {
 import {
   detectPackageManager,
   getInstallCommand,
+  getPrismaCliArgs,
   getPrismaCliCommand,
 } from "../utils/package-manager";
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
 const DEFAULT_PRISMA_POSTGRES = true;
 const DEFAULT_INSTALL = true;
+const DEFAULT_GENERATE = true;
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
   const databaseProvider = await select({
@@ -151,6 +161,59 @@ async function promptContinueWithDefaultPostgresUrl(): Promise<boolean | undefin
   return Boolean(shouldContinue);
 }
 
+async function promptForPrismaFilesMode(
+  existingFiles: string[],
+  canReuseExistingPrismaFiles: boolean
+): Promise<PrismaFilesMode | undefined> {
+  const existingFileList = existingFiles
+    .map((filePath) => formatCreatedPath(filePath))
+    .join(", ");
+
+  const mode = await select({
+    message: `Prisma already exists (${existingFileList}). How should we continue?`,
+    initialValue: canReuseExistingPrismaFiles ? "reuse" : "overwrite",
+    options: canReuseExistingPrismaFiles
+      ? [
+          {
+            value: "reuse",
+            label: "Keep existing Prisma files",
+            hint: "Recommended",
+          },
+          {
+            value: "overwrite",
+            label: "Overwrite Prisma files",
+          },
+          {
+            value: "cancel",
+            label: "Cancel",
+          },
+        ]
+      : [
+          {
+            value: "overwrite",
+            label: "Repair and overwrite Prisma files",
+            hint: "Recommended",
+          },
+          {
+            value: "cancel",
+            label: "Cancel",
+          },
+        ],
+  });
+
+  if (isCancel(mode) || mode === "cancel") {
+    cancel("Cancelled.");
+    return undefined;
+  }
+
+  if (mode !== "reuse" && mode !== "overwrite") {
+    cancel("Cancelled.");
+    return undefined;
+  }
+
+  return mode;
+}
+
 function formatEnvStatus(
   status: "created" | "appended" | "existing" | "updated",
   envPath: string,
@@ -175,11 +238,57 @@ function formatCreatedPath(filePath: string): string {
   return path.relative(process.cwd(), filePath);
 }
 
+function formatFileAction(action: PrismaFilesMode): "Created" | "Wrote" | "Kept existing" {
+  switch (action) {
+    case "create":
+      return "Created";
+    case "overwrite":
+      return "Wrote";
+    case "reuse":
+      return "Kept existing";
+    default: {
+      const exhaustiveCheck: never = action;
+      throw new Error(`Unsupported file action: ${String(exhaustiveCheck)}`);
+    }
+  }
+}
+
+function getCommandErrorMessage(error: unknown): string {
+  if (error instanceof Error && "stderr" in error) {
+    const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
+    if (stderr.length > 0) {
+      return stderr;
+    }
+  }
+
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<void> {
   const input = InitCommandInputSchema.parse(rawInput);
   const useDefaults = input.yes === true;
+  const verbose = input.verbose === true;
+  const shouldGenerate = input.generate ?? DEFAULT_GENERATE;
 
   intro("Create Prisma");
+
+  let prismaFilesMode: PrismaFilesMode = "create";
+  const existingPrismaFiles = findExistingPrismaFiles(process.cwd());
+  const canReuseExistingPrismaFiles = canReusePrismaFiles(process.cwd());
+  if (existingPrismaFiles.length > 0) {
+    if (useDefaults) {
+      prismaFilesMode = canReuseExistingPrismaFiles ? "reuse" : "overwrite";
+    } else {
+      const selectedMode = await promptForPrismaFilesMode(
+        existingPrismaFiles,
+        canReuseExistingPrismaFiles
+      );
+      if (!selectedMode) {
+        return;
+      }
+      prismaFilesMode = selectedMode;
+    }
+  }
 
   const databaseProvider =
     input.provider ??
@@ -250,10 +359,7 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
     }
   }
 
-  const dependencySpinner = spinner();
-  dependencySpinner.start("Updating package.json...");
   await writePrismaDependencies(databaseProvider);
-  dependencySpinner.stop("Updated package.json.");
 
   const shouldInstall =
     input.install ??
@@ -265,25 +371,95 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
   }
 
   if (shouldInstall) {
-    const installSpinner = spinner();
-    installSpinner.start(`Running ${installCommand}...`);
-    await installProjectDependencies(finalPackageManager);
-    installSpinner.stop("Dependencies installed.");
+    if (verbose) {
+      log.step(`Running ${installCommand}`);
+      try {
+        await installProjectDependencies(finalPackageManager, process.cwd(), {
+          verbose,
+        });
+        log.success("Dependencies installed.");
+      } catch (error) {
+        cancel(`Failed to run ${installCommand}: ${getCommandErrorMessage(error)}`);
+        return;
+      }
+    } else {
+      const installSpinner = spinner();
+      installSpinner.start(`Running ${installCommand}...`);
+      try {
+        await installProjectDependencies(finalPackageManager, process.cwd(), {
+          verbose,
+        });
+        installSpinner.stop("Dependencies installed.");
+      } catch (error) {
+        installSpinner.stop("Could not install dependencies.");
+        cancel(`Failed to run ${installCommand}: ${getCommandErrorMessage(error)}`);
+        return;
+      }
+    }
   }
 
   const initSpinner = spinner();
-  initSpinner.start("Scaffolding Prisma files...");
-  const initResult = await initializePrismaFiles({
-    provider: databaseProvider,
-    databaseUrl,
-    claimUrl,
-  });
-  initSpinner.stop("Prisma files ready.");
+  initSpinner.start("Preparing Prisma files...");
+  let initResult: InitPrismaResult;
+  try {
+    initResult = await initializePrismaFiles({
+      provider: databaseProvider,
+      databaseUrl,
+      claimUrl,
+      prismaFilesMode,
+    });
+  } catch (error) {
+    initSpinner.stop("Could not prepare Prisma files.");
+    cancel(getCommandErrorMessage(error));
+    return;
+  }
+  if (initResult.prismaFilesMode === "overwrite") {
+    initSpinner.stop("Prisma files updated.");
+  } else if (initResult.prismaFilesMode === "reuse") {
+    initSpinner.stop("Using existing Prisma files.");
+  } else {
+    initSpinner.stop("Prisma files ready.");
+  }
 
+  const generateCommand = getPrismaCliCommand(finalPackageManager, [
+    "generate",
+  ]);
+  let generateWarning: string | undefined;
+  let didGenerateClient = false;
+  if (shouldGenerate) {
+    if (verbose) {
+      log.step(`Running ${generateCommand}`);
+    }
+
+    const generateSpinner = verbose ? undefined : spinner();
+    generateSpinner?.start("Generating Prisma Client...");
+    try {
+      const generateArgs = getPrismaCliArgs(finalPackageManager, ["generate"]);
+      await execa(generateArgs.command, generateArgs.args, {
+        cwd: process.cwd(),
+        stdio: verbose ? "inherit" : "pipe",
+      });
+      didGenerateClient = true;
+      if (verbose) {
+        log.success("Prisma Client generated.");
+      } else {
+        generateSpinner?.stop("Prisma Client generated.");
+      }
+    } catch (error) {
+      if (verbose) {
+        log.warn("Could not generate Prisma Client.");
+      } else {
+        generateSpinner?.stop("Could not generate Prisma Client.");
+      }
+      generateWarning = `Prisma generate failed: ${getCommandErrorMessage(error)}`;
+    }
+  }
+
+  const fileActionLabel = formatFileAction(initResult.prismaFilesMode);
   const summaryLines: string[] = [
-    `- Created ${formatCreatedPath(initResult.schemaPath)}`,
-    `- Created ${formatCreatedPath(initResult.configPath)}`,
-    `- Created ${formatCreatedPath(initResult.singletonPath)}`,
+    `- ${fileActionLabel} ${formatCreatedPath(initResult.schemaPath)}`,
+    `- ${fileActionLabel} ${formatCreatedPath(initResult.configPath)}`,
+    `- ${fileActionLabel} ${formatCreatedPath(initResult.singletonPath)}`,
   ];
 
   if (initResult.envStatus !== "existing") {
@@ -298,6 +474,9 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
   }
   if (!shouldInstall) {
     summaryLines.push(`- Skipped ${installCommand}.`);
+  }
+  if (!shouldGenerate) {
+    summaryLines.push("- Skipped Prisma Client generation.");
   }
 
   const postgresLines: string[] = [];
@@ -314,12 +493,17 @@ export async function runInitCommand(rawInput: InitCommandInput = {}): Promise<v
   } else if (prismaPostgresWarning) {
     postgresLines.push(`- ${prismaPostgresWarning}`);
   }
+  if (generateWarning) {
+    postgresLines.push(`- ${generateWarning}`);
+  }
 
   const nextSteps: string[] = [];
   if (!shouldInstall) {
     nextSteps.push(`- ${installCommand}`);
   }
-  nextSteps.push(`- ${getPrismaCliCommand(finalPackageManager, ["generate"])}`);
+  if (!didGenerateClient || !shouldGenerate) {
+    nextSteps.push(`- ${generateCommand}`);
+  }
   nextSteps.push(
     `- ${getPrismaCliCommand(finalPackageManager, ["migrate", "dev"])}`
   );

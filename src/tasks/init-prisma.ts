@@ -11,47 +11,58 @@ export type InitPrismaOptions = {
   provider: DatabaseProvider;
   databaseUrl?: string;
   claimUrl?: string;
+  prismaFilesMode?: PrismaFilesMode;
   projectDir?: string;
 };
+
+export const prismaManagedFiles = [
+  "schema.prisma",
+  "prisma/schema.prisma",
+  "prisma/index.ts",
+  "prisma.config.ts",
+] as const;
+export const prismaTemplateFiles = [
+  "prisma/schema.prisma",
+  "prisma/index.ts",
+  "prisma.config.ts",
+] as const;
+
+export type PrismaFilesMode = "create" | "overwrite" | "reuse";
 
 export type InitPrismaResult = {
   schemaPath: string;
   configPath: string;
   singletonPath: string;
+  prismaFilesMode: PrismaFilesMode;
   envPath: string;
   envStatus: EnvStatus;
   claimEnvStatus?: EnvStatus;
 };
 
-function assertPrismaNotInitialized(projectDir: string): void {
-  const rootSchemaPath = path.join(projectDir, "schema.prisma");
-  const prismaSchemaPath = path.join(projectDir, "prisma", "schema.prisma");
-  const prismaIndexPath = path.join(projectDir, "prisma", "index.ts");
-  const prismaConfigPath = path.join(projectDir, "prisma.config.ts");
+export class PrismaAlreadyInitializedError extends Error {
+  readonly existingFiles: string[];
 
-  if (fs.existsSync(rootSchemaPath)) {
-    throw new Error(
-      `File ${rootSchemaPath} already exists. This project already appears to be Prisma-initialized.`
+  constructor(existingFiles: string[]) {
+    super(
+      `This project already appears to be Prisma-initialized: ${existingFiles.join(
+        ", "
+      )}`
     );
+    this.name = "PrismaAlreadyInitializedError";
+    this.existingFiles = existingFiles;
   }
+}
 
-  if (fs.existsSync(prismaSchemaPath)) {
-    throw new Error(
-      `File ${prismaSchemaPath} already exists. This project already appears to be Prisma-initialized.`
-    );
-  }
+export function findExistingPrismaFiles(projectDir = process.cwd()): string[] {
+  return prismaManagedFiles
+    .map((relativePath) => path.join(projectDir, relativePath))
+    .filter((absolutePath) => fs.existsSync(absolutePath));
+}
 
-  if (fs.existsSync(prismaIndexPath)) {
-    throw new Error(
-      `File ${prismaIndexPath} already exists. This project already appears to be Prisma-initialized.`
-    );
-  }
-
-  if (fs.existsSync(prismaConfigPath)) {
-    throw new Error(
-      `File ${prismaConfigPath} already exists. This project already appears to be Prisma-initialized.`
-    );
-  }
+export function canReusePrismaFiles(projectDir = process.cwd()): boolean {
+  return prismaTemplateFiles.every((relativePath) =>
+    fs.existsSync(path.join(projectDir, relativePath))
+  );
 }
 
 export function getDefaultDatabaseUrl(provider: DatabaseProvider): string {
@@ -131,12 +142,31 @@ export async function initializePrismaFiles(
   options: InitPrismaOptions
 ): Promise<InitPrismaResult> {
   const projectDir = options.projectDir ?? process.cwd();
-  assertPrismaNotInitialized(projectDir);
+  const prismaFilesMode = options.prismaFilesMode ?? "create";
+  const existingPrismaFiles = findExistingPrismaFiles(projectDir);
 
-  const scaffoldedPaths = await scaffoldInitTemplates(
-    projectDir,
-    options.provider
-  );
+  if (prismaFilesMode === "create" && existingPrismaFiles.length > 0) {
+    throw new PrismaAlreadyInitializedError(existingPrismaFiles);
+  }
+
+  if (prismaFilesMode === "reuse" && existingPrismaFiles.length === 0) {
+    throw new Error(
+      "Cannot reuse Prisma files because no existing Prisma files were found."
+    );
+  }
+  if (prismaFilesMode === "reuse" && !canReusePrismaFiles(projectDir)) {
+    throw new Error(
+      "Cannot reuse Prisma files because required files are missing."
+    );
+  }
+
+  const schemaPath = path.join(projectDir, "prisma/schema.prisma");
+  const configPath = path.join(projectDir, "prisma.config.ts");
+  const singletonPath = path.join(projectDir, "prisma/index.ts");
+
+  if (prismaFilesMode !== "reuse") {
+    await scaffoldInitTemplates(projectDir, options.provider);
+  }
 
   const databaseUrl =
     options.databaseUrl ?? getDefaultDatabaseUrl(options.provider);
@@ -165,9 +195,10 @@ export async function initializePrismaFiles(
   }
 
   return {
-    schemaPath: scaffoldedPaths.schemaPath,
-    configPath: scaffoldedPaths.configPath,
-    singletonPath: scaffoldedPaths.singletonPath,
+    schemaPath,
+    configPath,
+    singletonPath,
+    prismaFilesMode,
     envPath: envResult.envPath,
     envStatus: envResult.status,
     claimEnvStatus,
