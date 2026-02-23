@@ -17,7 +17,7 @@ A modern Prisma 7 CLI with first-party project templates and great init DX.
 Run directly with Bun:
 
 ```bash
-bunx create-prisma@latest
+bunx @prisma/create-prisma@latest
 ```
 
 Create a new project (default command):

@@ -1,5 +1,5 @@
 {
-  "name": "create-prisma",
+  "name": "@prisma/create-prisma",
   "version": "0.1.0",
   "description": "Create and initialize Prisma 7 projects with first-party templates and great DX.",
   "private": false,
@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "bun run build && npm publish --access public --provenance"
+    "release": "bun run build && npm publish --access public"
   },
   "dependencies": {
     "@clack/prompts": "^1.0.0",
