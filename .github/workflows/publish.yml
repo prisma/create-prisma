@@ -1,47 +1,124 @@
-name: Publish
+name: Release
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 permissions:
   contents: write
-  pull-requests: write
   id-token: write
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
+  release:
+    name: Release to npm
+    if: startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from commit message
+        id: version
+        run: |
+          VERSION=$(echo "${{ github.event.head_commit.message }}" | sed -E 's/^chore\(release\): ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: $VERSION"
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Invalid version format '$VERSION'. Expected x.y.z"
+            exit 1
+          fi
+
+      - name: Verify package version matches commit
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PACKAGE_VERSION=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));process.stdout.write(p.version)")
+          if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then
+            echo "Error: package.json version is '$PACKAGE_VERSION' but commit version is '$VERSION'"
+            exit 1
+          fi
+
+      - name: Check if version already exists on npm
+        id: check-version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if npm view create-prisma@$VERSION version >/dev/null 2>&1; then
+            echo "Version $VERSION already exists on npm"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version $VERSION is new"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push git tag
+        if: steps.check-version.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+            git push origin "v$VERSION"
+          else
+            echo "Tag v$VERSION already exists, skipping"
+          fi
 
       - name: Setup Node.js
+        if: steps.check-version.outputs.exists == 'false'
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22.14.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Setup Bun
+        if: steps.check-version.outputs.exists == 'false'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
+        if: steps.check-version.outputs.exists == 'false'
         run: bun install --frozen-lockfile
 
-      - name: Create publish PR
-        uses: changesets/action@v1
-        with:
-          version: bun run version-packages
-          publish: bun run release
-          commit: "chore: version packages"
-          title: "chore: version packages"
+      - name: Create GitHub Release
+        if: steps.check-version.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! gh release view "v$VERSION" >/dev/null 2>&1; then
+            bunx changelogithub
+          else
+            echo "Release v$VERSION already exists, skipping"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Typecheck
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun run typecheck
+
+      - name: Build
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun run build
+
+      - name: Publish to npm
+        if: steps.check-version.outputs.exists == 'false'
+        run: npm publish --access public
+
+      - name: Release summary
+        if: steps.check-version.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "## Release v$VERSION complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- https://www.npmjs.com/package/create-prisma/v/$VERSION" >> "$GITHUB_STEP_SUMMARY"
