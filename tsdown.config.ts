@@ -6,6 +6,7 @@ const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.met
 export default defineConfig({
   entry: ["src/index.ts", "src/cli.ts"],
   format: ["esm"],
+  inlineOnly: false,
   clean: true,
   shims: true,
   dts: true,
