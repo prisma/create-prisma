@@ -30,8 +30,6 @@ import {
   PackageManagerSchema,
   type DatabaseProvider,
   type DependencyWriteResult,
-  type EnvStatus,
-  type FileAppendStatus,
   type InitCommandResult,
   type InitCommandInput,
   type InitPrismaResult,
@@ -50,6 +48,7 @@ import {
   getPrismaCliCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
+import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "empty";
@@ -217,62 +216,8 @@ async function promptForPrismaFilesMode(
   return mode;
 }
 
-function formatEnvStatus(
-  status: EnvStatus,
-  envPath: string,
-  envVarName: string,
-  baseDir: string
-): string {
-  const relativeEnvPath = path.relative(baseDir, envPath) || ".env";
-  switch (status) {
-    case "created":
-      return `Created ${relativeEnvPath} with ${envVarName}`;
-    case "appended":
-      return `Appended ${envVarName} to ${relativeEnvPath}`;
-    case "existing":
-      return `Kept existing ${envVarName} in ${relativeEnvPath}`;
-    case "updated":
-      return `Updated ${envVarName} in ${relativeEnvPath}`;
-    default:
-      return `Updated ${relativeEnvPath}`;
-  }
-}
-
-function formatGitignoreStatus(
-  status: FileAppendStatus,
-  gitignorePath: string,
-  baseDir: string
-): string {
-  const relativePath = path.relative(baseDir, gitignorePath) || ".gitignore";
-  switch (status) {
-    case "created":
-      return `Created ${relativePath} with prisma/generated`;
-    case "appended":
-      return `Added prisma/generated to ${relativePath}`;
-    case "existing":
-      return `Kept existing prisma/generated ignore in ${relativePath}`;
-    default:
-      return `Updated ${relativePath}`;
-  }
-}
-
 function formatCreatedPath(filePath: string, baseDir: string): string {
   return path.relative(baseDir, filePath);
-}
-
-function formatFileAction(action: PrismaFilesMode): "Created" | "Wrote" | "Kept existing" {
-  switch (action) {
-    case "create":
-      return "Created";
-    case "overwrite":
-      return "Wrote";
-    case "reuse":
-      return "Kept existing";
-    default: {
-      const exhaustiveCheck: never = action;
-      throw new Error(`Unsupported file action: ${String(exhaustiveCheck)}`);
-    }
-  }
 }
 
 function getCommandErrorMessage(error: unknown): string {
@@ -297,7 +242,7 @@ export async function collectInitContext(
   const shouldGenerate = input.generate ?? DEFAULT_GENERATE;
 
   if (!options.skipIntro) {
-    intro("Create Prisma");
+    intro(getCreatePrismaIntro());
   }
 
   let prismaFilesMode: PrismaFilesMode = "create";
@@ -544,57 +489,6 @@ async function generatePrismaClientForContext(
   }
 }
 
-function buildSummaryLinesForContext(opts: {
-  context: InitPromptContext;
-  initResult: InitPrismaResult;
-  dependencyWriteResult: DependencyWriteResult;
-  projectDir: string;
-}): string[] {
-  const { context, initResult, dependencyWriteResult, projectDir } = opts;
-  const installCommand = getInstallCommand(context.packageManager);
-  const fileActionLabel = formatFileAction(initResult.prismaFilesMode);
-
-  const summaryLines: string[] = [
-    `- ${fileActionLabel} ${formatCreatedPath(initResult.schemaPath, projectDir)}`,
-    `- ${fileActionLabel} ${formatCreatedPath(initResult.configPath, projectDir)}`,
-    `- ${fileActionLabel} ${formatCreatedPath(initResult.singletonPath, projectDir)}`,
-  ];
-
-  if (initResult.envStatus !== "existing") {
-    summaryLines.push(
-      `- ${formatEnvStatus(initResult.envStatus, initResult.envPath, "DATABASE_URL", projectDir)}`
-    );
-  }
-  if (initResult.claimEnvStatus) {
-    summaryLines.push(
-      `- ${formatEnvStatus(initResult.claimEnvStatus, initResult.envPath, "CLAIM_URL", projectDir)}`
-    );
-  }
-  if (initResult.gitignoreStatus !== "existing") {
-    summaryLines.push(
-      `- ${formatGitignoreStatus(initResult.gitignoreStatus, initResult.gitignorePath, projectDir)}`
-    );
-  }
-
-  if (dependencyWriteResult.addedScripts.length > 0) {
-    summaryLines.push(
-      `- Added package.json scripts: ${dependencyWriteResult.addedScripts.join(", ")}`
-    );
-  } else if (dependencyWriteResult.scripts.length > 0) {
-    summaryLines.push(
-      `- Kept existing package.json scripts: ${dependencyWriteResult.scripts.join(", ")}`
-    );
-  }
-
-  if (context.shouldInstall) {
-    summaryLines.push(`- Installed dependencies with ${installCommand}.`);
-  } else {
-    summaryLines.push(`- Skipped ${installCommand}.`);
-  }
-
-  return summaryLines;
-}
-
 function buildWarningLines(
   provisionWarning: string | undefined,
   generateWarning: string | undefined
@@ -672,17 +566,6 @@ export async function executeInitContext(
   }
 
   const generateResult = await generatePrismaClientForContext(context, projectDir);
-  const summaryLines = buildSummaryLinesForContext({
-    context,
-    initResult,
-    dependencyWriteResult,
-    projectDir,
-  });
-  if (!context.shouldGenerate) {
-    summaryLines.push("- Skipped Prisma Client generation.");
-  } else if (generateResult.didGenerateClient) {
-    summaryLines.push("- Prisma Client generated.");
-  }
 
   const warningLines = buildWarningLines(
     provisionResult.warning,
@@ -694,9 +577,10 @@ export async function executeInitContext(
     didGenerateClient: generateResult.didGenerateClient,
   });
 
-  outro(`Setup complete.
-${summaryLines.join("\n")}
-${warningLines.length > 0 ? `\n${warningLines.join("\n")}` : ""}
+  const warningSection =
+    warningLines.length > 0 ? `\n\n${warningLines.join("\n")}` : "";
+
+  outro(`Setup complete.${warningSection}
 
 Next steps:
 ${nextSteps.join("\n")}`);

@@ -27,6 +27,7 @@ import {
   collectInitContext,
   executeInitContext,
 } from "./init";
+import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "hono";
@@ -135,7 +136,7 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
   try {
     const input = CreateCommandInputSchema.parse(rawInput);
 
-    intro("Create Prisma");
+    intro(getCreatePrismaIntro());
 
     const context = await collectCreateContext(input);
     if (!context) {
