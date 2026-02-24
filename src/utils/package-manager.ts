@@ -89,7 +89,7 @@ export async function detectPackageManager(
     return fromUserAgent;
   }
 
-  return "bun";
+  return "npm";
 }
 
 export function getInstallCommand(packageManager: PackageManager): string {

@@ -3,20 +3,17 @@ import path from "node:path";
 
 import { PRISMA_POSTGRES_TEMPORARY_NOTICE } from "./prisma-postgres";
 import { scaffoldInitTemplates } from "../templates/render-init-templates";
-import type { DatabaseProvider, SchemaPreset } from "../types";
+import type {
+  DatabaseProvider,
+  EnvStatus,
+  FileAppendStatus,
+  InitPrismaOptions,
+  InitPrismaResult,
+  PrismaFilesMode,
+  SchemaPreset,
+} from "../types";
 
-export type EnvStatus = "created" | "appended" | "existing" | "updated";
 type EnvWriteMode = "keep-existing" | "upsert";
-type FileAppendStatus = "created" | "appended" | "existing";
-
-export type InitPrismaOptions = {
-  provider: DatabaseProvider;
-  databaseUrl?: string;
-  claimUrl?: string;
-  schemaPreset?: SchemaPreset;
-  prismaFilesMode?: PrismaFilesMode;
-  projectDir?: string;
-};
 
 export const prismaManagedFiles = [
   "schema.prisma",
@@ -30,19 +27,6 @@ export const prismaTemplateFiles = [
   "prisma.config.ts",
 ] as const;
 
-export type PrismaFilesMode = "create" | "overwrite" | "reuse";
-
-export type InitPrismaResult = {
-  schemaPath: string;
-  configPath: string;
-  singletonPath: string;
-  prismaFilesMode: PrismaFilesMode;
-  envPath: string;
-  envStatus: EnvStatus;
-  gitignorePath: string;
-  gitignoreStatus: FileAppendStatus;
-  claimEnvStatus?: EnvStatus;
-};
 
 export class PrismaAlreadyInitializedError extends Error {
   readonly existingFiles: string[];

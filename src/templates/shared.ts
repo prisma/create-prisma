@@ -4,6 +4,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
+
 export function findPackageRoot(startDir: string): string {
   let currentDir = startDir;
 
@@ -64,6 +66,23 @@ function ensureTrailingNewline(content: string): string {
   return content.endsWith("\n") ? content : `${content}\n`;
 }
 
+export async function renderTemplateFile<TContext>(opts: {
+  templateFilePath: string;
+  outputPath: string;
+  context: TContext;
+}): Promise<void> {
+  const { templateFilePath, outputPath, context } = opts;
+  const templateContent = await fs.readFile(templateFilePath, "utf8");
+  const outputContent = templateFilePath.endsWith(".hbs")
+    ? Handlebars.compile<TContext>(templateContent, {
+        noEscape: true,
+        strict: true,
+      })(context)
+    : templateContent;
+
+  await fs.outputFile(outputPath, ensureTrailingNewline(outputContent), "utf8");
+}
+
 export async function renderTemplateTree<TContext>(opts: {
   templateRoot: string;
   outputDir: string;
@@ -76,14 +95,10 @@ export async function renderTemplateTree<TContext>(opts: {
     const relativeTemplatePath = path.relative(templateRoot, templateFilePath);
     const relativeOutputPath = stripHbsExtension(relativeTemplatePath);
     const outputPath = path.join(outputDir, relativeOutputPath);
-    const templateContent = await fs.readFile(templateFilePath, "utf8");
-    const outputContent = relativeTemplatePath.endsWith(".hbs")
-      ? Handlebars.compile<TContext>(templateContent, {
-          noEscape: true,
-          strict: true,
-        })(context)
-      : templateContent;
-
-    await fs.outputFile(outputPath, ensureTrailingNewline(outputContent), "utf8");
+    await renderTemplateFile({
+      templateFilePath,
+      outputPath,
+      context,
+    });
   }
 }

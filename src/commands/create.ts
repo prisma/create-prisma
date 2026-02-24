@@ -1,5 +1,6 @@
 import {
   cancel,
+  intro,
   isCancel,
   log,
   select,
@@ -9,16 +10,24 @@ import {
 import fs from "fs-extra";
 import path from "node:path";
 
-import { scaffoldCreateTemplate } from "../templates/render-create-template";
+import {
+  scaffoldCreateTemplate,
+} from "../templates/render-create-template";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
+  type CreatePromptContext,
+  type CreateTargetPathState,
   type CreateCommandInput,
   type CreateTemplate,
   type InitCommandInput,
   type SchemaPreset,
 } from "../types";
-import { runInitCommand } from "./init";
+import {
+  collectInitContext,
+  executeInitContext,
+} from "./init";
+import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "hono";
@@ -38,21 +47,33 @@ function formatPathForDisplay(filePath: string): string {
   return path.relative(process.cwd(), filePath) || ".";
 }
 
+function validateProjectName(value: string | undefined): string | undefined {
+  const trimmed = String(value ?? "").trim();
+  if (trimmed.length === 0) {
+    return "Please enter a project name.";
+  }
+
+  if (trimmed === "." || trimmed === "..") {
+    return "Project name cannot be '.' or '..'.";
+  }
+
+  if (path.isAbsolute(trimmed)) {
+    return "Use a relative project name instead of an absolute path.";
+  }
+
+  return undefined;
+}
+
 async function promptForProjectName(): Promise<string | undefined> {
   const projectName = await text({
     message: "Project name",
     placeholder: DEFAULT_PROJECT_NAME,
     initialValue: DEFAULT_PROJECT_NAME,
-    validate: (value) => {
-      const trimmed = String(value ?? "").trim();
-      return trimmed.length > 0
-        ? undefined
-        : "Please enter a valid project name.";
-    },
+    validate: validateProjectName,
   });
 
   if (isCancel(projectName)) {
-    cancel("Cancelled.");
+    cancel("Operation cancelled.");
     return undefined;
   }
 
@@ -78,24 +99,63 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
   });
 
   if (isCancel(template)) {
-    cancel("Cancelled.");
+    cancel("Operation cancelled.");
     return undefined;
   }
 
   return CreateTemplateSchema.parse(template);
 }
 
-async function isDirectoryEmpty(directoryPath: string): Promise<boolean> {
-  if (!(await fs.pathExists(directoryPath))) {
-    return true;
+async function inspectTargetPath(targetPath: string): Promise<CreateTargetPathState> {
+  if (!(await fs.pathExists(targetPath))) {
+    return {
+      exists: false,
+      isDirectory: true,
+      isEmptyDirectory: true,
+    };
   }
 
-  const entries = await fs.readdir(directoryPath);
-  return entries.length === 0;
+  const stats = await fs.stat(targetPath);
+  if (!stats.isDirectory()) {
+    return {
+      exists: true,
+      isDirectory: false,
+      isEmptyDirectory: false,
+    };
+  }
+
+  const entries = await fs.readdir(targetPath);
+  return {
+    exists: true,
+    isDirectory: true,
+    isEmptyDirectory: entries.length === 0,
+  };
 }
 
 export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promise<void> {
-  const input = CreateCommandInputSchema.parse(rawInput);
+  try {
+    const input = CreateCommandInputSchema.parse(rawInput);
+
+    intro(getCreatePrismaIntro());
+
+    const context = await collectCreateContext(input);
+    if (!context) {
+      return;
+    }
+
+    await executeCreateContext(context);
+  } catch (error) {
+    cancel(
+      `Create command failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+}
+
+async function collectCreateContext(
+  input: CreateCommandInput
+): Promise<CreatePromptContext | undefined> {
   const useDefaults = input.yes === true;
   const force = input.force === true;
 
@@ -116,37 +176,26 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     input.schemaPreset ?? DEFAULT_SCHEMA_PRESET;
 
   const targetDirectory = path.resolve(process.cwd(), projectName);
-  const targetExists = await fs.pathExists(targetDirectory);
-  const targetIsEmpty = await isDirectoryEmpty(targetDirectory);
-  if (targetExists && !targetIsEmpty && !force) {
+  const targetPathState = await inspectTargetPath(targetDirectory);
+  if (targetPathState.exists && !targetPathState.isDirectory) {
+    cancel(
+      `Target path ${formatPathForDisplay(
+        targetDirectory
+      )} already exists and is not a directory. Choose a different project name.`
+    );
+    return;
+  }
+  if (
+    targetPathState.exists &&
+    !targetPathState.isEmptyDirectory &&
+    !force
+  ) {
     cancel(
       `Target directory ${formatPathForDisplay(
         targetDirectory
       )} is not empty. Use --force to continue.`
     );
     return;
-  }
-
-  const scaffoldSpinner = spinner();
-  scaffoldSpinner.start(`Scaffolding ${template} project...`);
-  try {
-    await scaffoldCreateTemplate({
-      projectDir: targetDirectory,
-      projectName: toPackageName(path.basename(targetDirectory)),
-      template,
-      schemaPreset,
-    });
-    scaffoldSpinner.stop("Project files scaffolded.");
-  } catch (error) {
-    scaffoldSpinner.stop("Could not scaffold project files.");
-    cancel(error instanceof Error ? error.message : String(error));
-    return;
-  }
-
-  if (targetExists && !targetIsEmpty && force) {
-    log.warn(
-      `Used --force in non-empty directory ${formatPathForDisplay(targetDirectory)}.`
-    );
   }
 
   const initInput: InitCommandInput = {
@@ -161,10 +210,58 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     schemaPreset,
   };
 
-  const cdStep = `- cd ${formatPathForDisplay(targetDirectory)}`;
-  await runInitCommand(initInput, {
+  const initContext = await collectInitContext(initInput, {
+    skipIntro: true,
+    projectDir: targetDirectory,
+  });
+  if (!initContext) {
+    return;
+  }
+
+  return {
+    targetDirectory,
+    targetPathState,
+    force,
+    template,
+    schemaPreset,
+    projectPackageName: toPackageName(path.basename(targetDirectory)),
+    initContext,
+  };
+}
+
+async function executeCreateContext(context: CreatePromptContext): Promise<void> {
+  const scaffoldSpinner = spinner();
+  scaffoldSpinner.start(`Scaffolding ${context.template} project...`);
+  try {
+    await scaffoldCreateTemplate({
+      projectDir: context.targetDirectory,
+      projectName: context.projectPackageName,
+      template: context.template,
+      schemaPreset: context.schemaPreset,
+      packageManager: context.initContext.packageManager,
+    });
+    scaffoldSpinner.stop("Project files scaffolded.");
+  } catch (error) {
+    scaffoldSpinner.stop("Could not scaffold project files.");
+    cancel(error instanceof Error ? error.message : String(error));
+    return;
+  }
+
+  if (
+    context.targetPathState.exists &&
+    !context.targetPathState.isEmptyDirectory &&
+    context.force
+  ) {
+    log.warn(
+      `Used --force in non-empty directory ${formatPathForDisplay(context.targetDirectory)}.`
+    );
+  }
+
+  const cdStep = `- cd ${formatPathForDisplay(context.targetDirectory)}`;
+  await executeInitContext(context.initContext, {
     skipIntro: true,
     prependNextSteps: [cdStep],
-    projectDir: targetDirectory,
+    projectDir: context.targetDirectory,
+    includeDevNextStep: true,
   });
 }

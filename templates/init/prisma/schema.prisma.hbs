@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "{{provider}}"
 }
-{{#if useBasicSchema}}
+{{#if (eq schemaPreset "basic")}}
 
 model User {
   id        String   @id @default(cuid())
