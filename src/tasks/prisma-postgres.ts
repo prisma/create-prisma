@@ -1,6 +1,6 @@
 import { execa } from "execa";
 
-import type { PackageManager } from "../types";
+import type { PackageManager, PrismaPostgresResult } from "../types";
 import {
   getPackageExecutionArgs,
   getPackageExecutionCommand,
@@ -14,11 +14,6 @@ type CreateDbJsonPayload = {
   databaseUrl?: string;
   claimUrl?: string;
   claimURL?: string;
-};
-
-type PrismaPostgresResult = {
-  databaseUrl: string;
-  claimUrl?: string;
 };
 
 export const PRISMA_POSTGRES_TEMPORARY_NOTICE =

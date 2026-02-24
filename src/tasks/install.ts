@@ -6,17 +6,13 @@ import {
   dependencyVersionMap,
   type AvailableDependency,
 } from "../constants/dependencies";
-import { getDbPackages } from "../db/config";
-import type { DatabaseProvider, PackageManager } from "../types";
+import { getDbPackages } from "../constants/db-packages";
+import type {
+  DatabaseProvider,
+  DependencyWriteResult,
+  PackageManager,
+} from "../types";
 import { getInstallArgs } from "../utils/package-manager";
-
-export type DependencyWriteResult = {
-  dependencies: string[];
-  devDependencies: string[];
-  scripts: string[];
-  addedScripts: string[];
-  existingScripts: string[];
-};
 
 const prismaScriptMap = {
   "db:generate": "prisma generate",

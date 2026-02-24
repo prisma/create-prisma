@@ -1,21 +1,15 @@
 import path from "node:path";
 
-import type { DatabaseProvider, SchemaPreset } from "../types";
+import type {
+  DatabaseProvider,
+  InitTemplateContext,
+  ScaffoldedInitTemplatePaths,
+  SchemaPreset,
+} from "../types";
 import {
   renderTemplateTree,
   resolveTemplatesDir,
 } from "./shared";
-
-type InitTemplateContext = {
-  envVar: string;
-  provider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
-  usePgAdapter: boolean;
-  useMariaDbAdapter: boolean;
-  useSqliteAdapter: boolean;
-  useMssqlAdapter: boolean;
-  useBasicSchema: boolean;
-};
 
 function getInitTemplatesDir(): string {
   return resolveTemplatesDir("templates/init");
@@ -30,19 +24,8 @@ function createTemplateContext(
     envVar,
     provider,
     schemaPreset,
-    usePgAdapter: provider === "postgresql" || provider === "cockroachdb",
-    useMariaDbAdapter: provider === "mysql",
-    useSqliteAdapter: provider === "sqlite",
-    useMssqlAdapter: provider === "sqlserver",
-    useBasicSchema: schemaPreset === "basic",
   };
 }
-
-export type ScaffoldedInitTemplatePaths = {
-  schemaPath: string;
-  configPath: string;
-  singletonPath: string;
-};
 
 export async function scaffoldInitTemplates(
   projectDir: string,

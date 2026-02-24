@@ -1,15 +1,18 @@
 import "dotenv/config";
 import { PrismaClient } from "./generated/client";
-{{#if usePgAdapter}}
+{{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
 {{/if}}
-{{#if useMariaDbAdapter}}
+{{#if (eq provider "cockroachdb")}}
+import { PrismaPg } from "@prisma/adapter-pg";
+{{/if}}
+{{#if (eq provider "mysql")}}
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 {{/if}}
-{{#if useSqliteAdapter}}
+{{#if (eq provider "sqlite")}}
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 {{/if}}
-{{#if useMssqlAdapter}}
+{{#if (eq provider "sqlserver")}}
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
@@ -17,20 +20,25 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-{{#if usePgAdapter}}
+{{#if (eq provider "postgresql")}}
 const adapter = new PrismaPg({
   connectionString: process.env.{{envVar}} ?? "",
 });
 {{/if}}
-{{#if useMariaDbAdapter}}
+{{#if (eq provider "cockroachdb")}}
+const adapter = new PrismaPg({
+  connectionString: process.env.{{envVar}} ?? "",
+});
+{{/if}}
+{{#if (eq provider "mysql")}}
 const adapter = new PrismaMariaDb(process.env.{{envVar}} ?? "");
 {{/if}}
-{{#if useSqliteAdapter}}
+{{#if (eq provider "sqlite")}}
 const adapter = new PrismaBetterSqlite3({
   url: process.env.{{envVar}} ?? "file:./dev.db",
 });
 {{/if}}
-{{#if useMssqlAdapter}}
+{{#if (eq provider "sqlserver")}}
 const adapter = new PrismaMssql(process.env.{{envVar}} ?? "");
 {{/if}}
 

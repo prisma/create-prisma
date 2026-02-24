@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-{{#if useBasicSchema}}
+{{#if (eq schemaPreset "basic")}}
 import { prisma } from "../prisma";
 {{/if}}
 
@@ -11,7 +11,7 @@ app.get("/", (c) => {
     message: "hello from create-prisma + hono",
   });
 });
-{{#if useBasicSchema}}
+{{#if (eq schemaPreset "basic")}}
 
 app.get("/users", async (c) => {
   const users = await prisma.user.findMany({
