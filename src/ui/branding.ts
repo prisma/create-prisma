@@ -1,6 +1,9 @@
-import pc from "picocolors";
+import { styleText } from "node:util";
 
-const prismaTitle = `${pc.bold(pc.cyan("Create"))} ${pc.bold(pc.magenta("Prisma"))}`;
+const prismaTitle = `${styleText(["bold", "cyan"], "Create")} ${styleText(
+  ["bold", "magenta"],
+  "Prisma"
+)}`;
 
 export function getCreatePrismaIntro(): string {
   return prismaTitle;
