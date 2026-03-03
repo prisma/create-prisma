@@ -15,7 +15,8 @@ export const load: PageServerLoad = async () => {
         ...user,
         createdAt: user.createdAt.toISOString(),
       }))
-    );
+    )
+    .catch(() => undefined);
 
   return { users };
 };

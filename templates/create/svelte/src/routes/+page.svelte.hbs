@@ -29,10 +29,15 @@
 	<div class="panel">
 		<div class="panel-header">
 			<h2>Seeded users</h2>
-			<span>{data.users.length} total</span>
+			<span>{data.users?.length ?? 0} total</span>
 		</div>
 
-		{#if data.users.length === 0}
+		{#if !data.users}
+			<p class="empty">
+				Could not query users yet. Run <code>db:migrate</code>, then <code>db:seed</code>, then
+				refresh.
+			</p>
+		{:else if data.users.length === 0}
 			<p class="empty">No users yet. Run <code>db:seed</code> after your first migration.</p>
 		{:else}
 			<ul class="users">
@@ -160,7 +165,7 @@
 		border-radius: 0.35rem;
 		background: rgba(17, 24, 39, 0.06);
 		font-family:
-			'SFMono-Regular',
+			SFMono-Regular,
 			Consolas,
 			monospace;
 		font-size: 0.95em;
@@ -323,7 +328,7 @@
 		border-radius: 0.35rem;
 		background: rgba(17, 24, 39, 0.06);
 		font-family:
-			'SFMono-Regular',
+			SFMono-Regular,
 			Consolas,
 			monospace;
 		font-size: 0.95em;

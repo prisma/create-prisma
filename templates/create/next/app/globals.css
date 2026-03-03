@@ -117,7 +117,7 @@ code {
   border-radius: 0.35rem;
   background: rgba(17, 24, 39, 0.06);
   font-family:
-    "SFMono-Regular",
+    SFMono-Regular,
     Consolas,
     monospace;
   font-size: 0.95em;

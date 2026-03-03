@@ -260,8 +260,13 @@ function getDefaultDatabaseUrl(provider: DatabaseProvider): string {
   }
 }
 
+// Escape regex metacharacters before interpolating dynamic values into RegExp.
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeEnvValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function hasEnvVar(content: string, envVarName: string): boolean {
@@ -286,10 +291,13 @@ async function ensureEnvVarInEnv(
   }
 ): Promise<{ envPath: string; status: EnvStatus }> {
   const envPath = path.join(projectDir, ".env");
-  const envLine = `${envVarName}="${envVarValue}"`;
+  const envLine = `${envVarName}="${escapeEnvValue(envVarValue)}"`;
 
   if (!(await fs.pathExists(envPath))) {
-    await fs.writeFile(envPath, `${envLine}\n`, "utf8");
+    const content = opts.comment
+      ? `# ${opts.comment}\n${envLine}\n`
+      : `${envLine}\n`;
+    await fs.writeFile(envPath, content, "utf8");
     return { envPath, status: "created" };
   }
 

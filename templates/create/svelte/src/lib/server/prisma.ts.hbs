@@ -20,26 +20,35 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
+{{#if (eq provider "sqlite")}}
+const databaseUrl = env.DATABASE_URL ?? "file:./dev.db";
+{{else}}
+const databaseUrl = env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required");
+}
+{{/if}}
+
 {{#if (eq provider "postgresql")}}
 const adapter = new PrismaPg({
-  connectionString: env.DATABASE_URL ?? "",
+  connectionString: databaseUrl,
 });
 {{/if}}
 {{#if (eq provider "cockroachdb")}}
 const adapter = new PrismaPg({
-  connectionString: env.DATABASE_URL ?? "",
+  connectionString: databaseUrl,
 });
 {{/if}}
 {{#if (eq provider "mysql")}}
-const adapter = new PrismaMariaDb(env.DATABASE_URL ?? "");
+const adapter = new PrismaMariaDb(databaseUrl);
 {{/if}}
 {{#if (eq provider "sqlite")}}
 const adapter = new PrismaBetterSqlite3({
-  url: env.DATABASE_URL ?? "file:./dev.db",
+  url: databaseUrl,
 });
 {{/if}}
 {{#if (eq provider "sqlserver")}}
-const adapter = new PrismaMssql(env.DATABASE_URL ?? "");
+const adapter = new PrismaMssql(databaseUrl);
 {{/if}}
 
 const prisma = globalThis.prisma ?? new PrismaClient({ adapter });
