@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 {{#if (eq schemaPreset "basic")}}
-import { prisma } from "../prisma";
+import { prisma } from "./lib/prisma";
 {{/if}}
 
 const app = new Hono();

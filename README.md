@@ -1,6 +1,6 @@
 # create-prisma
 
-A modern Prisma 7 CLI with first-party project templates and great init DX.
+A modern Prisma 7 CLI with first-party project templates and a smooth create flow.
 
 ## Stack
 
@@ -38,40 +38,34 @@ Create a Next.js project non-interactively:
 create-prisma --name my-web --template next --provider postgresql
 ```
 
-Initialize Prisma explicitly in the current project:
-
-```bash
-create-prisma init
-```
-
 Set package manager non-interactively:
 
 ```bash
-create-prisma init --package-manager pnpm --install
+create-prisma --name my-app --template hono --package-manager pnpm --install
 ```
 
 Skip Prisma Client generation:
 
 ```bash
-create-prisma init --no-generate
+create-prisma --name my-app --template hono --no-generate
 ```
 
 Show verbose command output:
 
 ```bash
-create-prisma init --verbose
+create-prisma --name my-app --template hono --verbose
 ```
 
 Run fully non-interactive with defaults:
 
 ```bash
-create-prisma init --yes
+create-prisma --yes
 ```
 
 Use Prisma Postgres auto-provisioning for PostgreSQL:
 
 ```bash
-create-prisma init --provider postgresql --prisma-postgres
+create-prisma --name my-app --template hono --provider postgresql --prisma-postgres
 ```
 
 Or run locally:
@@ -82,10 +76,12 @@ bun run build
 bun run start
 ```
 
-The CLI updates `package.json` with Prisma dependencies, optionally runs dependency installation with your selected package manager, and scaffolds Prisma 7 setup files from Handlebars templates:
+The CLI updates `package.json` with Prisma dependencies, optionally runs dependency installation with your selected package manager, and scaffolds Prisma 7 setup files directly inside each app template:
 - `prisma/schema.prisma`
-- `prisma/index.ts`
+- `prisma/seed.ts`
+- `src/lib/prisma.ts`
 - `prisma.config.ts`
+- `generated/prisma`
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)
 - runs `prisma generate` automatically after scaffolding
 
@@ -94,8 +90,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 
-`init` configures Prisma in the current project and supports schema presets too (default: `empty`).
-Both commands prompt for database choice, package manager, and whether to install dependencies now.
+`create` prompts for database choice, package manager, and whether to install dependencies now.
 Supported providers in this flow: `postgresql`, `mysql`, `sqlite`, `sqlserver`, `cockroachdb`.
 Supported package managers: `bun`, `pnpm`, `npm`.
 Package manager prompt auto-detects from `package.json`/lockfiles/user agent and uses that as the initial selection.
@@ -103,8 +98,8 @@ Package manager prompt auto-detects from `package.json`/lockfiles/user agent and
 `--no-generate` skips automatic `prisma generate`.
 `--verbose` prints full install/generate command output; default mode keeps output concise.
 `--force` (create only) allows scaffolding in a non-empty target directory.
-If Prisma files already exist, `init` asks whether to keep existing files or overwrite them.
-When `postgresql` is selected, `init` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
+When `postgresql` is selected, `create` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
+Generated projects also include `db:seed` and configure Prisma's `migrations.seed` hook to run `tsx prisma/seed.ts`.
 
 ## Scripts
 

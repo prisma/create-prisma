@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient } from "./generated/client";
+import { PrismaClient } from "../../generated/prisma/client";
 {{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
 {{/if}}
@@ -22,24 +22,24 @@ declare global {
 
 {{#if (eq provider "postgresql")}}
 const adapter = new PrismaPg({
-  connectionString: process.env.{{envVar}} ?? "",
+  connectionString: process.env.DATABASE_URL ?? "",
 });
 {{/if}}
 {{#if (eq provider "cockroachdb")}}
 const adapter = new PrismaPg({
-  connectionString: process.env.{{envVar}} ?? "",
+  connectionString: process.env.DATABASE_URL ?? "",
 });
 {{/if}}
 {{#if (eq provider "mysql")}}
-const adapter = new PrismaMariaDb(process.env.{{envVar}} ?? "");
+const adapter = new PrismaMariaDb(process.env.DATABASE_URL ?? "");
 {{/if}}
 {{#if (eq provider "sqlite")}}
 const adapter = new PrismaBetterSqlite3({
-  url: process.env.{{envVar}} ?? "file:./dev.db",
+  url: process.env.DATABASE_URL ?? "file:./dev.db",
 });
 {{/if}}
 {{#if (eq provider "sqlserver")}}
-const adapter = new PrismaMssql(process.env.{{envVar}} ?? "");
+const adapter = new PrismaMssql(process.env.DATABASE_URL ?? "");
 {{/if}}
 
 const prisma = globalThis.prisma ?? new PrismaClient({ adapter });

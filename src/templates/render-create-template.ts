@@ -1,6 +1,7 @@
 import type {
   CreateTemplate,
   CreateTemplateContext,
+  DatabaseProvider,
   PackageManager,
   SchemaPreset,
 } from "../types";
@@ -15,11 +16,13 @@ function getCreateTemplateDir(template: CreateTemplate): string {
 
 function createTemplateContext(
   projectName: string,
+  provider: DatabaseProvider,
   schemaPreset: SchemaPreset,
   packageManager?: PackageManager
 ): CreateTemplateContext {
   return {
     projectName,
+    provider,
     schemaPreset,
     packageManager,
   };
@@ -29,12 +32,25 @@ export async function scaffoldCreateTemplate(opts: {
   projectDir: string;
   projectName: string;
   template: CreateTemplate;
+  provider: DatabaseProvider;
   schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
 }): Promise<void> {
-  const { projectDir, projectName, template, schemaPreset, packageManager } = opts;
+  const {
+    projectDir,
+    projectName,
+    template,
+    provider,
+    schemaPreset,
+    packageManager,
+  } = opts;
   const templateRoot = getCreateTemplateDir(template);
-  const context = createTemplateContext(projectName, schemaPreset, packageManager);
+  const context = createTemplateContext(
+    projectName,
+    provider,
+    schemaPreset,
+    packageManager
+  );
   await renderTemplateTree<CreateTemplateContext>({
     templateRoot,
     outputDir: projectDir,
