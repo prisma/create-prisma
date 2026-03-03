@@ -1,0 +1,344 @@
+{{#if (eq schemaPreset "basic")}}
+<script lang="ts">
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
+</script>
+
+<svelte:head>
+	<title>create-prisma + sveltekit</title>
+</svelte:head>
+
+<script lang="ts" module>
+	const formatter = new Intl.DateTimeFormat('en', {
+		dateStyle: 'medium',
+		timeStyle: 'short'
+	});
+</script>
+
+<section class="shell">
+	<div class="hero">
+		<p class="eyebrow">SvelteKit + Prisma 7</p>
+		<h1>Users from your database, loaded on the server.</h1>
+		<p class="lede">
+			This page reads from <code>+page.server.ts</code> using the Prisma instance in
+			<code>src/lib/server/prisma.ts</code>.
+		</p>
+	</div>
+
+	<div class="panel">
+		<div class="panel-header">
+			<h2>Seeded users</h2>
+			<span>{data.users.length} total</span>
+		</div>
+
+		{#if data.users.length === 0}
+			<p class="empty">No users yet. Run <code>db:seed</code> after your first migration.</p>
+		{:else}
+			<ul class="users">
+				{#each data.users as user}
+					<li>
+						<div>
+							<strong>{user.name ?? 'Unnamed user'}</strong>
+							<p>{user.email}</p>
+						</div>
+						<time datetime={user.createdAt}>
+							{formatter.format(new Date(user.createdAt))}
+						</time>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+</section>
+
+<style>
+	:global(body) {
+		margin: 0;
+		font-family:
+			'Instrument Sans',
+			'Segoe UI',
+			sans-serif;
+		background:
+			radial-gradient(circle at top left, rgba(255, 62, 0, 0.16), transparent 28rem),
+			linear-gradient(180deg, #fff8f3 0%, #fff 45%, #f8fafc 100%);
+		color: #111827;
+	}
+
+	.shell {
+		max-width: 64rem;
+		margin: 0 auto;
+		padding: 4rem 1.5rem 5rem;
+	}
+
+	.hero {
+		margin-bottom: 2rem;
+	}
+
+	.eyebrow {
+		margin: 0 0 0.75rem;
+		color: #c2410c;
+		font-size: 0.875rem;
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+
+	h1 {
+		margin: 0;
+		max-width: 12ch;
+		font-size: clamp(2.75rem, 7vw, 5rem);
+		line-height: 0.95;
+	}
+
+	.lede {
+		max-width: 42rem;
+		font-size: 1.05rem;
+		line-height: 1.7;
+		color: #4b5563;
+	}
+
+	.panel {
+		padding: 1.5rem;
+		border: 1px solid rgba(17, 24, 39, 0.08);
+		border-radius: 1.5rem;
+		background: rgba(255, 255, 255, 0.92);
+		box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+		backdrop-filter: blur(12px);
+	}
+
+	.panel-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1.125rem;
+	}
+
+	.panel-header span,
+	.empty,
+	time,
+	p {
+		color: #6b7280;
+	}
+
+	.users {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.users li {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1rem 1.125rem;
+		border-radius: 1rem;
+		background: #fff7ed;
+		border: 1px solid rgba(255, 237, 213, 0.9);
+	}
+
+	.users p {
+		margin: 0.2rem 0 0;
+	}
+
+	time {
+		font-size: 0.875rem;
+		white-space: nowrap;
+	}
+
+	code {
+		padding: 0.15rem 0.4rem;
+		border-radius: 0.35rem;
+		background: rgba(17, 24, 39, 0.06);
+		font-family:
+			'SFMono-Regular',
+			Consolas,
+			monospace;
+		font-size: 0.95em;
+	}
+
+	@media (max-width: 640px) {
+		.shell {
+			padding-top: 3rem;
+		}
+
+		.users li,
+		.panel-header {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+	}
+</style>
+{{else}}
+<svelte:head>
+	<title>create-prisma + sveltekit</title>
+</svelte:head>
+
+<section class="shell">
+	<div class="hero">
+		<p class="eyebrow">SvelteKit + Prisma 7</p>
+		<h1>Your SvelteKit app is ready.</h1>
+		<p class="lede">
+			Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then load your data from
+			<code>+page.server.ts</code> with the Prisma instance in <code>src/lib/server/prisma.ts</code>.
+		</p>
+	</div>
+
+	<div class="panel">
+		<div class="panel-header">
+			<h2>What's included</h2>
+			<span>Starter kit</span>
+		</div>
+
+		<ul class="users">
+			<li>
+				<div>
+					<strong>Prisma client</strong>
+					<p>Use the server-only instance from <code>src/lib/server/prisma.ts</code>.</p>
+				</div>
+			</li>
+			<li>
+				<div>
+					<strong>Seed script</strong>
+					<p>Run <code>db:seed</code> after your first migration.</p>
+				</div>
+			</li>
+			<li>
+				<div>
+					<strong>Generated client output</strong>
+					<p>Prisma Client is generated into <code>generated/prisma</code>.</p>
+				</div>
+			</li>
+		</ul>
+	</div>
+</section>
+
+<style>
+	:global(body) {
+		margin: 0;
+		font-family:
+			'Instrument Sans',
+			'Segoe UI',
+			sans-serif;
+		background:
+			radial-gradient(circle at top left, rgba(255, 62, 0, 0.16), transparent 28rem),
+			linear-gradient(180deg, #fff8f3 0%, #fff 45%, #f8fafc 100%);
+		color: #111827;
+	}
+
+	.shell {
+		max-width: 64rem;
+		margin: 0 auto;
+		padding: 4rem 1.5rem 5rem;
+	}
+
+	.hero {
+		margin-bottom: 2rem;
+	}
+
+	.eyebrow {
+		margin: 0 0 0.75rem;
+		color: #c2410c;
+		font-size: 0.875rem;
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+
+	h1 {
+		margin: 0;
+		max-width: 12ch;
+		font-size: clamp(2.75rem, 7vw, 5rem);
+		line-height: 0.95;
+	}
+
+	.lede {
+		max-width: 42rem;
+		font-size: 1.05rem;
+		line-height: 1.7;
+		color: #4b5563;
+	}
+
+	.panel {
+		padding: 1.5rem;
+		border: 1px solid rgba(17, 24, 39, 0.08);
+		border-radius: 1.5rem;
+		background: rgba(255, 255, 255, 0.92);
+		box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+		backdrop-filter: blur(12px);
+	}
+
+	.panel-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1.125rem;
+	}
+
+	.panel-header span,
+	p {
+		color: #6b7280;
+	}
+
+	.users {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.users li {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1rem 1.125rem;
+		border-radius: 1rem;
+		background: #fff7ed;
+		border: 1px solid rgba(255, 237, 213, 0.9);
+	}
+
+	.users p {
+		margin: 0.2rem 0 0;
+	}
+
+	code {
+		padding: 0.15rem 0.4rem;
+		border-radius: 0.35rem;
+		background: rgba(17, 24, 39, 0.06);
+		font-family:
+			'SFMono-Regular',
+			Consolas,
+			monospace;
+		font-size: 0.95em;
+	}
+
+	@media (max-width: 640px) {
+		.shell {
+			padding-top: 3rem;
+		}
+
+		.users li,
+		.panel-header {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+	}
+</style>
+{{/if}}

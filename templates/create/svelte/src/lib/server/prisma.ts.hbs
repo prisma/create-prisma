@@ -1,0 +1,52 @@
+import { env } from "$env/dynamic/private";
+import { PrismaClient } from "../../../generated/prisma/client";
+{{#if (eq provider "postgresql")}}
+import { PrismaPg } from "@prisma/adapter-pg";
+{{/if}}
+{{#if (eq provider "cockroachdb")}}
+import { PrismaPg } from "@prisma/adapter-pg";
+{{/if}}
+{{#if (eq provider "mysql")}}
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+{{/if}}
+{{#if (eq provider "sqlite")}}
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+{{/if}}
+{{#if (eq provider "sqlserver")}}
+import { PrismaMssql } from "@prisma/adapter-mssql";
+{{/if}}
+
+declare global {
+  var prisma: PrismaClient | undefined;
+}
+
+{{#if (eq provider "postgresql")}}
+const adapter = new PrismaPg({
+  connectionString: env.DATABASE_URL ?? "",
+});
+{{/if}}
+{{#if (eq provider "cockroachdb")}}
+const adapter = new PrismaPg({
+  connectionString: env.DATABASE_URL ?? "",
+});
+{{/if}}
+{{#if (eq provider "mysql")}}
+const adapter = new PrismaMariaDb(env.DATABASE_URL ?? "");
+{{/if}}
+{{#if (eq provider "sqlite")}}
+const adapter = new PrismaBetterSqlite3({
+  url: env.DATABASE_URL ?? "file:./dev.db",
+});
+{{/if}}
+{{#if (eq provider "sqlserver")}}
+const adapter = new PrismaMssql(env.DATABASE_URL ?? "");
+{{/if}}
+
+const prisma = globalThis.prisma ?? new PrismaClient({ adapter });
+
+if (import.meta.env.DEV) {
+  globalThis.prisma = prisma;
+}
+
+export { prisma };
+export default prisma;

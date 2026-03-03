@@ -1,0 +1,78 @@
+import "dotenv/config";
+import { PrismaClient } from "../generated/prisma/client";
+{{#if (eq provider "postgresql")}}
+import { PrismaPg } from "@prisma/adapter-pg";
+{{/if}}
+{{#if (eq provider "cockroachdb")}}
+import { PrismaPg } from "@prisma/adapter-pg";
+{{/if}}
+{{#if (eq provider "mysql")}}
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+{{/if}}
+{{#if (eq provider "sqlite")}}
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+{{/if}}
+{{#if (eq provider "sqlserver")}}
+import { PrismaMssql } from "@prisma/adapter-mssql";
+{{/if}}
+
+{{#if (eq provider "postgresql")}}
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL ?? "",
+});
+{{/if}}
+{{#if (eq provider "cockroachdb")}}
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL ?? "",
+});
+{{/if}}
+{{#if (eq provider "mysql")}}
+const adapter = new PrismaMariaDb(process.env.DATABASE_URL ?? "");
+{{/if}}
+{{#if (eq provider "sqlite")}}
+const adapter = new PrismaBetterSqlite3({
+  url: process.env.DATABASE_URL ?? "file:./dev.db",
+});
+{{/if}}
+{{#if (eq provider "sqlserver")}}
+const adapter = new PrismaMssql(process.env.DATABASE_URL ?? "");
+{{/if}}
+
+const prisma = new PrismaClient({ adapter });
+
+async function main() {
+{{#if (eq schemaPreset "basic")}}
+  const users = await Promise.all([
+    prisma.user.upsert({
+      where: { email: "alice@prisma.io" },
+      update: { name: "Alice" },
+      create: {
+        email: "alice@prisma.io",
+        name: "Alice",
+      },
+    }),
+    prisma.user.upsert({
+      where: { email: "bob@prisma.io" },
+      update: { name: "Bob" },
+      create: {
+        email: "bob@prisma.io",
+        name: "Bob",
+      },
+    }),
+  ]);
+
+  console.log(`Seeded ${users.length} users.`);
+{{else}}
+  console.log("No seed data defined for the empty schema preset.");
+{{/if}}
+}
+
+main()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async (error) => {
+    console.error(error);
+    await prisma.$disconnect();
+    process.exit(1);
+  });

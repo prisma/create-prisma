@@ -54,11 +54,11 @@ const DEFAULT_PRISMA_POSTGRES = true;
 const DEFAULT_INSTALL = true;
 const DEFAULT_GENERATE = true;
 
-const requiredPrismaFiles = [
-  "prisma/schema.prisma",
-  "prisma/seed.ts",
-  "prisma.config.ts",
-  "src/lib/prisma.ts",
+const requiredPrismaFileGroups = [
+  ["prisma/schema.prisma"],
+  ["prisma/seed.ts"],
+  ["prisma.config.ts"],
+  ["src/lib/prisma.ts", "src/lib/server/prisma.ts"],
 ] as const;
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
@@ -374,10 +374,19 @@ async function ensureGitignoreEntry(
 async function ensureRequiredPrismaFiles(projectDir: string): Promise<void> {
   const missingFiles: string[] = [];
 
-  for (const relativePath of requiredPrismaFiles) {
-    const absolutePath = path.join(projectDir, relativePath);
-    if (!(await fs.pathExists(absolutePath))) {
-      missingFiles.push(relativePath);
+  for (const candidates of requiredPrismaFileGroups) {
+    let foundCandidate = false;
+
+    for (const relativePath of candidates) {
+      const absolutePath = path.join(projectDir, relativePath);
+      if (await fs.pathExists(absolutePath)) {
+        foundCandidate = true;
+        break;
+      }
+    }
+
+    if (!foundCandidate) {
+      missingFiles.push(candidates.join(" or "));
     }
   }
 
@@ -394,9 +403,11 @@ async function finalizePrismaFiles(
   const projectDir = options.projectDir ?? process.cwd();
   const schemaPath = path.join(projectDir, "prisma/schema.prisma");
   const configPath = path.join(projectDir, "prisma.config.ts");
-  const singletonPath = path.join(projectDir, "src/lib/prisma.ts");
 
   await ensureRequiredPrismaFiles(projectDir);
+  const singletonPath = (await fs.pathExists(path.join(projectDir, "src/lib/prisma.ts")))
+    ? path.join(projectDir, "src/lib/prisma.ts")
+    : path.join(projectDir, "src/lib/server/prisma.ts");
 
   const databaseUrl =
     options.databaseUrl ?? getDefaultDatabaseUrl(options.provider);

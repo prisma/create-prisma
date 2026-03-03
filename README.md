@@ -38,6 +38,12 @@ Create a Next.js project non-interactively:
 create-prisma --name my-web --template next --provider postgresql
 ```
 
+Create a SvelteKit project non-interactively:
+
+```bash
+create-prisma --name my-app --template svelte --provider postgresql
+```
+
 Set package manager non-interactively:
 
 ```bash
@@ -79,14 +85,14 @@ bun run start
 The CLI updates `package.json` with Prisma dependencies, optionally runs dependency installation with your selected package manager, and scaffolds Prisma 7 setup files directly inside each app template:
 - `prisma/schema.prisma`
 - `prisma/seed.ts`
-- `src/lib/prisma.ts`
+- `src/lib/prisma.ts` or `src/lib/server/prisma.ts`
 - `prisma.config.ts`
 - `generated/prisma`
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)
 - runs `prisma generate` automatically after scaffolding
 
 `create` is the default command and currently supports:
-- templates: `hono`, `next`
+- templates: `hono`, `next`, `svelte`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 

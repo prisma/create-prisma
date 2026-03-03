@@ -94,6 +94,11 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         label: "Next.js",
         hint: "App Router + TypeScript starter",
       },
+      {
+        value: "svelte",
+        label: "SvelteKit",
+        hint: "Official minimal SvelteKit + TypeScript starter",
+      },
     ],
   });
 
