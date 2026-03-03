@@ -10,7 +10,10 @@ export const GET: APIRoute = async () => {
         createdAt: "desc",
       },
     })
-    .catch(() => undefined);
+    .catch((error) => {
+      console.error("Failed to query users:", error);
+      return undefined;
+    });
 
   if (!users) {
     return new Response(JSON.stringify({ error: "Could not query users yet." }), {

@@ -266,6 +266,10 @@ function escapeRegExp(value: string): string {
 }
 
 function escapeEnvValue(value: string): string {
+  if (/[\r\n]/.test(value)) {
+    throw new Error("Environment variable values must be single-line.");
+  }
+
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
@@ -310,7 +314,7 @@ async function ensureEnvVarInEnv(
     const escapedName = escapeRegExp(envVarName);
     const lineRegex = new RegExp(
       `(^|\\n)\\s*${escapedName}\\s*=.*(?=\\n|$)`,
-      "m"
+      "gm"
     );
     const updatedContent = existingContent.replace(lineRegex, `$1${envLine}`);
     if (updatedContent === existingContent) {
@@ -353,8 +357,10 @@ async function ensureEnvComment(
 function hasGitignoreEntry(content: string, entry: string): boolean {
   const escapedEntry = escapeRegExp(entry);
   const escapedWithLeadingSlash = escapeRegExp(`/${entry}`);
+  const escapedWithTrailingSlash = escapeRegExp(`${entry}/`);
+  const escapedWithLeadingAndTrailingSlash = escapeRegExp(`/${entry}/`);
   return new RegExp(
-    `(^|\\n)\\s*(?:${escapedEntry}|${escapedWithLeadingSlash})\\s*(?=\\n|$)`
+    `(^|\\n)\\s*(?:${escapedEntry}|${escapedWithLeadingSlash}|${escapedWithTrailingSlash}|${escapedWithLeadingAndTrailingSlash})\\s*(?=\\n|$)`
   ).test(content);
 }
 

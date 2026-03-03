@@ -24,11 +24,7 @@ const users = await prisma.user
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
-{{#if (eq schemaPreset "basic")}}
     <title>create-prisma + astro</title>
-{{else}}
-    <title>create-prisma + astro</title>
-{{/if}}
   </head>
   <body>
     <main class="shell">
@@ -179,8 +175,11 @@ const users = await prisma.user
 
   .panel-header span,
   .empty,
-  time,
-  p {
+  time {
+    color: #64748b;
+  }
+
+  .panel p {
     color: #64748b;
   }
 
