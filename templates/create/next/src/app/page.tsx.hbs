@@ -1,0 +1,100 @@
+{{#if (eq schemaPreset "basic")}}
+import { prisma } from "../lib/prisma";
+{{/if}}
+
+export default async function Home() {
+{{#if (eq schemaPreset "basic")}}
+  const formatter = new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const users = await prisma.user
+    .findMany({
+      take: 10,
+      orderBy: {
+        createdAt: "desc",
+      },
+    })
+    .catch(() => undefined);
+{{/if}}
+
+  return (
+    <main className="shell">
+      <div className="hero">
+        <p className="eyebrow">Next.js + Prisma 7</p>
+{{#if (eq schemaPreset "basic")}}
+        <h1>Users from your database, loaded on the server.</h1>
+        <p className="lede">
+          This page reads from <code>src/app/page.tsx</code> using the Prisma instance in{" "}
+          <code>src/lib/prisma.ts</code>.
+        </p>
+      </div>
+
+      <section className="panel">
+        <div className="panelHeader">
+          <h2>Seeded users</h2>
+          <span>{users?.length ?? 0} total</span>
+        </div>
+
+        {!users ? (
+          <p className="empty">
+            Could not query users yet. Run <code>db:migrate</code>, then <code>db:seed</code>,
+            then refresh.
+          </p>
+        ) : users.length === 0 ? (
+          <p className="empty">No users yet. Run <code>db:seed</code> after your first migration.</p>
+        ) : (
+          <ul className="users">
+            {users.map((user) => (
+              <li key={user.id}>
+                <div>
+                  <strong>{user.name ?? "Unnamed user"}</strong>
+                  <p>{user.email}</p>
+                </div>
+                <time dateTime={user.createdAt.toISOString()}>
+                  {formatter.format(user.createdAt)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+{{else}}
+        <h1>Your Next.js app is ready.</h1>
+        <p className="lede">
+          Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then load your data
+          in server components with the Prisma instance in <code>src/lib/prisma.ts</code>.
+        </p>
+      </div>
+
+      <section className="panel">
+        <div className="panelHeader">
+          <h2>What&apos;s included</h2>
+          <span>Starter kit</span>
+        </div>
+
+        <ul className="users">
+          <li>
+            <div>
+              <strong>Prisma client</strong>
+              <p>Use the shared instance from <code>src/lib/prisma.ts</code>.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Seed script</strong>
+              <p>Run <code>db:seed</code> after your first migration.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Generated client output</strong>
+              <p>Prisma Client is generated into <code>src/generated/prisma</code>.</p>
+            </div>
+          </li>
+        </ul>
+      </section>
+{{/if}}
+    </main>
+  );
+}

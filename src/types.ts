@@ -10,7 +10,7 @@ export const databaseProviders = [
 
 export const packageManagers = ["npm", "pnpm", "bun"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
-export const createTemplates = ["hono", "next"] as const;
+export const createTemplates = ["hono", "next", "svelte", "astro"] as const;
 
 export const DatabaseProviderSchema = z.enum(databaseProviders);
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
@@ -62,10 +62,12 @@ export const PrismaSetupOptionsSchema = z.object({
   ),
 });
 
-export const InitCommandInputSchema = CommonCommandOptionsSchema.extend(
+export const PrismaSetupCommandInputSchema = CommonCommandOptionsSchema.extend(
   PrismaSetupOptionsSchema.shape
 );
-export type InitCommandInput = z.infer<typeof InitCommandInputSchema>;
+export type PrismaSetupCommandInput = z.infer<
+  typeof PrismaSetupCommandInputSchema
+>;
 
 export const CreateScaffoldOptionsSchema = z.object({
   name: z
@@ -81,9 +83,9 @@ export const CreateScaffoldOptionsSchema = z.object({
     .describe("Allow scaffolding into a non-empty target directory"),
 });
 
-export const CreateCommandInputSchema = CommonCommandOptionsSchema.extend(
+export const CreateCommandInputSchema = PrismaSetupCommandInputSchema.extend(
   CreateScaffoldOptionsSchema.shape
-).extend(PrismaSetupOptionsSchema.shape);
+);
 export type CreateCommandInput = z.infer<typeof CreateCommandInputSchema>;
 
 export type CreateTargetPathState = {
@@ -92,14 +94,13 @@ export type CreateTargetPathState = {
   isEmptyDirectory: boolean;
 };
 
-export type InitRunOptions = {
-  skipIntro?: boolean;
+export type PrismaSetupRunOptions = {
   prependNextSteps?: string[];
   projectDir?: string;
   includeDevNextStep?: boolean;
 };
 
-export type InitCommandResult = {
+export type PrismaSetupResult = {
   packageManager: PackageManager;
 };
 
@@ -114,11 +115,10 @@ export type PrismaGenerateResult = {
   warning?: string;
 };
 
-export type InitPromptContext = {
+export type PrismaSetupContext = {
   projectDir: string;
   verbose: boolean;
   shouldGenerate: boolean;
-  prismaFilesMode: PrismaFilesMode;
   databaseProvider: DatabaseProvider;
   schemaPreset: SchemaPreset;
   databaseUrl?: string;
@@ -134,22 +134,17 @@ export type CreatePromptContext = {
   template: CreateTemplate;
   schemaPreset: SchemaPreset;
   projectPackageName: string;
-  initContext: InitPromptContext;
+  prismaSetupContext: PrismaSetupContext;
 };
 
 export type CreateTemplateContext = {
   projectName: string;
+  provider: DatabaseProvider;
   schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
 };
 
-export type InitTemplateContext = {
-  envVar: string;
-  provider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
-};
-
-export type ScaffoldedInitTemplatePaths = {
+export type ScaffoldedPrismaPaths = {
   schemaPath: string;
   configPath: string;
   singletonPath: string;
@@ -170,22 +165,18 @@ export type DependencyWriteResult = {
 
 export type EnvStatus = "created" | "appended" | "existing" | "updated";
 export type FileAppendStatus = "created" | "appended" | "existing";
-export type PrismaFilesMode = "create" | "overwrite" | "reuse";
 
-export type InitPrismaOptions = {
+export type FinalizePrismaOptions = {
   provider: DatabaseProvider;
   databaseUrl?: string;
   claimUrl?: string;
-  schemaPreset?: SchemaPreset;
-  prismaFilesMode?: PrismaFilesMode;
   projectDir?: string;
 };
 
-export type InitPrismaResult = {
+export type FinalizePrismaResult = {
   schemaPath: string;
   configPath: string;
   singletonPath: string;
-  prismaFilesMode: PrismaFilesMode;
   envPath: string;
   envStatus: EnvStatus;
   gitignorePath: string;

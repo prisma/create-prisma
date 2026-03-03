@@ -18,6 +18,7 @@ const prismaScriptMap = {
   "db:generate": "prisma generate",
   "db:push": "prisma db push",
   "db:migrate": "prisma migrate dev",
+  "db:seed": "prisma db seed",
 } as const;
 
 function getVersion(packageName: string): string | undefined {

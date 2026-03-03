@@ -20,13 +20,12 @@ import {
   type CreateTargetPathState,
   type CreateCommandInput,
   type CreateTemplate,
-  type InitCommandInput,
   type SchemaPreset,
 } from "../types";
 import {
-  collectInitContext,
-  executeInitContext,
-} from "./init";
+  collectPrismaSetupContext,
+  executePrismaSetupContext,
+} from "../tasks/setup-prisma";
 import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
@@ -94,6 +93,16 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         value: "next",
         label: "Next.js",
         hint: "App Router + TypeScript starter",
+      },
+      {
+        value: "svelte",
+        label: "SvelteKit",
+        hint: "Official minimal SvelteKit + TypeScript starter",
+      },
+      {
+        value: "astro",
+        label: "Astro",
+        hint: "Official minimal Astro starter with API route example",
       },
     ],
   });
@@ -172,9 +181,6 @@ async function collectCreateContext(
     return;
   }
 
-  const schemaPreset =
-    input.schemaPreset ?? DEFAULT_SCHEMA_PRESET;
-
   const targetDirectory = path.resolve(process.cwd(), projectName);
   const targetPathState = await inspectTargetPath(targetDirectory);
   if (targetPathState.exists && !targetPathState.isDirectory) {
@@ -198,23 +204,11 @@ async function collectCreateContext(
     return;
   }
 
-  const initInput: InitCommandInput = {
-    yes: input.yes,
-    verbose: input.verbose,
-    provider: input.provider,
-    packageManager: input.packageManager,
-    prismaPostgres: input.prismaPostgres,
-    databaseUrl: input.databaseUrl,
-    install: input.install,
-    generate: input.generate,
-    schemaPreset,
-  };
-
-  const initContext = await collectInitContext(initInput, {
-    skipIntro: true,
+  const prismaSetupContext = await collectPrismaSetupContext(input, {
     projectDir: targetDirectory,
+    defaultSchemaPreset: DEFAULT_SCHEMA_PRESET,
   });
-  if (!initContext) {
+  if (!prismaSetupContext) {
     return;
   }
 
@@ -223,9 +217,9 @@ async function collectCreateContext(
     targetPathState,
     force,
     template,
-    schemaPreset,
+    schemaPreset: prismaSetupContext.schemaPreset,
     projectPackageName: toPackageName(path.basename(targetDirectory)),
-    initContext,
+    prismaSetupContext,
   };
 }
 
@@ -238,7 +232,8 @@ async function executeCreateContext(context: CreatePromptContext): Promise<void>
       projectName: context.projectPackageName,
       template: context.template,
       schemaPreset: context.schemaPreset,
-      packageManager: context.initContext.packageManager,
+      provider: context.prismaSetupContext.databaseProvider,
+      packageManager: context.prismaSetupContext.packageManager,
     });
     scaffoldSpinner.stop("Project files scaffolded.");
   } catch (error) {
@@ -258,8 +253,7 @@ async function executeCreateContext(context: CreatePromptContext): Promise<void>
   }
 
   const cdStep = `- cd ${formatPathForDisplay(context.targetDirectory)}`;
-  await executeInitContext(context.initContext, {
-    skipIntro: true,
+  await executePrismaSetupContext(context.prismaSetupContext, {
     prependNextSteps: [cdStep],
     projectDir: context.targetDirectory,
     includeDevNextStep: true,
