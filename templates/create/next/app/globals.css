@@ -16,10 +16,8 @@ body {
     "Instrument Sans",
     "Segoe UI",
     sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(255, 62, 0, 0.16), transparent 28rem),
-    linear-gradient(180deg, #fff8f3 0%, #fff 45%, #f8fafc 100%);
-  color: #111827;
+  background: #f7f8fb;
+  color: #0f172a;
 }
 
 .shell {
@@ -34,7 +32,7 @@ body {
 
 .eyebrow {
   margin: 0 0 0.75rem;
-  color: #c2410c;
+  color: #10b981;
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -52,16 +50,15 @@ h1 {
   max-width: 42rem;
   font-size: 1.05rem;
   line-height: 1.7;
-  color: #4b5563;
+  color: #475569;
 }
 
 .panel {
   padding: 1.5rem;
-  border: 1px solid rgba(17, 24, 39, 0.08);
+  border: 1px solid #dbe2ea;
   border-radius: 1.5rem;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(12px);
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
 }
 
 .panelHeader {
@@ -81,7 +78,7 @@ h2 {
 .empty,
 time,
 p {
-  color: #6b7280;
+  color: #64748b;
 }
 
 .users {
@@ -99,8 +96,8 @@ p {
   gap: 1rem;
   padding: 1rem 1.125rem;
   border-radius: 1rem;
-  background: #fff7ed;
-  border: 1px solid rgba(255, 237, 213, 0.9);
+  background: #f8fafc;
+  border: 1px solid #dbe2ea;
 }
 
 .users p {
@@ -115,7 +112,7 @@ time {
 code {
   padding: 0.15rem 0.4rem;
   border-radius: 0.35rem;
-  background: rgba(17, 24, 39, 0.06);
+  background: #eef2f7;
   font-family:
     SFMono-Regular,
     Consolas,

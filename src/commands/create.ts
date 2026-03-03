@@ -99,6 +99,11 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         label: "SvelteKit",
         hint: "Official minimal SvelteKit + TypeScript starter",
       },
+      {
+        value: "astro",
+        label: "Astro",
+        hint: "Official minimal Astro starter with API route example",
+      },
     ],
   });
 

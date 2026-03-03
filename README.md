@@ -44,6 +44,12 @@ Create a SvelteKit project non-interactively:
 create-prisma --name my-app --template svelte --provider postgresql
 ```
 
+Create an Astro project non-interactively:
+
+```bash
+create-prisma --name my-site --template astro --provider postgresql
+```
+
 Set package manager non-interactively:
 
 ```bash
@@ -92,7 +98,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - runs `prisma generate` automatically after scaffolding
 
 `create` is the default command and currently supports:
-- templates: `hono`, `next`, `svelte`
+- templates: `hono`, `next`, `svelte`, `astro`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 

@@ -1,0 +1,39 @@
+import type { APIRoute } from "astro";
+{{#if (eq schemaPreset "basic")}}
+import prisma from "../../lib/prisma";
+
+export const GET: APIRoute = async () => {
+  const users = await prisma.user
+    .findMany({
+      take: 10,
+      orderBy: {
+        createdAt: "desc",
+      },
+    })
+    .catch(() => undefined);
+
+  if (!users) {
+    return new Response(JSON.stringify({ error: "Could not query users yet." }), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  }
+
+  return new Response(JSON.stringify(users), {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+};
+{{else}}
+
+export const GET: APIRoute = async () => {
+  return new Response(JSON.stringify([]), {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+};
+{{/if}}
