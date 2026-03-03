@@ -47,7 +47,7 @@
 							<strong>{user.name ?? 'Unnamed user'}</strong>
 							<p>{user.email}</p>
 						</div>
-						<time datetime={user.createdAt}>
+						<time datetime={new Date(user.createdAt).toISOString()}>
 							{formatter.format(new Date(user.createdAt))}
 						</time>
 					</li>
