@@ -1,5 +1,5 @@
 {{#if (eq schemaPreset "basic")}}
-import { prisma } from "../src/lib/prisma";
+import { prisma } from "../lib/prisma";
 {{/if}}
 
 export default async function Home() {
@@ -25,7 +25,7 @@ export default async function Home() {
 {{#if (eq schemaPreset "basic")}}
         <h1>Users from your database, loaded on the server.</h1>
         <p className="lede">
-          This page reads from <code>app/page.tsx</code> using the Prisma instance in{" "}
+          This page reads from <code>src/app/page.tsx</code> using the Prisma instance in{" "}
           <code>src/lib/prisma.ts</code>.
         </p>
       </div>
@@ -89,7 +89,7 @@ export default async function Home() {
           <li>
             <div>
               <strong>Generated client output</strong>
-              <p>Prisma Client is generated into <code>generated/prisma</code>.</p>
+              <p>Prisma Client is generated into <code>src/generated/prisma</code>.</p>
             </div>
           </li>
         </ul>

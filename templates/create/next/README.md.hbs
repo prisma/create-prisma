@@ -34,7 +34,7 @@ Prisma setup is scaffolded automatically in:
 - `prisma/seed.ts`
 - `src/lib/prisma.ts`
 - `prisma.config.ts`
-- `generated/prisma`
+- `src/generated/prisma`
 
 Database helper scripts are added to `package.json`:
 
@@ -44,5 +44,5 @@ Database helper scripts are added to `package.json`:
 - `db:seed`
 {{#if (eq schemaPreset "basic")}}
 
-The starter page reads from a basic `User` model so you can verify queries quickly, and `prisma/seed.ts` inserts starter users.
+The starter page in `src/app/page.tsx` reads from a basic `User` model so you can verify queries quickly, and `prisma/seed.ts` inserts starter users.
 {{/if}}

@@ -1,5 +1,5 @@
 import { env } from "$env/dynamic/private";
-import { PrismaClient } from "../../../generated/prisma/client";
+import { PrismaClient } from "../../generated/prisma/client";
 {{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
 {{/if}}

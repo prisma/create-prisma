@@ -444,7 +444,7 @@ async function finalizePrismaFiles(
     await ensureEnvComment(projectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
   }
 
-  const gitignoreResult = await ensureGitignoreEntry(projectDir, "generated");
+  const gitignoreResult = await ensureGitignoreEntry(projectDir, "src/generated");
 
   return {
     schemaPath,

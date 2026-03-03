@@ -93,7 +93,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - `prisma/seed.ts`
 - `src/lib/prisma.ts` or `src/lib/server/prisma.ts`
 - `prisma.config.ts`
-- `generated/prisma`
+- `src/generated/prisma`
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)
 - runs `prisma generate` automatically after scaffolding
 
