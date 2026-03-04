@@ -58,7 +58,7 @@ const requiredPrismaFileGroups = [
   ["prisma/schema.prisma"],
   ["prisma/seed.ts"],
   ["prisma.config.ts"],
-  ["src/lib/prisma.ts", "src/lib/server/prisma.ts"],
+  ["src/lib/prisma.ts", "src/lib/server/prisma.ts", "server/utils/prisma.ts"],
 ] as const;
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
@@ -421,7 +421,12 @@ async function finalizePrismaFiles(
   await ensureRequiredPrismaFiles(projectDir);
   const singletonPath = (await fs.pathExists(path.join(projectDir, "src/lib/prisma.ts")))
     ? path.join(projectDir, "src/lib/prisma.ts")
-    : path.join(projectDir, "src/lib/server/prisma.ts");
+    : (await fs.pathExists(path.join(projectDir, "src/lib/server/prisma.ts")))
+      ? path.join(projectDir, "src/lib/server/prisma.ts")
+      : path.join(projectDir, "server/utils/prisma.ts");
+  const generatedDir = (await fs.pathExists(path.join(projectDir, "server/utils/prisma.ts")))
+    ? "server/generated"
+    : "src/generated";
 
   const databaseUrl =
     options.databaseUrl ?? getDefaultDatabaseUrl(options.provider);
@@ -450,7 +455,7 @@ async function finalizePrismaFiles(
     await ensureEnvComment(projectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
   }
 
-  const gitignoreResult = await ensureGitignoreEntry(projectDir, "src/generated");
+  const gitignoreResult = await ensureGitignoreEntry(projectDir, generatedDir);
 
   return {
     schemaPath,

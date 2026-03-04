@@ -104,6 +104,11 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         label: "Astro",
         hint: "Official minimal Astro starter with API route example",
       },
+      {
+        value: "nuxt",
+        label: "Nuxt",
+        hint: "Official minimal Nuxt starter with Nitro API route example",
+      },
     ],
   });
 
