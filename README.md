@@ -92,6 +92,12 @@ Use Prisma Postgres auto-provisioning for PostgreSQL:
 create-prisma --name my-app --template hono --provider postgresql --prisma-postgres
 ```
 
+Enable add-ons with individual flags:
+
+```bash
+create-prisma --name my-app --template next --skills --mcp --extension
+```
+
 Or run locally:
 
 ```bash
@@ -122,6 +128,8 @@ Package manager prompt auto-detects from `package.json`/lockfiles/user agent and
 `--no-generate` skips automatic `prisma generate`.
 `--verbose` prints full install/generate command output; default mode keeps output concise.
 `--force` (create only) allows scaffolding in a non-empty target directory.
+Add-ons can be selected interactively or through flags: `--skills`, `--mcp`, `--extension`.
+When add-ons are enabled, `create` prompts for the relevant agent and IDE selections, then installs curated Prisma skills (`skills@latest`), configures Prisma MCP (`add-mcp@latest`), and installs the Prisma IDE extension for supported IDE CLIs.
 When `postgresql` is selected, `create` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
 Generated projects also include `db:seed` and configure Prisma's `migrations.seed` hook to run `tsx prisma/seed.ts`.
 

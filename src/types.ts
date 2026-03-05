@@ -11,6 +11,16 @@ export const databaseProviders = [
 export const packageManagers = ["npm", "pnpm", "bun"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
 export const createTemplates = ["hono", "next", "svelte", "astro", "nuxt", "turborepo"] as const;
+export const createAddons = ["skills", "mcp", "extension"] as const;
+export const addonInstallScopes = ["project", "global"] as const;
+export const extensionTargets = ["vscode", "cursor", "windsurf"] as const;
+export const prismaSkillNames = [
+  "prisma-cli",
+  "prisma-client-api",
+  "prisma-database-setup",
+  "prisma-upgrade-v7",
+  "prisma-postgres",
+] as const;
 
 export const DatabaseProviderSchema = z.enum(databaseProviders);
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
@@ -20,6 +30,14 @@ export const SchemaPresetSchema = z.enum(schemaPresets);
 export type SchemaPreset = z.infer<typeof SchemaPresetSchema>;
 export const CreateTemplateSchema = z.enum(createTemplates);
 export type CreateTemplate = z.infer<typeof CreateTemplateSchema>;
+export const CreateAddonSchema = z.enum(createAddons);
+export type CreateAddon = z.infer<typeof CreateAddonSchema>;
+export const AddonInstallScopeSchema = z.enum(addonInstallScopes);
+export type AddonInstallScope = z.infer<typeof AddonInstallScopeSchema>;
+export const ExtensionTargetSchema = z.enum(extensionTargets);
+export type ExtensionTarget = z.infer<typeof ExtensionTargetSchema>;
+export const PrismaSkillNameSchema = z.enum(prismaSkillNames);
+export type PrismaSkillName = z.infer<typeof PrismaSkillNameSchema>;
 
 export const DatabaseUrlSchema = z
   .string()
@@ -77,6 +95,18 @@ export const CreateScaffoldOptionsSchema = z.object({
     .optional()
     .describe("Project name / directory"),
   template: CreateTemplateSchema.optional().describe("Project template"),
+  skills: z
+    .boolean()
+    .optional()
+    .describe("Enable skills addon"),
+  mcp: z
+    .boolean()
+    .optional()
+    .describe("Enable MCP addon"),
+  extension: z
+    .boolean()
+    .optional()
+    .describe("Enable extension addon"),
   force: z
     .boolean()
     .optional()
@@ -135,6 +165,16 @@ export type CreatePromptContext = {
   schemaPreset: SchemaPreset;
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
+  addonSetupContext?: CreateAddonSetupContext;
+};
+
+export type CreateAddonSetupContext = {
+  addons: CreateAddon[];
+  scope: AddonInstallScope;
+  skills: PrismaSkillName[];
+  skillsAgents: string[];
+  mcpAgents: string[];
+  extensionTargets: ExtensionTarget[];
 };
 
 export type CreateTemplateContext = {
