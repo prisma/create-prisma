@@ -16,10 +16,6 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
-declare global {
-  var prisma: PrismaClient | undefined;
-}
-
 {{#if (eq provider "sqlite")}}
 const databaseUrl = process.env.DATABASE_URL ?? "file:./dev.db";
 {{else}}
@@ -51,11 +47,7 @@ const adapter = new PrismaBetterSqlite3({
 const adapter = new PrismaMssql(databaseUrl);
 {{/if}}
 
-const prisma = globalThis.prisma ?? new PrismaClient({ adapter });
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.prisma = prisma;
-}
+const prisma = new PrismaClient({ adapter });
 
 export { prisma };
 export default prisma;

@@ -10,7 +10,7 @@ export const databaseProviders = [
 
 export const packageManagers = ["npm", "pnpm", "bun"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
-export const createTemplates = ["hono", "next", "svelte", "astro", "nuxt"] as const;
+export const createTemplates = ["hono", "next", "svelte", "astro", "nuxt", "turborepo"] as const;
 
 export const DatabaseProviderSchema = z.enum(databaseProviders);
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
