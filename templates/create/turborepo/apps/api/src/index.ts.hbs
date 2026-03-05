@@ -1,0 +1,45 @@
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+{{#if (eq schemaPreset "basic")}}
+import { prisma } from "@repo/db";
+{{/if}}
+
+const app = new Hono();
+
+app.get("/", (c) => {
+  return c.json({
+    ok: true,
+    message: "Turborepo API is running.",
+  });
+});
+{{#if (eq schemaPreset "basic")}}
+
+app.get("/users", async (c) => {
+  const users = await prisma.user
+    .findMany({
+      take: 10,
+      orderBy: {
+        createdAt: "desc",
+      },
+    })
+    .catch((error) => {
+      console.error("Failed to query users:", error);
+      return undefined;
+    });
+
+  if (!users) {
+    return c.json(
+      {
+        error: "Could not query users yet. Run db:migrate and db:seed first.",
+      },
+      500
+    );
+  }
+
+  return c.json(users);
+});
+{{/if}}
+
+const port = Number(process.env.PORT ?? 3000);
+console.log(`API listening at http://localhost:${port}`);
+serve({ fetch: app.fetch, port });

@@ -56,6 +56,12 @@ Create a Nuxt project non-interactively:
 create-prisma --name my-nuxt-app --template nuxt --provider postgresql
 ```
 
+Create a Turborepo project with a `packages/db` Prisma package:
+
+```bash
+create-prisma --name my-monorepo --template turborepo --provider postgresql
+```
+
 Set package manager non-interactively:
 
 ```bash
@@ -99,12 +105,12 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - `prisma/seed.ts`
 - `src/lib/prisma.ts` or `src/lib/server/prisma.ts`
 - `prisma.config.ts`
-- `src/generated/prisma` or `server/generated/prisma` (Nuxt)
+- `src/generated/prisma` or `server/generated/prisma` (Nuxt) or `packages/db/src/generated/prisma` (Turborepo)
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)
 - runs `prisma generate` automatically after scaffolding
 
 `create` is the default command and currently supports:
-- templates: `hono`, `next`, `svelte`, `astro`, `nuxt`
+- templates: `hono`, `next`, `svelte`, `astro`, `nuxt`, `turborepo`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 

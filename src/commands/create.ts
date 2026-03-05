@@ -109,6 +109,11 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         label: "Nuxt",
         hint: "Official minimal Nuxt starter with Nitro API route example",
       },
+      {
+        value: "turborepo",
+        label: "Turborepo",
+        hint: "Monorepo starter with apps + packages/db Prisma package",
+      },
     ],
   });
 
