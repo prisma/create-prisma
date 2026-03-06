@@ -26,6 +26,10 @@ import {
   collectPrismaSetupContext,
   executePrismaSetupContext,
 } from "../tasks/setup-prisma";
+import {
+  collectCreateAddonSetupContext,
+  executeCreateAddonSetupContext,
+} from "../tasks/setup-addons";
 import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
@@ -103,6 +107,16 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         value: "astro",
         label: "Astro",
         hint: "Official minimal Astro starter with API route example",
+      },
+      {
+        value: "nuxt",
+        label: "Nuxt",
+        hint: "Official minimal Nuxt starter with Nitro API route example",
+      },
+      {
+        value: "turborepo",
+        label: "Turborepo",
+        hint: "Monorepo starter with apps + packages/db Prisma package",
       },
     ],
   });
@@ -212,6 +226,15 @@ async function collectCreateContext(
     return;
   }
 
+  const addonSetupContext = await collectCreateAddonSetupContext(input, {
+    useDefaults,
+    provider: prismaSetupContext.databaseProvider,
+    shouldUsePrismaPostgres: prismaSetupContext.shouldUsePrismaPostgres,
+  });
+  if (addonSetupContext === undefined) {
+    return;
+  }
+
   return {
     targetDirectory,
     targetPathState,
@@ -220,6 +243,7 @@ async function collectCreateContext(
     schemaPreset: prismaSetupContext.schemaPreset,
     projectPackageName: toPackageName(path.basename(targetDirectory)),
     prismaSetupContext,
+    addonSetupContext: addonSetupContext ?? undefined,
   };
 }
 
@@ -253,6 +277,15 @@ async function executeCreateContext(context: CreatePromptContext): Promise<void>
   }
 
   const cdStep = `- cd ${formatPathForDisplay(context.targetDirectory)}`;
+  if (context.addonSetupContext) {
+    await executeCreateAddonSetupContext({
+      context: context.addonSetupContext,
+      packageManager: context.prismaSetupContext.packageManager,
+      projectDir: context.targetDirectory,
+      verbose: context.prismaSetupContext.verbose,
+    });
+  }
+
   await executePrismaSetupContext(context.prismaSetupContext, {
     prependNextSteps: [cdStep],
     projectDir: context.targetDirectory,

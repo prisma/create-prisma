@@ -55,11 +55,25 @@ const DEFAULT_INSTALL = true;
 const DEFAULT_GENERATE = true;
 
 const requiredPrismaFileGroups = [
-  ["prisma/schema.prisma"],
-  ["prisma/seed.ts"],
-  ["prisma.config.ts"],
-  ["src/lib/prisma.ts", "src/lib/server/prisma.ts"],
+  ["prisma/schema.prisma", "packages/db/prisma/schema.prisma"],
+  ["prisma/seed.ts", "packages/db/prisma/seed.ts"],
+  ["prisma.config.ts", "packages/db/prisma.config.ts"],
+  [
+    "src/lib/prisma.ts",
+    "src/lib/server/prisma.ts",
+    "server/utils/prisma.ts",
+    "packages/db/src/client.ts",
+  ],
 ] as const;
+
+async function resolvePrismaProjectDir(projectDir: string): Promise<string> {
+  const monorepoDbDir = path.join(projectDir, "packages/db");
+  if (await fs.pathExists(path.join(monorepoDbDir, "prisma/schema.prisma"))) {
+    return monorepoDbDir;
+  }
+
+  return projectDir;
+}
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
   const databaseProvider = await select({
@@ -415,18 +429,26 @@ async function finalizePrismaFiles(
   options: FinalizePrismaOptions
 ): Promise<FinalizePrismaResult> {
   const projectDir = options.projectDir ?? process.cwd();
-  const schemaPath = path.join(projectDir, "prisma/schema.prisma");
-  const configPath = path.join(projectDir, "prisma.config.ts");
+  const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
+  const schemaPath = path.join(prismaProjectDir, "prisma/schema.prisma");
+  const configPath = path.join(prismaProjectDir, "prisma.config.ts");
 
   await ensureRequiredPrismaFiles(projectDir);
-  const singletonPath = (await fs.pathExists(path.join(projectDir, "src/lib/prisma.ts")))
-    ? path.join(projectDir, "src/lib/prisma.ts")
-    : path.join(projectDir, "src/lib/server/prisma.ts");
+  const singletonPath = (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.ts")))
+    ? path.join(prismaProjectDir, "src/lib/prisma.ts")
+    : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/server/prisma.ts")))
+      ? path.join(prismaProjectDir, "src/lib/server/prisma.ts")
+      : (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))
+        ? path.join(prismaProjectDir, "server/utils/prisma.ts")
+        : path.join(prismaProjectDir, "src/client.ts");
+  const generatedDir = (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))
+    ? "server/generated"
+    : "src/generated";
 
   const databaseUrl =
     options.databaseUrl ?? getDefaultDatabaseUrl(options.provider);
   const envResult = await ensureEnvVarInEnv(
-    projectDir,
+    prismaProjectDir,
     "DATABASE_URL",
     databaseUrl,
     {
@@ -438,7 +460,7 @@ async function finalizePrismaFiles(
   let claimEnvStatus: EnvStatus | undefined;
   if (options.claimUrl) {
     const claimResult = await ensureEnvVarInEnv(
-      projectDir,
+      prismaProjectDir,
       "CLAIM_URL",
       options.claimUrl,
       {
@@ -447,10 +469,10 @@ async function finalizePrismaFiles(
       }
     );
     claimEnvStatus = claimResult.status;
-    await ensureEnvComment(projectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
+    await ensureEnvComment(prismaProjectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
   }
 
-  const gitignoreResult = await ensureGitignoreEntry(projectDir, "src/generated");
+  const gitignoreResult = await ensureGitignoreEntry(prismaProjectDir, generatedDir);
 
   return {
     schemaPath,
@@ -504,10 +526,11 @@ async function writeDependenciesForContext(
   context: PrismaSetupContext,
   projectDir: string
 ): Promise<DependencyWriteResult | undefined> {
+  const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
   try {
     return await writePrismaDependencies(
       context.databaseProvider,
-      projectDir
+      prismaProjectDir
     );
   } catch (error) {
     cancel(getCommandErrorMessage(error));
@@ -582,6 +605,7 @@ async function generatePrismaClientForContext(
   context: PrismaSetupContext,
   projectDir: string
 ): Promise<PrismaGenerateResult> {
+  const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
   if (!context.shouldGenerate) {
     return {
       didGenerateClient: false,
@@ -600,7 +624,7 @@ async function generatePrismaClientForContext(
   try {
     const generateArgs = getPrismaCliArgs(context.packageManager, ["generate"]);
     await execa(generateArgs.command, generateArgs.args, {
-      cwd: projectDir,
+      cwd: prismaProjectDir,
       stdio: context.verbose ? "inherit" : "pipe",
     });
     if (context.verbose) {

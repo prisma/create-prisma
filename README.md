@@ -50,6 +50,18 @@ Create an Astro project non-interactively:
 create-prisma --name my-site --template astro --provider postgresql
 ```
 
+Create a Nuxt project non-interactively:
+
+```bash
+create-prisma --name my-nuxt-app --template nuxt --provider postgresql
+```
+
+Create a Turborepo project with a `packages/db` Prisma package:
+
+```bash
+create-prisma --name my-monorepo --template turborepo --provider postgresql
+```
+
 Set package manager non-interactively:
 
 ```bash
@@ -80,6 +92,12 @@ Use Prisma Postgres auto-provisioning for PostgreSQL:
 create-prisma --name my-app --template hono --provider postgresql --prisma-postgres
 ```
 
+Enable add-ons with individual flags:
+
+```bash
+create-prisma --name my-app --template next --skills --mcp --extension
+```
+
 Or run locally:
 
 ```bash
@@ -93,12 +111,12 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - `prisma/seed.ts`
 - `src/lib/prisma.ts` or `src/lib/server/prisma.ts`
 - `prisma.config.ts`
-- `src/generated/prisma`
+- `src/generated/prisma` or `server/generated/prisma` (Nuxt) or `packages/db/src/generated/prisma` (Turborepo)
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)
 - runs `prisma generate` automatically after scaffolding
 
 `create` is the default command and currently supports:
-- templates: `hono`, `next`, `svelte`, `astro`
+- templates: `hono`, `next`, `svelte`, `astro`, `nuxt`, `turborepo`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 
@@ -110,6 +128,8 @@ Package manager prompt auto-detects from `package.json`/lockfiles/user agent and
 `--no-generate` skips automatic `prisma generate`.
 `--verbose` prints full install/generate command output; default mode keeps output concise.
 `--force` (create only) allows scaffolding in a non-empty target directory.
+Add-ons can be selected interactively or through flags: `--skills`, `--mcp`, `--extension`.
+When add-ons are enabled, `create` prompts for the relevant agent and IDE selections, then installs curated Prisma skills (`skills@latest`), configures Prisma MCP (`add-mcp@latest`), and installs the Prisma IDE extension for supported IDE CLIs.
 When `postgresql` is selected, `create` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
 Generated projects also include `db:seed` and configure Prisma's `migrations.seed` hook to run `tsx prisma/seed.ts`.
 

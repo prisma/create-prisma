@@ -1,0 +1,9 @@
+.nuxt
+.output
+server/generated
+node_modules
+*.log
+.env
+.env.production
+.DS_Store
+.idea
