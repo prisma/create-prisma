@@ -20,6 +20,18 @@ Run directly with Bun:
 bunx create-prisma@latest
 ```
 
+Run directly with Yarn:
+
+```bash
+yarn dlx create-prisma@latest
+```
+
+Run directly with Deno:
+
+```bash
+deno run -A npm:create-prisma@latest
+```
+
 Create a new project (default command):
 
 ```bash
@@ -122,7 +134,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 
 `create` prompts for database choice, package manager, and whether to install dependencies now.
 Supported providers in this flow: `postgresql`, `mysql`, `sqlite`, `sqlserver`, `cockroachdb`.
-Supported package managers: `bun`, `pnpm`, `npm`.
+Supported package managers: `bun`, `deno`, `npm`, `pnpm`, `yarn`.
 Package manager prompt auto-detects from `package.json`/lockfiles/user agent and uses that as the initial selection.
 `--yes` accepts defaults (`postgresql`, detected package manager, Prisma Postgres enabled for PostgreSQL, install enabled) and skips prompts.
 `--no-generate` skips automatic `prisma generate`.

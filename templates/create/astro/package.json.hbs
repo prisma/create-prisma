@@ -2,6 +2,9 @@
   "name": "{{projectName}}",
   "type": "module",
   "version": "0.0.1",
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",

@@ -1,6 +1,9 @@
 {
   "name": "{{projectName}}",
   "private": true,
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",

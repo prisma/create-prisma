@@ -8,7 +8,7 @@ export const databaseProviders = [
   "cockroachdb",
 ] as const;
 
-export const packageManagers = ["npm", "pnpm", "bun"] as const;
+export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
 export const createTemplates = ["hono", "next", "svelte", "astro", "nuxt", "turborepo"] as const;
 export const createAddons = ["skills", "mcp", "extension"] as const;
