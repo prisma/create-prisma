@@ -1,17 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 {{#if (eq schemaPreset "basic")}}
-import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma.server";
 {{/if}}
 
 {{#if (eq schemaPreset "basic")}}
+function isBootstrapQueryError(error: unknown): error is { code?: string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2021"
+  );
+}
+
 const listUsers = createServerFn({ method: "GET" }).handler(async () => {
-  return prisma.user.findMany({
-    take: 10,
-    orderBy: {
-      createdAt: "desc",
-    },
-  }).catch(() => undefined);
+  try {
+    return await prisma.user.findMany({
+      take: 10,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  } catch (error) {
+    if (isBootstrapQueryError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
 });
 {{/if}}
 
@@ -27,6 +44,7 @@ function Home() {
   const formatter = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "UTC",
   });
   const users = Route.useLoaderData();
 {{/if}}
@@ -39,7 +57,7 @@ function Home() {
         <h2>Users from your database, loaded through a server function.</h2>
         <p className="lede">
           This route uses TanStack Start&apos;s server function API and the Prisma client in{" "}
-          <code>src/lib/prisma.ts</code>.
+          <code>src/lib/prisma.server.ts</code>.
         </p>
 {{else}}
         <h2>Your TanStack Start app is ready.</h2>
@@ -97,7 +115,7 @@ function Home() {
           <li className="listItem">
             <div>
               <strong>Prisma client</strong>
-              <p>Use the shared instance from <code>src/lib/prisma.ts</code>.</p>
+              <p>Use the shared instance from <code>src/lib/prisma.server.ts</code>.</p>
             </div>
           </li>
           <li className="listItem">
@@ -125,4 +143,3 @@ function Home() {
     </main>
   );
 }
-

@@ -127,7 +127,7 @@ bun run start
 The CLI updates `package.json` with Prisma dependencies, optionally runs dependency installation with your selected package manager, and scaffolds Prisma 7 setup files directly inside each app template:
 - `prisma/schema.prisma`
 - `prisma/seed.ts`
-- `src/lib/prisma.ts` or `src/lib/server/prisma.ts`
+- `src/lib/prisma.ts`, `src/lib/prisma.server.ts`, or `src/lib/server/prisma.ts`
 - `prisma.config.ts`
 - `src/generated/prisma` or `server/generated/prisma` (Nuxt) or `packages/db/src/generated/prisma` (Turborepo)
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)

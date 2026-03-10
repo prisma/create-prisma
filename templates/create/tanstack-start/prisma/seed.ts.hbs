@@ -1,4 +1,4 @@
-import prisma from "../src/lib/prisma";
+import prisma from "../src/lib/prisma.server";
 
 async function main() {
 {{#if (eq schemaPreset "basic")}}
@@ -28,12 +28,10 @@ async function main() {
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (error) => {
+  .catch(async (error: unknown) => {
     console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
     await prisma.$disconnect();
-    process.exit(1);
   });
-
