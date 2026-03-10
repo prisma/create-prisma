@@ -1,8 +1,10 @@
 import {
   cancel,
   intro,
+  isCancel,
   log,
   spinner,
+  text,
 } from "@clack/prompts";
 import fs from "fs-extra";
 import path from "node:path";
@@ -17,6 +19,7 @@ import {
 import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
+const DEFAULT_PRISMA_INSTANCE_PATH = "src/lib/prisma.ts";
 
 async function readProjectPackageJson(projectDir: string): Promise<Record<string, unknown> | undefined> {
   const packageJsonPath = path.join(projectDir, "package.json");
@@ -75,6 +78,72 @@ export async function shouldInitCurrentProject(
   return hasPackageJson(projectDir);
 }
 
+function normalizePrismaInstancePath(input: string): string | undefined {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  if (path.isAbsolute(trimmed)) {
+    return undefined;
+  }
+
+  const normalizedPath = trimmed.replace(/\\/g, "/");
+  if (
+    normalizedPath === "." ||
+    normalizedPath === ".." ||
+    normalizedPath.startsWith("../") ||
+    normalizedPath.includes("/../") ||
+    normalizedPath.endsWith("/")
+  ) {
+    return undefined;
+  }
+
+  const existingExtension = path.posix.extname(normalizedPath);
+  if (existingExtension.length > 0 && existingExtension !== ".ts") {
+    return undefined;
+  }
+
+  const withExtension =
+    existingExtension === ".ts" ? normalizedPath : `${normalizedPath}.ts`;
+
+  return withExtension;
+}
+
+async function promptForPrismaInstancePath(): Promise<string | undefined> {
+  const prismaInstancePath = await text({
+    message: "Where should the Prisma instance live?",
+    placeholder: DEFAULT_PRISMA_INSTANCE_PATH,
+    initialValue: DEFAULT_PRISMA_INSTANCE_PATH,
+    validate: (value) => {
+      const normalizedPath = normalizePrismaInstancePath(String(value ?? ""));
+
+      if (!normalizedPath) {
+        return "Use a relative .ts path inside the project, for example src/lib/prisma.ts.";
+      }
+
+      return undefined;
+    },
+  });
+
+  if (isCancel(prismaInstancePath)) {
+    cancel("Operation cancelled.");
+    return undefined;
+  }
+
+  return normalizePrismaInstancePath(String(prismaInstancePath));
+}
+
+async function resolvePrismaInstancePath(
+  input: PrismaSetupCommandInput
+): Promise<string | undefined> {
+  if (input.yes === true) {
+    return DEFAULT_PRISMA_INSTANCE_PATH;
+  }
+
+  return promptForPrismaInstancePath();
+}
+
 export async function runInitCommand(
   rawInput: PrismaSetupCommandInput = {},
   options: {
@@ -107,16 +176,21 @@ export async function runInitCommand(
       return;
     }
 
+    const prismaInstancePath = await resolvePrismaInstancePath(input);
+    if (!prismaInstancePath) {
+      return;
+    }
+
     const initSpinner = spinner();
     initSpinner.start("Scaffolding Prisma files for the current project...");
 
     try {
       const renderResult = await scaffoldInitTemplate({
         projectDir,
-        projectName: path.basename(projectDir),
         provider: prismaSetupContext.databaseProvider,
         schemaPreset: prismaSetupContext.schemaPreset,
         packageManager: prismaSetupContext.packageManager,
+        singletonPath: prismaInstancePath,
       });
       const fileAction =
         renderResult.writtenFiles.length > 0
@@ -142,6 +216,7 @@ export async function runInitCommand(
     await executePrismaSetupContext(prismaSetupContext, {
       projectDir,
       includeDevNextStep: await hasPackageScript(projectDir, "dev"),
+      singletonPath: prismaInstancePath,
     });
   } catch (error) {
     cancel(

@@ -2,7 +2,6 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import type {
-  CreateTemplateContext,
   DatabaseProvider,
   PackageManager,
   SchemaPreset,
@@ -12,59 +11,78 @@ import {
   resolveTemplatesDir,
 } from "./shared";
 
-const initTemplateFiles = [
+type InitTemplateContext = {
+  provider: DatabaseProvider;
+  schemaPreset: SchemaPreset;
+  packageManager?: PackageManager;
+  generatedClientImportPath: string;
+  singletonImportPathFromSeed: string;
+};
+
+const initTemplateRoot = resolveTemplatesDir("templates/init");
+
+const staticInitTemplateFiles = [
   "prisma/schema.prisma.hbs",
   "prisma/seed.ts.hbs",
   "prisma.config.ts",
-  "src/lib/prisma.ts.hbs",
 ] as const;
-const initTemplateRoot = resolveTemplatesDir("templates/create/hono");
 
 function stripHbsExtension(filePath: string): string {
   return filePath.endsWith(".hbs") ? filePath.slice(0, -4) : filePath;
 }
 
-function createTemplateContext(
-  projectName: string,
-  provider: DatabaseProvider,
-  schemaPreset: SchemaPreset,
-  packageManager?: PackageManager
-): CreateTemplateContext {
-  return {
-    projectName,
-    provider,
-    schemaPreset,
-    packageManager,
-  };
+function toImportSpecifier(fromPath: string, toPath: string): string {
+  const relativePath = path.relative(path.dirname(fromPath), toPath);
+  const normalizedPath = relativePath.split(path.sep).join("/");
+  const withoutExtension = normalizedPath.endsWith(".ts")
+    ? normalizedPath.slice(0, -3)
+    : normalizedPath;
+
+  return withoutExtension.startsWith(".")
+    ? withoutExtension
+    : `./${withoutExtension}`;
 }
 
 export async function scaffoldInitTemplate(opts: {
   projectDir: string;
-  projectName: string;
   provider: DatabaseProvider;
   schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
+  singletonPath: string;
 }): Promise<{
   writtenFiles: string[];
   skippedFiles: string[];
 }> {
   const {
     projectDir,
-    projectName,
     provider,
     schemaPreset,
     packageManager,
+    singletonPath,
   } = opts;
-  const context = createTemplateContext(
-    projectName,
+  const singletonOutputPath = path.join(projectDir, singletonPath);
+  const generatedClientOutputPath = path.join(
+    projectDir,
+    "src/generated/prisma/client.ts"
+  );
+  const seedOutputPath = path.join(projectDir, "prisma/seed.ts");
+  const context: InitTemplateContext = {
     provider,
     schemaPreset,
-    packageManager
-  );
+    packageManager,
+    generatedClientImportPath: toImportSpecifier(
+      singletonOutputPath,
+      generatedClientOutputPath
+    ),
+    singletonImportPathFromSeed: toImportSpecifier(
+      seedOutputPath,
+      singletonOutputPath
+    ),
+  };
   const writtenFiles: string[] = [];
   const skippedFiles: string[] = [];
 
-  for (const relativeTemplatePath of initTemplateFiles) {
+  for (const relativeTemplatePath of staticInitTemplateFiles) {
     const templateFilePath = path.join(initTemplateRoot, relativeTemplatePath);
     const outputPath = path.join(
       projectDir,
@@ -83,6 +101,23 @@ export async function scaffoldInitTemplate(opts: {
     });
     if (await fs.pathExists(outputPath)) {
       writtenFiles.push(outputPath);
+    }
+  }
+
+  const singletonTemplatePath = path.join(
+    initTemplateRoot,
+    "prisma-instance.ts.hbs"
+  );
+  if (await fs.pathExists(singletonOutputPath)) {
+    skippedFiles.push(singletonOutputPath);
+  } else {
+    await renderTemplateFile({
+      templateFilePath: singletonTemplatePath,
+      outputPath: singletonOutputPath,
+      context,
+    });
+    if (await fs.pathExists(singletonOutputPath)) {
+      writtenFiles.push(singletonOutputPath);
     }
   }
 

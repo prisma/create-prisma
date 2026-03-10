@@ -136,6 +136,7 @@ export type PrismaSetupRunOptions = {
   prependNextSteps?: string[];
   projectDir?: string;
   includeDevNextStep?: boolean;
+  singletonPath?: string;
 };
 
 export type PrismaSetupResult = {
@@ -219,6 +220,7 @@ export type FinalizePrismaOptions = {
   databaseUrl?: string;
   claimUrl?: string;
   projectDir?: string;
+  singletonPath?: string;
 };
 
 export type FinalizePrismaResult = {

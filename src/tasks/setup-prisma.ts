@@ -67,6 +67,8 @@ const requiredPrismaFileGroups = [
   ],
 ] as const;
 
+const defaultSingletonCandidates = requiredPrismaFileGroups[3];
+
 async function resolvePrismaProjectDir(projectDir: string): Promise<string> {
   const monorepoDbDir = path.join(projectDir, "packages/db");
   if (await fs.pathExists(path.join(monorepoDbDir, "prisma/schema.prisma"))) {
@@ -414,10 +416,21 @@ async function ensureGitignoreEntry(
   return { gitignorePath, status: "appended" };
 }
 
-async function ensureRequiredPrismaFiles(projectDir: string): Promise<void> {
+async function ensureRequiredPrismaFiles(
+  projectDir: string,
+  singletonPath?: string
+): Promise<void> {
   const missingFiles: string[] = [];
+  const singletonCandidates = singletonPath
+    ? [singletonPath]
+    : [...defaultSingletonCandidates];
 
-  for (const candidates of requiredPrismaFileGroups) {
+  for (const candidates of [
+    requiredPrismaFileGroups[0],
+    requiredPrismaFileGroups[1],
+    requiredPrismaFileGroups[2],
+    singletonCandidates,
+  ] as const) {
     let foundCandidate = false;
 
     for (const relativePath of candidates) {
@@ -448,16 +461,18 @@ async function finalizePrismaFiles(
   const schemaPath = path.join(prismaProjectDir, "prisma/schema.prisma");
   const configPath = path.join(prismaProjectDir, "prisma.config.ts");
 
-  await ensureRequiredPrismaFiles(projectDir);
-  const singletonPath = (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.ts")))
-    ? path.join(prismaProjectDir, "src/lib/prisma.ts")
-    : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.server.ts")))
-      ? path.join(prismaProjectDir, "src/lib/prisma.server.ts")
-    : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/server/prisma.ts")))
-      ? path.join(prismaProjectDir, "src/lib/server/prisma.ts")
-      : (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))
-        ? path.join(prismaProjectDir, "server/utils/prisma.ts")
-        : path.join(prismaProjectDir, "src/client.ts");
+  await ensureRequiredPrismaFiles(projectDir, options.singletonPath);
+  const singletonPath = options.singletonPath
+    ? path.join(projectDir, options.singletonPath)
+    : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.ts")))
+      ? path.join(prismaProjectDir, "src/lib/prisma.ts")
+      : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.server.ts")))
+        ? path.join(prismaProjectDir, "src/lib/prisma.server.ts")
+        : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/server/prisma.ts")))
+          ? path.join(prismaProjectDir, "src/lib/server/prisma.ts")
+          : (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))
+            ? path.join(prismaProjectDir, "server/utils/prisma.ts")
+            : path.join(prismaProjectDir, "src/client.ts");
   const generatedDir = (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))
     ? "server/generated"
     : "src/generated";
@@ -597,7 +612,8 @@ async function installDependenciesForContext(
 async function finalizePrismaFilesForContext(
   context: PrismaSetupContext,
   projectDir: string,
-  provisionResult: PrismaPostgresProvisionResult
+  provisionResult: PrismaPostgresProvisionResult,
+  singletonPath?: string
 ): Promise<FinalizePrismaResult | undefined> {
   const initSpinner = spinner();
   initSpinner.start("Preparing Prisma files...");
@@ -608,6 +624,7 @@ async function finalizePrismaFilesForContext(
       databaseUrl: provisionResult.databaseUrl,
       claimUrl: provisionResult.claimUrl,
       projectDir,
+      singletonPath,
     });
 
     initSpinner.stop("Prisma files ready.");
@@ -739,7 +756,8 @@ export async function executePrismaSetupContext(
   const finalizeResult = await finalizePrismaFilesForContext(
     context,
     projectDir,
-    provisionResult
+    provisionResult,
+    options.singletonPath
   );
   if (!finalizeResult) {
     return;

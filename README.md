@@ -155,7 +155,7 @@ The create flow supports:
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 
-When initializing an existing project, it adds the standard Prisma setup: `prisma/schema.prisma`, `prisma/seed.ts`, `prisma.config.ts`, and `src/lib/prisma.ts`.
+When initializing an existing project, it adds the standard Prisma setup from the dedicated init template and asks where to place the Prisma instance file, defaulting to `src/lib/prisma.ts`.
 
 `create` prompts for database choice, package manager, and whether to install dependencies now.
 Supported providers in this flow: `postgresql`, `mysql`, `sqlite`, `sqlserver`, `cockroachdb`.
