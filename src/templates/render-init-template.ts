@@ -7,6 +7,10 @@ import type {
   SchemaPreset,
 } from "../types";
 import {
+  getRelativePathFromBase,
+  resolveGeneratedClientDirPath,
+} from "../utils/prisma-paths";
+import {
   renderTemplateFile,
   resolveTemplatesDir,
 } from "./shared";
@@ -15,6 +19,7 @@ type InitTemplateContext = {
   provider: DatabaseProvider;
   schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
+  generatedClientOutputPath: string;
   generatedClientImportPath: string;
   singletonImportPathFromSeed: string;
 };
@@ -61,18 +66,27 @@ export async function scaffoldInitTemplate(opts: {
     singletonPath,
   } = opts;
   const singletonOutputPath = path.join(projectDir, singletonPath);
-  const generatedClientOutputPath = path.join(
+  const schemaOutputPath = path.join(projectDir, "prisma/schema.prisma");
+  const generatedClientDirPath = await resolveGeneratedClientDirPath(
     projectDir,
-    "src/generated/prisma/client.ts"
+    singletonPath
+  );
+  const generatedClientEntryPath = path.join(
+    generatedClientDirPath,
+    "client.ts"
   );
   const seedOutputPath = path.join(projectDir, "prisma/seed.ts");
   const context: InitTemplateContext = {
     provider,
     schemaPreset,
     packageManager,
+    generatedClientOutputPath: getRelativePathFromBase(
+      path.dirname(schemaOutputPath),
+      generatedClientDirPath
+    ),
     generatedClientImportPath: toImportSpecifier(
       singletonOutputPath,
-      generatedClientOutputPath
+      generatedClientEntryPath
     ),
     singletonImportPathFromSeed: toImportSpecifier(
       seedOutputPath,

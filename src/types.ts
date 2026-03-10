@@ -135,6 +135,7 @@ export type CreateTargetPathState = {
 export type PrismaSetupRunOptions = {
   prependNextSteps?: string[];
   projectDir?: string;
+  prismaProjectDir?: string;
   includeDevNextStep?: boolean;
   singletonPath?: string;
 };
@@ -220,6 +221,7 @@ export type FinalizePrismaOptions = {
   databaseUrl?: string;
   claimUrl?: string;
   projectDir?: string;
+  prismaProjectDir?: string;
   singletonPath?: string;
 };
 

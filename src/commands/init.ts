@@ -68,10 +68,21 @@ export async function shouldInitCurrentProject(
   input: {
     name?: string;
     template?: string;
+    force?: boolean;
+    skills?: boolean;
+    mcp?: boolean;
+    extension?: boolean;
   },
   projectDir = process.cwd()
 ): Promise<boolean> {
-  if (input.name || input.template) {
+  if (
+    input.name ||
+    input.template ||
+    input.force ||
+    input.skills ||
+    input.mcp ||
+    input.extension
+  ) {
     return false;
   }
 
@@ -216,6 +227,7 @@ export async function runInitCommand(
 
     await executePrismaSetupContext(prismaSetupContext, {
       projectDir,
+      prismaProjectDir: projectDir,
       includeDevNextStep: await hasPackageScript(projectDir, "dev"),
       singletonPath: prismaInstancePath,
     });

@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  output   = "{{generatedClientOutputPath}}"
 {{#if (eq packageManager "deno")}}
   runtime  = "deno"
 {{/if}}
