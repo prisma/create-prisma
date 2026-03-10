@@ -1,0 +1,188 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background:
+    radial-gradient(circle at top left, rgba(88, 180, 141, 0.18), transparent 28rem),
+    linear-gradient(180deg, #f6fbf8 0%, #eef5f1 100%);
+  color: #153127;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+code {
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.92em;
+}
+
+.shell {
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.topbar h1,
+.hero h2,
+.sectionHeader h3 {
+  margin: 0;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: #31795e;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.nav {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.navLink {
+  border: 1px solid rgba(21, 49, 39, 0.12);
+  border-radius: 999px;
+  padding: 0.55rem 0.95rem;
+  background: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+}
+
+.content {
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  border: 1px solid rgba(21, 49, 39, 0.1);
+  border-radius: 1.5rem;
+  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 44px rgba(21, 49, 39, 0.08);
+}
+
+.hero {
+  padding: 1.5rem;
+}
+
+.hero h2 {
+  font-size: clamp(2rem, 5vw, 4rem);
+  line-height: 0.98;
+  max-width: 40rem;
+}
+
+.lede {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  color: #456759;
+  font-size: 1.05rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.sectionHeader span {
+  color: #5c7a6e;
+  font-size: 0.95rem;
+}
+
+.empty {
+  margin: 0;
+  color: #5c7a6e;
+}
+
+.list,
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.listItem {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  background: rgba(246, 251, 248, 0.9);
+}
+
+.listItem p {
+  margin: 0.35rem 0 0;
+  color: #5c7a6e;
+}
+
+.listItem time {
+  color: #5c7a6e;
+  font-size: 0.95rem;
+}
+
+.checklist {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.checklist li {
+  position: relative;
+  padding-left: 1.25rem;
+  color: #456759;
+}
+
+.checklist li::before {
+  content: "";
+  position: absolute;
+  top: 0.55rem;
+  left: 0;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #58b48d;
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding-inline: 1rem;
+  }
+
+  .topbar,
+  .sectionHeader,
+  .listItem {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

@@ -1,0 +1,13 @@
+{{#if (eq packageManager "deno")}}
+{
+  "nodeModulesDir": "auto",
+  "unstable": [
+    "bare-node-builtins",
+    "detect-cjs",
+    "node-globals",
+    "unsafe-proto",
+    "sloppy-imports"
+  ]
+}
+{{/if}}
+

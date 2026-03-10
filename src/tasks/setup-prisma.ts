@@ -60,6 +60,7 @@ const requiredPrismaFileGroups = [
   ["prisma.config.ts", "packages/db/prisma.config.ts"],
   [
     "src/lib/prisma.ts",
+    "src/lib/prisma.server.ts",
     "src/lib/server/prisma.ts",
     "server/utils/prisma.ts",
     "packages/db/src/client.ts",
@@ -450,6 +451,8 @@ async function finalizePrismaFiles(
   await ensureRequiredPrismaFiles(projectDir);
   const singletonPath = (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.ts")))
     ? path.join(prismaProjectDir, "src/lib/prisma.ts")
+    : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.server.ts")))
+      ? path.join(prismaProjectDir, "src/lib/prisma.server.ts")
     : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/server/prisma.ts")))
       ? path.join(prismaProjectDir, "src/lib/server/prisma.ts")
       : (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))

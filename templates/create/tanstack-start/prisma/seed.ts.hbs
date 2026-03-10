@@ -1,0 +1,37 @@
+import prisma from "../src/lib/prisma.server";
+
+async function main() {
+{{#if (eq schemaPreset "basic")}}
+  const users = await Promise.all([
+    prisma.user.upsert({
+      where: { email: "alice@prisma.io" },
+      update: { name: "Alice" },
+      create: {
+        email: "alice@prisma.io",
+        name: "Alice",
+      },
+    }),
+    prisma.user.upsert({
+      where: { email: "bob@prisma.io" },
+      update: { name: "Bob" },
+      create: {
+        email: "bob@prisma.io",
+        name: "Bob",
+      },
+    }),
+  ]);
+
+  console.log(`Seeded ${users.length} users.`);
+{{else}}
+  console.log("No seed data defined for the empty schema preset.");
+{{/if}}
+}
+
+main()
+  .catch(async (error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
