@@ -152,6 +152,22 @@ export function getInstallCommand(packageManager: PackageManager): string {
   return `${packageManager} install`;
 }
 
+export function getPrismaSeedCommand(
+  packageManager: PackageManager | undefined
+): string {
+  switch (packageManager) {
+    case "deno":
+      return "deno run -A prisma/seed.ts";
+    case "bun":
+      return "bun prisma/seed.ts";
+    case "pnpm":
+    case "yarn":
+    case "npm":
+    default:
+      return "tsx prisma/seed.ts";
+  }
+}
+
 export function getRunScriptCommand(
   packageManager: PackageManager,
   scriptName: string

@@ -24,7 +24,7 @@ const initTemplateRoot = resolveTemplatesDir("templates/init");
 const staticInitTemplateFiles = [
   "prisma/schema.prisma.hbs",
   "prisma/seed.ts.hbs",
-  "prisma.config.ts",
+  "prisma.config.ts.hbs",
 ] as const;
 
 function stripHbsExtension(filePath: string): string {

@@ -8,6 +8,7 @@ import type { PackageManager } from "../types";
 import {
   getInstallCommand,
   getPackageManagerManifestValue,
+  getPrismaSeedCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
 
@@ -26,6 +27,11 @@ Handlebars.registerHelper(
   "packageManagerManifestValue",
   (packageManager: PackageManager | undefined) =>
     getPackageManagerManifestValue(packageManager) ?? ""
+);
+Handlebars.registerHelper(
+  "prismaSeedCommand",
+  (packageManager: PackageManager | undefined) =>
+    getPrismaSeedCommand(packageManager)
 );
 
 export function findPackageRoot(startDir: string): string {
