@@ -12,10 +12,7 @@ html {
 
 body {
   margin: 0;
-  font-family:
-    "Instrument Sans",
-    "Segoe UI",
-    sans-serif;
+  font-family: "Instrument Sans", "Segoe UI", sans-serif;
   background: #f7f8fb;
   color: #0f172a;
 }
@@ -116,10 +113,7 @@ code {
   padding: 0.15rem 0.4rem;
   border-radius: 0.35rem;
   background: #eef2f7;
-  font-family:
-    SFMono-Regular,
-    Consolas,
-    monospace;
+  font-family: SFMono-Regular, Consolas, monospace;
   font-size: 0.95em;
 }
 

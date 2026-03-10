@@ -2,10 +2,7 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import { dependencyVersionMap } from "../constants/dependencies";
-import {
-  PackageManagerSchema,
-  type PackageManager,
-} from "../types";
+import { PackageManagerSchema, type PackageManager } from "../types";
 
 type CommandAndArgs = {
   command: string;
@@ -43,9 +40,7 @@ function parseUserAgent(userAgent: string | undefined): PackageManager | null {
   return null;
 }
 
-function parsePackageManagerField(
-  packageManagerField: unknown
-): PackageManager | null {
+function parsePackageManagerField(packageManagerField: unknown): PackageManager | null {
   if (typeof packageManagerField !== "string" || packageManagerField.length === 0) {
     return null;
   }
@@ -55,9 +50,7 @@ function parsePackageManagerField(
   return parsed.success ? parsed.data : null;
 }
 
-async function detectFromPackageJson(
-  projectDir: string
-): Promise<PackageManager | null> {
+async function detectFromPackageJson(projectDir: string): Promise<PackageManager | null> {
   const packageJsonPath = path.join(projectDir, "package.json");
   if (!(await fs.pathExists(packageJsonPath))) {
     return null;
@@ -67,9 +60,7 @@ async function detectFromPackageJson(
   return parsePackageManagerField(packageJson.packageManager);
 }
 
-async function detectFromDenoConfig(
-  projectDir: string
-): Promise<PackageManager | null> {
+async function detectFromDenoConfig(projectDir: string): Promise<PackageManager | null> {
   const configCandidates = ["deno.json", "deno.jsonc"];
 
   for (const configFile of configCandidates) {
@@ -81,9 +72,7 @@ async function detectFromDenoConfig(
   return null;
 }
 
-async function detectFromLockfile(
-  projectDir: string
-): Promise<PackageManager | null> {
+async function detectFromLockfile(projectDir: string): Promise<PackageManager | null> {
   const lockfileChecks: Array<{ manager: PackageManager; lockfile: string }> = [
     { manager: "pnpm", lockfile: "pnpm-lock.yaml" },
     { manager: "yarn", lockfile: "yarn.lock" },
@@ -103,9 +92,7 @@ async function detectFromLockfile(
   return null;
 }
 
-export async function detectPackageManager(
-  projectDir = process.cwd()
-): Promise<PackageManager> {
+export async function detectPackageManager(projectDir = process.cwd()): Promise<PackageManager> {
   const fromPackageJson = await detectFromPackageJson(projectDir);
   if (fromPackageJson) {
     return fromPackageJson;
@@ -130,7 +117,7 @@ export async function detectPackageManager(
 }
 
 export function getPackageManagerManifestValue(
-  packageManager: PackageManager | undefined
+  packageManager: PackageManager | undefined,
 ): string | undefined {
   if (!packageManager || packageManager === "deno") {
     return undefined;
@@ -152,10 +139,7 @@ export function getInstallCommand(packageManager: PackageManager): string {
   return `${packageManager} install`;
 }
 
-export function getRunScriptCommand(
-  packageManager: PackageManager,
-  scriptName: string
-): string {
+export function getRunScriptCommand(packageManager: PackageManager, scriptName: string): string {
   switch (packageManager) {
     case "deno":
       return `deno task ${scriptName}`;
@@ -171,9 +155,7 @@ export function getRunScriptCommand(
   }
 }
 
-export function getInstallArgs(
-  packageManager: PackageManager
-): CommandAndArgs {
+export function getInstallArgs(packageManager: PackageManager): CommandAndArgs {
   if (packageManager === "deno") {
     return {
       command: "deno",
@@ -189,7 +171,7 @@ export function getInstallArgs(
 
 export function getPackageExecutionArgs(
   packageManager: PackageManager,
-  commandArgs: string[]
+  commandArgs: string[],
 ): CommandAndArgs {
   switch (packageManager) {
     case "pnpm":
@@ -217,7 +199,7 @@ export function getPackageExecutionArgs(
 
 export function getPackageExecutionCommand(
   packageManager: PackageManager,
-  commandArgs: string[]
+  commandArgs: string[],
 ): string {
   const execution = getPackageExecutionArgs(packageManager, commandArgs);
   return [execution.command, ...execution.args].join(" ");
@@ -225,14 +207,10 @@ export function getPackageExecutionCommand(
 
 export function getPrismaCliArgs(
   packageManager: PackageManager,
-  prismaArgs: string[]
+  prismaArgs: string[],
 ): CommandAndArgs {
   if (packageManager === "bun") {
-    return getPackageExecutionArgs(packageManager, [
-      "--bun",
-      "prisma",
-      ...prismaArgs,
-    ]);
+    return getPackageExecutionArgs(packageManager, ["--bun", "prisma", ...prismaArgs]);
   }
 
   if (packageManager === "deno") {
@@ -245,10 +223,7 @@ export function getPrismaCliArgs(
   return getPackageExecutionArgs(packageManager, ["prisma", ...prismaArgs]);
 }
 
-export function getPrismaCliCommand(
-  packageManager: PackageManager,
-  prismaArgs: string[]
-): string {
+export function getPrismaCliCommand(packageManager: PackageManager, prismaArgs: string[]): string {
   const execution = getPrismaCliArgs(packageManager, prismaArgs);
   return [execution.command, ...execution.args].join(" ");
 }

@@ -2,10 +2,7 @@ import { os } from "@orpc/server";
 import { createCli } from "trpc-cli";
 
 import { runCreateCommand } from "./commands/create";
-import {
-  CreateCommandInputSchema,
-  type CreateCommandInput,
-} from "./types";
+import { CreateCommandInputSchema, type CreateCommandInput } from "./types";
 
 const CLI_VERSION = process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0";
 
