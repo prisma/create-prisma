@@ -4,7 +4,29 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { PackageManager } from "../types";
+import {
+  getInstallCommand,
+  getPackageManagerManifestValue,
+  getRunScriptCommand,
+} from "../utils/package-manager";
+
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
+Handlebars.registerHelper(
+  "installCommand",
+  (packageManager: PackageManager | undefined) =>
+    packageManager ? getInstallCommand(packageManager) : ""
+);
+Handlebars.registerHelper(
+  "runScriptCommand",
+  (packageManager: PackageManager | undefined, scriptName: string) =>
+    packageManager ? getRunScriptCommand(packageManager, scriptName) : ""
+);
+Handlebars.registerHelper(
+  "packageManagerManifestValue",
+  (packageManager: PackageManager | undefined) =>
+    getPackageManagerManifestValue(packageManager) ?? ""
+);
 
 export function findPackageRoot(startDir: string): string {
   let currentDir = startDir;
@@ -79,6 +101,13 @@ export async function renderTemplateFile<TContext>(opts: {
         strict: true,
       })(context)
     : templateContent;
+
+  if (
+    templateFilePath.endsWith(".hbs") &&
+    outputContent.trim().length === 0
+  ) {
+    return;
+  }
 
   await fs.outputFile(outputPath, ensureTrailingNewline(outputContent), "utf8");
 }

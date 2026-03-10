@@ -2,7 +2,9 @@
   "name": "{{projectName}}",
   "private": true,
   "version": "0.0.1",
-  "packageManager": "{{#if (eq packageManager "bun")}}bun@1.3.9{{else}}{{#if (eq packageManager "pnpm")}}pnpm@10.16.1{{else}}npm@10.9.0{{/if}}{{/if}}",
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
   "workspaces": [
     "apps/*",
     "packages/*"

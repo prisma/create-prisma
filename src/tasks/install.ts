@@ -2,6 +2,7 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
+import { getDenoPrismaSpecifier } from "../utils/package-manager";
 import {
   dependencyVersionMap,
   type AvailableDependency,
@@ -14,12 +15,25 @@ import type {
 } from "../types";
 import { getInstallArgs } from "../utils/package-manager";
 
-const prismaScriptMap = {
-  "db:generate": "prisma generate",
-  "db:push": "prisma db push",
-  "db:migrate": "prisma migrate dev",
-  "db:seed": "prisma db seed",
-} as const;
+function getPrismaScriptMap(packageManager: PackageManager) {
+  if (packageManager === "deno") {
+    const prismaSpecifier = getDenoPrismaSpecifier();
+
+    return {
+      "db:generate": `deno run -A ${prismaSpecifier} generate`,
+      "db:push": `deno run -A ${prismaSpecifier} db push`,
+      "db:migrate": `deno run -A ${prismaSpecifier} migrate dev`,
+      "db:seed": `deno run -A ${prismaSpecifier} db seed`,
+    } as const;
+  }
+
+  return {
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+  } as const;
+}
 
 function getVersion(packageName: string): string | undefined {
   return dependencyVersionMap[packageName as AvailableDependency];
@@ -137,12 +151,20 @@ export async function addPackageDependency(opts: {
 
 export async function writePrismaDependencies(
   provider: DatabaseProvider,
+  packageManager: PackageManager,
   projectDir = process.cwd()
 ): Promise<DependencyWriteResult> {
   const dependencies: string[] = ["@prisma/client", "dotenv"];
   const devDependencies: string[] = ["prisma"];
   const { adapterPackage } = getDbPackages(provider);
   dependencies.push(adapterPackage);
+
+  // Deno needs node-gyp available when sqlite pulls in better-sqlite3.
+  if (provider === "sqlite" && packageManager === "deno") {
+    devDependencies.push("node-gyp");
+  }
+
+  const prismaScriptMap = getPrismaScriptMap(packageManager);
 
   const scriptWriteResult = await addPackageDependency({
     dependencies,

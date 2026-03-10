@@ -1,6 +1,10 @@
 {{#if (eq schemaPreset "basic")}}
 import { prisma } from "../lib/prisma";
 {{/if}}
+{{#if (eq packageManager "deno")}}
+
+export const dynamic = "force-dynamic";
+{{/if}}
 
 export default async function Home() {
 {{#if (eq schemaPreset "basic")}}

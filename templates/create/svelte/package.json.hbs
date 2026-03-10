@@ -2,6 +2,9 @@
 	"name": "{{projectName}}",
 	"private": true,
 	"version": "0.0.1",
+	{{#if (packageManagerManifestValue packageManager)}}
+	"packageManager": "{{packageManagerManifestValue packageManager}}",
+	{{/if}}
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",

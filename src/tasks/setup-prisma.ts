@@ -108,6 +108,10 @@ function getPackageManagerHint(
     return "Fast runtime + package manager";
   }
 
+  if (option === "deno") {
+    return "Runtime + package manager";
+  }
+
   return undefined;
 }
 
@@ -129,9 +133,19 @@ async function promptForPackageManager(
         hint: getPackageManagerHint("pnpm", detectedPackageManager),
       },
       {
+        value: "yarn",
+        label: "yarn",
+        hint: getPackageManagerHint("yarn", detectedPackageManager),
+      },
+      {
         value: "bun",
         label: "bun",
         hint: getPackageManagerHint("bun", detectedPackageManager),
+      },
+      {
+        value: "deno",
+        label: "deno",
+        hint: getPackageManagerHint("deno", detectedPackageManager),
       },
     ],
   });
@@ -530,6 +544,7 @@ async function writeDependenciesForContext(
   try {
     return await writePrismaDependencies(
       context.databaseProvider,
+      context.packageManager,
       prismaProjectDir
     );
   } catch (error) {
