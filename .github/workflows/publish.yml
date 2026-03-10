@@ -78,11 +78,8 @@ jobs:
           fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
           EOF
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Format check
-        run: bun run format:check
+      - name: Check
+        run: bun run check
 
       - name: Typecheck
         run: bun run typecheck
@@ -175,13 +172,9 @@ jobs:
         if: steps.check-version.outputs.exists == 'false'
         run: bun install --frozen-lockfile
 
-      - name: Lint
+      - name: Check
         if: steps.check-version.outputs.exists == 'false'
-        run: bun run lint
-
-      - name: Format check
-        if: steps.check-version.outputs.exists == 'false'
-        run: bun run format:check
+        run: bun run check
 
       - name: Typecheck
         if: steps.check-version.outputs.exists == 'false'

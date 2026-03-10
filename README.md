@@ -120,8 +120,7 @@ Or run locally:
 
 ```bash
 bun install
-bun run lint
-bun run format:check
+bun run check
 bun run build
 bun run start
 ```
@@ -158,6 +157,7 @@ Generated projects also include `db:seed` and configure Prisma's `migrations.see
 ## Scripts
 
 - `bun run build` - Build to `dist/`
+- `bun run check` - Run formatting and lint checks
 - `bun run dev` - Watch mode build
 - `bun run start` - Run built CLI
 - `bun run lint` - Run `oxlint` with warnings treated as failures
@@ -177,7 +177,7 @@ This repo uses a manual, script-driven release flow:
 1. Run `bun run bump` (or pass `patch|minor|major|x.y.z`).
 2. The script creates a `release/vX.Y.Z` branch and a PR with commit `chore(release): X.Y.Z`.
 3. Merge that PR to `main` with squash (keep commit title `chore(release): X.Y.Z`).
-4. GitHub Actions runs `bun run lint`, `bun run format:check`, `bun run typecheck`, and `bun run build` before publishing.
+4. GitHub Actions runs `bun run check`, `bun run typecheck`, and `bun run build` before publishing.
 5. GitHub Actions creates the `vX.Y.Z` tag and GitHub Release notes via `changelogithub`.
 6. GitHub Actions publishes only for `chore(release):` commits, using npm trusted publishing (OIDC, no npm token secret).
 

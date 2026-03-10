@@ -36,6 +36,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "start": "bun run ./dist/cli.mjs",
+    "check": "bun run format:check && bun run lint",
     "lint": "oxlint . --deny-warnings",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --write .",
