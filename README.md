@@ -32,88 +32,100 @@ Run directly with Deno:
 deno run -A npm:create-prisma@latest
 ```
 
-Create a new project (default command):
+Create a new project in an empty directory:
 
 ```bash
 create-prisma
 ```
 
+Initialize Prisma in the current project:
+
+```bash
+create-prisma
+```
+
+Create a new project explicitly:
+
+```bash
+create-prisma create
+```
+
 Create a Hono project non-interactively:
 
 ```bash
-create-prisma --name my-api --template hono --provider postgresql
+create-prisma create --name my-api --template hono --provider postgresql
 ```
 
 Create a Next.js project non-interactively:
 
 ```bash
-create-prisma --name my-web --template next --provider postgresql
+create-prisma create --name my-web --template next --provider postgresql
 ```
 
 Create a SvelteKit project non-interactively:
 
 ```bash
-create-prisma --name my-app --template svelte --provider postgresql
+create-prisma create --name my-app --template svelte --provider postgresql
 ```
 
 Create an Astro project non-interactively:
 
 ```bash
-create-prisma --name my-site --template astro --provider postgresql
+create-prisma create --name my-site --template astro --provider postgresql
 ```
 
 Create a Nuxt project non-interactively:
 
 ```bash
-create-prisma --name my-nuxt-app --template nuxt --provider postgresql
+create-prisma create --name my-nuxt-app --template nuxt --provider postgresql
 ```
 
 Create a TanStack Start project non-interactively:
 
 ```bash
-create-prisma --name my-start-app --template tanstack-start --provider postgresql
+create-prisma create --name my-start-app --template tanstack-start --provider postgresql
 ```
 
 Create a Turborepo project with a `packages/db` Prisma package:
 
 ```bash
-create-prisma --name my-monorepo --template turborepo --provider postgresql
+create-prisma create --name my-monorepo --template turborepo --provider postgresql
 ```
 
 Set package manager non-interactively:
 
 ```bash
-create-prisma --name my-app --template hono --package-manager pnpm --install
+create-prisma create --name my-app --template hono --package-manager pnpm --install
 ```
 
 Skip Prisma Client generation:
 
 ```bash
-create-prisma --name my-app --template hono --no-generate
+create-prisma create --name my-app --template hono --no-generate
 ```
 
 Show verbose command output:
 
 ```bash
-create-prisma --name my-app --template hono --verbose
+create-prisma create --name my-app --template hono --verbose
 ```
 
-Run fully non-interactive with defaults:
+Scaffold a new project non-interactively with defaults:
 
 ```bash
-create-prisma --yes
+create-prisma create --yes
 ```
 
 Use Prisma Postgres auto-provisioning for PostgreSQL:
 
 ```bash
-create-prisma --name my-app --template hono --provider postgresql --prisma-postgres
+create-prisma create --name my-app --template hono --provider postgresql --prisma-postgres
 ```
 
 Enable add-ons with individual flags:
 
 ```bash
-create-prisma --name my-app --template next --skills --mcp --extension
+create-prisma create --name my-app --template next --skills --mcp --extension
 ```
 
 Or run locally:
@@ -133,10 +145,17 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - `.env` (creates or updates `DATABASE_URL`, and writes `CLAIM_URL` when Prisma Postgres is provisioned)
 - runs `prisma generate` automatically after scaffolding
 
-`create` is the default command and currently supports:
+The create flow is smart:
+- if the current directory contains a `package.json` and you do not pass `--name` or `--template`, it initializes Prisma in the current project
+- otherwise it scaffolds a new project
+- passing `--name` or `--template` forces the project scaffolding flow
+
+The create flow supports:
 - templates: `hono`, `next`, `svelte`, `astro`, `nuxt`, `tanstack-start`, `turborepo`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
+
+When initializing an existing project, it adds the standard Prisma setup: `prisma/schema.prisma`, `prisma/seed.ts`, `prisma.config.ts`, and `src/lib/prisma.ts`.
 
 `create` prompts for database choice, package manager, and whether to install dependencies now.
 Supported providers in this flow: `postgresql`, `mysql`, `sqlite`, `sqlserver`, `cockroachdb`.
@@ -145,7 +164,7 @@ Package manager prompt auto-detects from `package.json`/lockfiles/user agent and
 `--yes` accepts defaults (`postgresql`, detected package manager, Prisma Postgres enabled for PostgreSQL, install enabled) and skips prompts.
 `--no-generate` skips automatic `prisma generate`.
 `--verbose` prints full install/generate command output; default mode keeps output concise.
-`--force` (create only) allows scaffolding in a non-empty target directory.
+`--force` allows scaffolding in a non-empty target directory when creating a new project.
 Add-ons can be selected interactively or through flags: `--skills`, `--mcp`, `--extension`.
 When add-ons are enabled, `create` prompts for the relevant agent and IDE selections, then installs curated Prisma skills (`skills@latest`), configures Prisma MCP (`add-mcp@latest`), and installs the Prisma IDE extension for supported IDE CLIs.
 When `postgresql` is selected, `create` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.

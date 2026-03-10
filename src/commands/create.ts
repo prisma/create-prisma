@@ -11,6 +11,10 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import {
+  runInitCommand,
+  shouldInitCurrentProject,
+} from "./init";
+import {
   scaffoldCreateTemplate,
 } from "../templates/render-create-template";
 import {
@@ -163,6 +167,11 @@ async function inspectTargetPath(targetPath: string): Promise<CreateTargetPathSt
 export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promise<void> {
   try {
     const input = CreateCommandInputSchema.parse(rawInput);
+
+    if (await shouldInitCurrentProject(input)) {
+      await runInitCommand(input);
+      return;
+    }
 
     intro(getCreatePrismaIntro());
 
