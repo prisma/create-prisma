@@ -164,11 +164,20 @@ async function inspectTargetPath(targetPath: string): Promise<CreateTargetPathSt
   };
 }
 
-export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promise<void> {
+export async function runCreateCommand(
+  rawInput: CreateCommandInput = {},
+  options: {
+    allowInitCurrentProject?: boolean;
+  } = {}
+): Promise<void> {
   try {
     const input = CreateCommandInputSchema.parse(rawInput);
+    const allowInitCurrentProject = options.allowInitCurrentProject === true;
 
-    if (await shouldInitCurrentProject(input)) {
+    if (
+      allowInitCurrentProject &&
+      (await shouldInitCurrentProject(input))
+    ) {
       await runInitCommand(input);
       return;
     }

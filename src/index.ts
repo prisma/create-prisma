@@ -9,6 +9,10 @@ import {
 
 const CLI_VERSION = process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0";
 
+function usesExplicitCreateSubcommand(argv = process.argv): boolean {
+  return argv.slice(2)[0] === "create";
+}
+
 export const router = os.router({
   create: os
     .meta({
@@ -18,7 +22,11 @@ export const router = os.router({
     })
     .input(CreateCommandInputSchema.optional())
     .handler(async ({ input }) => {
-      await runCreateCommand(input ?? {});
+      await runCreateCommand(input ?? {}, {
+        // Preserve smart init for `create-prisma`, but keep explicit
+        // `create-prisma create` on the scaffolding path.
+        allowInitCurrentProject: !usesExplicitCreateSubcommand(),
+      });
     }),
 });
 
@@ -31,7 +39,9 @@ export function createCreatePrismaCli() {
 }
 
 export async function create(input: CreateCommandInput = {}): Promise<void> {
-  await runCreateCommand(input);
+  await runCreateCommand(input, {
+    allowInitCurrentProject: false,
+  });
 }
 
 export type { CreateCommandInput };

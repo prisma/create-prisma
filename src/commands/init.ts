@@ -171,6 +171,7 @@ export async function runInitCommand(
     const prismaSetupContext = await collectPrismaSetupContext(input, {
       projectDir,
       defaultSchemaPreset: DEFAULT_SCHEMA_PRESET,
+      promptForPackageManager: false,
     });
     if (!prismaSetupContext) {
       return;

@@ -118,7 +118,7 @@ function getPackageManagerHint(
   return undefined;
 }
 
-async function promptForPackageManager(
+async function promptForPackageManagerSelection(
   detectedPackageManager: PackageManager
 ): Promise<PackageManager | undefined> {
   const packageManager = await select({
@@ -209,6 +209,7 @@ export async function collectPrismaSetupContext(
   options: {
     projectDir?: string;
     defaultSchemaPreset?: SchemaPreset;
+    promptForPackageManager?: boolean;
   } = {}
 ): Promise<PrismaSetupContext | undefined> {
   const projectDir = path.resolve(options.projectDir ?? process.cwd());
@@ -241,11 +242,14 @@ export async function collectPrismaSetupContext(
   }
 
   const detectedPackageManager = await detectPackageManager(projectDir);
+  const promptForPackageManager = options.promptForPackageManager ?? true;
   const packageManager =
     input.packageManager ??
     (useDefaults
       ? detectedPackageManager
-      : await promptForPackageManager(detectedPackageManager));
+      : promptForPackageManager
+        ? await promptForPackageManagerSelection(detectedPackageManager)
+        : detectedPackageManager);
   if (!packageManager) {
     return;
   }

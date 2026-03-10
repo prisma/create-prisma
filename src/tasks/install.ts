@@ -155,7 +155,7 @@ export async function writePrismaDependencies(
   projectDir = process.cwd()
 ): Promise<DependencyWriteResult> {
   const dependencies: string[] = ["@prisma/client", "dotenv"];
-  const devDependencies: string[] = ["prisma"];
+  const devDependencies: string[] = ["prisma", "tsx"];
   const { adapterPackage } = getDbPackages(provider);
   dependencies.push(adapterPackage);
 
