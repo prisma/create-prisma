@@ -114,6 +114,11 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         hint: "Official minimal Nuxt starter with Nitro API route example",
       },
       {
+        value: "tanstack-start",
+        label: "TanStack Start",
+        hint: "TanStack Start React app with file routes and server functions",
+      },
+      {
         value: "turborepo",
         label: "Turborepo",
         hint: "Monorepo starter with apps + packages/db Prisma package",

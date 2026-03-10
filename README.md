@@ -68,6 +68,12 @@ Create a Nuxt project non-interactively:
 create-prisma --name my-nuxt-app --template nuxt --provider postgresql
 ```
 
+Create a TanStack Start project non-interactively:
+
+```bash
+create-prisma --name my-start-app --template tanstack-start --provider postgresql
+```
+
 Create a Turborepo project with a `packages/db` Prisma package:
 
 ```bash
@@ -128,7 +134,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - runs `prisma generate` automatically after scaffolding
 
 `create` is the default command and currently supports:
-- templates: `hono`, `next`, `svelte`, `astro`, `nuxt`, `turborepo`
+- templates: `hono`, `next`, `svelte`, `astro`, `nuxt`, `tanstack-start`, `turborepo`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 
