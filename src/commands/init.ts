@@ -1,11 +1,4 @@
-import {
-  cancel,
-  intro,
-  isCancel,
-  log,
-  spinner,
-  text,
-} from "@clack/prompts";
+import { cancel, intro, isCancel, log, spinner, text } from "@clack/prompts";
 import fs from "fs-extra";
 import path from "node:path";
 
@@ -21,7 +14,9 @@ import { getCreatePrismaIntro } from "../ui/branding";
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
 const DEFAULT_PRISMA_INSTANCE_PATH = "src/lib/prisma.ts";
 
-async function readProjectPackageJson(projectDir: string): Promise<Record<string, unknown> | undefined> {
+async function readProjectPackageJson(
+  projectDir: string,
+): Promise<Record<string, unknown> | undefined> {
   const packageJsonPath = path.join(projectDir, "package.json");
   if (!(await fs.pathExists(packageJsonPath))) {
     return undefined;
@@ -34,10 +29,7 @@ async function hasPackageJson(projectDir: string): Promise<boolean> {
   return fs.pathExists(path.join(projectDir, "package.json"));
 }
 
-async function hasPackageScript(
-  projectDir: string,
-  scriptName: string
-): Promise<boolean> {
+async function hasPackageScript(projectDir: string, scriptName: string): Promise<boolean> {
   const packageJson = await readProjectPackageJson(projectDir);
   if (!packageJson) {
     return false;
@@ -59,7 +51,7 @@ async function warnIfWorkspaceRoot(projectDir: string): Promise<void> {
 
   if ("workspaces" in packageJson) {
     log.warn(
-      "Detected a workspace root package.json. Prisma files will be initialized in the current directory."
+      "Detected a workspace root package.json. Prisma files will be initialized in the current directory.",
     );
   }
 }
@@ -73,16 +65,9 @@ export async function shouldInitCurrentProject(
     mcp?: boolean;
     extension?: boolean;
   },
-  projectDir = process.cwd()
+  projectDir = process.cwd(),
 ): Promise<boolean> {
-  if (
-    input.name ||
-    input.template ||
-    input.force ||
-    input.skills ||
-    input.mcp ||
-    input.extension
-  ) {
+  if (input.name || input.template || input.force || input.skills || input.mcp || input.extension) {
     return false;
   }
 
@@ -115,8 +100,7 @@ function normalizePrismaInstancePath(input: string): string | undefined {
     return undefined;
   }
 
-  const withExtension =
-    existingExtension === ".ts" ? normalizedPath : `${normalizedPath}.ts`;
+  const withExtension = existingExtension === ".ts" ? normalizedPath : `${normalizedPath}.ts`;
 
   return withExtension;
 }
@@ -146,7 +130,7 @@ async function promptForPrismaInstancePath(): Promise<string | undefined> {
 }
 
 async function resolvePrismaInstancePath(
-  input: PrismaSetupCommandInput
+  input: PrismaSetupCommandInput,
 ): Promise<string | undefined> {
   if (input.yes === true) {
     return DEFAULT_PRISMA_INSTANCE_PATH;
@@ -159,7 +143,7 @@ export async function runInitCommand(
   rawInput: PrismaSetupCommandInput = {},
   options: {
     showIntro?: boolean;
-  } = {}
+  } = {},
 ): Promise<void> {
   try {
     const input = PrismaSetupCommandInputSchema.parse(rawInput);
@@ -172,7 +156,7 @@ export async function runInitCommand(
 
     if (!(await hasPackageJson(projectDir))) {
       cancel(
-        "No package.json found in the current directory. Run `create-prisma create` to scaffold a new project first."
+        "No package.json found in the current directory. Run `create-prisma create` to scaffold a new project first.",
       );
       return;
     }
@@ -216,7 +200,7 @@ export async function runInitCommand(
         log.warn(
           `Skipped ${renderResult.skippedFiles.length} existing Prisma file${
             renderResult.skippedFiles.length === 1 ? "" : "s"
-          }.`
+          }.`,
         );
       }
     } catch (error) {
@@ -232,10 +216,6 @@ export async function runInitCommand(
       singletonPath: prismaInstancePath,
     });
   } catch (error) {
-    cancel(
-      `Init command failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+    cancel(`Init command failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

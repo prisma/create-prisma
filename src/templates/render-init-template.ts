@@ -1,19 +1,9 @@
 import fs from "fs-extra";
 import path from "node:path";
 
-import type {
-  DatabaseProvider,
-  PackageManager,
-  SchemaPreset,
-} from "../types";
-import {
-  getRelativePathFromBase,
-  resolveGeneratedClientDirPath,
-} from "../utils/prisma-paths";
-import {
-  renderTemplateFile,
-  resolveTemplatesDir,
-} from "./shared";
+import type { DatabaseProvider, PackageManager, SchemaPreset } from "../types";
+import { getRelativePathFromBase, resolveGeneratedClientDirPath } from "../utils/prisma-paths";
+import { renderTemplateFile, resolveTemplatesDir } from "./shared";
 
 type InitTemplateContext = {
   provider: DatabaseProvider;
@@ -43,9 +33,7 @@ function toImportSpecifier(fromPath: string, toPath: string): string {
     ? normalizedPath.slice(0, -3)
     : normalizedPath;
 
-  return withoutExtension.startsWith(".")
-    ? withoutExtension
-    : `./${withoutExtension}`;
+  return withoutExtension.startsWith(".") ? withoutExtension : `./${withoutExtension}`;
 }
 
 export async function scaffoldInitTemplate(opts: {
@@ -58,23 +46,11 @@ export async function scaffoldInitTemplate(opts: {
   writtenFiles: string[];
   skippedFiles: string[];
 }> {
-  const {
-    projectDir,
-    provider,
-    schemaPreset,
-    packageManager,
-    singletonPath,
-  } = opts;
+  const { projectDir, provider, schemaPreset, packageManager, singletonPath } = opts;
   const singletonOutputPath = path.join(projectDir, singletonPath);
   const schemaOutputPath = path.join(projectDir, "prisma/schema.prisma");
-  const generatedClientDirPath = await resolveGeneratedClientDirPath(
-    projectDir,
-    singletonPath
-  );
-  const generatedClientEntryPath = path.join(
-    generatedClientDirPath,
-    "client.ts"
-  );
+  const generatedClientDirPath = await resolveGeneratedClientDirPath(projectDir, singletonPath);
+  const generatedClientEntryPath = path.join(generatedClientDirPath, "client.ts");
   const seedOutputPath = path.join(projectDir, "prisma/seed.ts");
   const context: InitTemplateContext = {
     provider,
@@ -82,26 +58,17 @@ export async function scaffoldInitTemplate(opts: {
     packageManager,
     generatedClientOutputPath: getRelativePathFromBase(
       path.dirname(schemaOutputPath),
-      generatedClientDirPath
+      generatedClientDirPath,
     ),
-    generatedClientImportPath: toImportSpecifier(
-      singletonOutputPath,
-      generatedClientEntryPath
-    ),
-    singletonImportPathFromSeed: toImportSpecifier(
-      seedOutputPath,
-      singletonOutputPath
-    ),
+    generatedClientImportPath: toImportSpecifier(singletonOutputPath, generatedClientEntryPath),
+    singletonImportPathFromSeed: toImportSpecifier(seedOutputPath, singletonOutputPath),
   };
   const writtenFiles: string[] = [];
   const skippedFiles: string[] = [];
 
   for (const relativeTemplatePath of staticInitTemplateFiles) {
     const templateFilePath = path.join(initTemplateRoot, relativeTemplatePath);
-    const outputPath = path.join(
-      projectDir,
-      stripHbsExtension(relativeTemplatePath)
-    );
+    const outputPath = path.join(projectDir, stripHbsExtension(relativeTemplatePath));
 
     if (await fs.pathExists(outputPath)) {
       skippedFiles.push(outputPath);
@@ -118,10 +85,7 @@ export async function scaffoldInitTemplate(opts: {
     }
   }
 
-  const singletonTemplatePath = path.join(
-    initTemplateRoot,
-    "prisma-instance.ts.hbs"
-  );
+  const singletonTemplatePath = path.join(initTemplateRoot, "prisma-instance.ts.hbs");
   if (await fs.pathExists(singletonOutputPath)) {
     skippedFiles.push(singletonOutputPath);
   } else {

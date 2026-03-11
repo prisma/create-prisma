@@ -47,53 +47,34 @@ export type ExtensionTarget = z.infer<typeof ExtensionTargetSchema>;
 export const PrismaSkillNameSchema = z.enum(prismaSkillNames);
 export type PrismaSkillName = z.infer<typeof PrismaSkillNameSchema>;
 
-export const DatabaseUrlSchema = z
-  .string()
-  .trim()
-  .min(1, "Please enter a valid database URL");
+export const DatabaseUrlSchema = z.string().trim().min(1, "Please enter a valid database URL");
 
 export const CommonCommandOptionsSchema = z.object({
-  yes: z
-    .boolean()
-    .optional()
-    .describe("Skip prompts and accept default choices"),
-  verbose: z
-    .boolean()
-    .optional()
-    .describe("Show verbose command output during setup"),
+  yes: z.boolean().optional().describe("Skip prompts and accept default choices"),
+  verbose: z.boolean().optional().describe("Show verbose command output during setup"),
 });
 
 export const PrismaSetupOptionsSchema = z.object({
   provider: DatabaseProviderSchema.optional().describe("Database provider"),
   packageManager: PackageManagerSchema.optional().describe(
-    "Package manager used for dependency installation"
+    "Package manager used for dependency installation",
   ),
   prismaPostgres: z
     .boolean()
     .optional()
-    .describe(
-      "Provision Prisma Postgres with create-db when provider is postgresql"
-    ),
+    .describe("Provision Prisma Postgres with create-db when provider is postgresql"),
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
-  install: z
-    .boolean()
-    .optional()
-    .describe("Install dependencies with selected package manager"),
-  generate: z
-    .boolean()
-    .optional()
-    .describe("Generate Prisma Client after scaffolding"),
+  install: z.boolean().optional().describe("Install dependencies with selected package manager"),
+  generate: z.boolean().optional().describe("Generate Prisma Client after scaffolding"),
   schemaPreset: SchemaPresetSchema.optional().describe(
-    "Schema preset to scaffold in prisma/schema.prisma"
+    "Schema preset to scaffold in prisma/schema.prisma",
   ),
 });
 
 export const PrismaSetupCommandInputSchema = CommonCommandOptionsSchema.extend(
-  PrismaSetupOptionsSchema.shape
+  PrismaSetupOptionsSchema.shape,
 );
-export type PrismaSetupCommandInput = z.infer<
-  typeof PrismaSetupCommandInputSchema
->;
+export type PrismaSetupCommandInput = z.infer<typeof PrismaSetupCommandInputSchema>;
 
 export const CreateScaffoldOptionsSchema = z.object({
   name: z
@@ -103,26 +84,14 @@ export const CreateScaffoldOptionsSchema = z.object({
     .optional()
     .describe("Project name / directory"),
   template: CreateTemplateSchema.optional().describe("Project template"),
-  skills: z
-    .boolean()
-    .optional()
-    .describe("Enable skills addon"),
-  mcp: z
-    .boolean()
-    .optional()
-    .describe("Enable MCP addon"),
-  extension: z
-    .boolean()
-    .optional()
-    .describe("Enable extension addon"),
-  force: z
-    .boolean()
-    .optional()
-    .describe("Allow scaffolding into a non-empty target directory"),
+  skills: z.boolean().optional().describe("Enable skills addon"),
+  mcp: z.boolean().optional().describe("Enable MCP addon"),
+  extension: z.boolean().optional().describe("Enable extension addon"),
+  force: z.boolean().optional().describe("Allow scaffolding into a non-empty target directory"),
 });
 
 export const CreateCommandInputSchema = PrismaSetupCommandInputSchema.extend(
-  CreateScaffoldOptionsSchema.shape
+  CreateScaffoldOptionsSchema.shape,
 );
 export type CreateCommandInput = z.infer<typeof CreateCommandInputSchema>;
 

@@ -3,16 +3,9 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import { getDenoPrismaSpecifier } from "../utils/package-manager";
-import {
-  dependencyVersionMap,
-  type AvailableDependency,
-} from "../constants/dependencies";
+import { dependencyVersionMap, type AvailableDependency } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
-import type {
-  DatabaseProvider,
-  DependencyWriteResult,
-  PackageManager,
-} from "../types";
+import type { DatabaseProvider, DependencyWriteResult, PackageManager } from "../types";
 import { getInstallArgs } from "../utils/package-manager";
 
 function getPrismaScriptMap(packageManager: PackageManager) {
@@ -44,9 +37,7 @@ function unique(items: string[]): string[] {
 }
 
 function sortRecord(record: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(record).sort(([a], [b]) => a.localeCompare(b))
-  );
+  return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 export async function addPackageDependency(opts: {
@@ -76,7 +67,7 @@ export async function addPackageDependency(opts: {
   const pkgJsonPath = path.join(projectDir, "package.json");
   if (!(await fs.pathExists(pkgJsonPath))) {
     throw new Error(
-      `No package.json found in ${projectDir}. Run this command inside an existing JavaScript/TypeScript project.`
+      `No package.json found in ${projectDir}. Run this command inside an existing JavaScript/TypeScript project.`,
     );
   }
 
@@ -100,9 +91,7 @@ export async function addPackageDependency(opts: {
     if (version) {
       pkgJson.devDependencies[pkgName] = version;
     } else {
-      console.warn(
-        `Warning: Dev dependency ${pkgName} not found in version map.`
-      );
+      console.warn(`Warning: Dev dependency ${pkgName} not found in version map.`);
     }
   }
 
@@ -152,7 +141,7 @@ export async function addPackageDependency(opts: {
 export async function writePrismaDependencies(
   provider: DatabaseProvider,
   packageManager: PackageManager,
-  projectDir = process.cwd()
+  projectDir = process.cwd(),
 ): Promise<DependencyWriteResult> {
   const dependencies: string[] = ["@prisma/client", "dotenv"];
   const devDependencies: string[] = ["prisma", "tsx"];
@@ -188,7 +177,7 @@ export async function installProjectDependencies(
   projectDir = process.cwd(),
   options: {
     verbose?: boolean;
-  } = {}
+  } = {},
 ): Promise<void> {
   const verbose = options.verbose === true;
   const installCommand = getInstallArgs(packageManager);

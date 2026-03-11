@@ -132,11 +132,13 @@ Or run locally:
 
 ```bash
 bun install
+bun run check
 bun run build
 bun run start
 ```
 
 The CLI updates `package.json` with Prisma dependencies, optionally runs dependency installation with your selected package manager, and scaffolds Prisma 7 setup files directly inside each app template:
+
 - `prisma/schema.prisma`
 - `prisma/seed.ts`
 - `src/lib/prisma.ts`, `src/lib/prisma.server.ts`, `src/lib/server/prisma.ts`, `server/utils/prisma.ts`, or `packages/db/src/client.ts`
@@ -146,11 +148,13 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 - runs `prisma generate` automatically after scaffolding
 
 The create flow is smart:
-- if the current directory contains a `package.json` and you do not pass `--name` or `--template`, it initializes Prisma in the current project
-- otherwise it scaffolds a new project
-- passing `--name` or `--template` forces the project scaffolding flow
 
-The create flow supports:
+- if the current directory contains a `package.json` and you do not pass `--name`, `--template`, `--force`, `--skills`, `--mcp`, or `--extension`, it initializes Prisma in the current project
+- otherwise it scaffolds a new project
+- passing `create` explicitly, or passing `--name` or `--template`, forces the project scaffolding flow
+
+`create` is the default command and currently supports:
+
 - templates: `hono`, `next`, `svelte`, `astro`, `nuxt`, `tanstack-start`, `turborepo`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
@@ -168,13 +172,18 @@ Package manager prompt auto-detects from `package.json`/lockfiles/user agent and
 Add-ons can be selected interactively or through flags: `--skills`, `--mcp`, `--extension`.
 When add-ons are enabled, `create` prompts for the relevant agent and IDE selections, then installs curated Prisma skills (`skills@latest`), configures Prisma MCP (`add-mcp@latest`), and installs the Prisma IDE extension for supported IDE CLIs.
 When `postgresql` is selected, `create` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
-Generated projects also include `db:seed` and configure Prisma's `migrations.seed` hook to run `tsx prisma/seed.ts`.
+Generated projects also include `db:seed` and configure Prisma's `migrations.seed` hook to run the package-manager-appropriate Prisma seed command.
 
 ## Scripts
 
 - `bun run build` - Build to `dist/`
+- `bun run check` - Run formatting and lint checks
 - `bun run dev` - Watch mode build
 - `bun run start` - Run built CLI
+- `bun run lint` - Run `oxlint` with warnings treated as failures
+- `bun run lint:fix` - Apply safe `oxlint` fixes
+- `bun run format` - Format the repo with `oxfmt`
+- `bun run format:check` - Check formatting with `oxfmt`
 - `bun run typecheck` - TypeScript checks only
 - `bun run bump` - Create a release PR (interactive semver bump)
 - `bun run bump -- patch|minor|major|x.y.z` - Non-interactive bump
@@ -188,5 +197,8 @@ This repo uses a manual, script-driven release flow:
 1. Run `bun run bump` (or pass `patch|minor|major|x.y.z`).
 2. The script creates a `release/vX.Y.Z` branch and a PR with commit `chore(release): X.Y.Z`.
 3. Merge that PR to `main` with squash (keep commit title `chore(release): X.Y.Z`).
-4. GitHub Actions creates the `vX.Y.Z` tag and GitHub Release notes via `changelogithub`.
-5. GitHub Actions publishes only for `chore(release):` commits, using npm trusted publishing (OIDC, no npm token secret).
+4. GitHub Actions runs `bun run check`, `bun run typecheck`, and `bun run build` before publishing.
+5. GitHub Actions creates the `vX.Y.Z` tag and GitHub Release notes via `changelogithub`.
+6. GitHub Actions publishes only for `chore(release):` commits, using npm trusted publishing (OIDC, no npm token secret).
+
+Every PR from a branch in this repository also publishes a preview package to npm using the dist-tag `pr<PR_NUMBER>`, so PR 3 is installable as `create-prisma@pr3`.

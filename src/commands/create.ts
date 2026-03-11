@@ -1,22 +1,9 @@
-import {
-  cancel,
-  intro,
-  isCancel,
-  log,
-  select,
-  spinner,
-  text,
-} from "@clack/prompts";
+import { cancel, intro, isCancel, log, select, spinner, text } from "@clack/prompts";
 import fs from "fs-extra";
 import path from "node:path";
 
-import {
-  runInitCommand,
-  shouldInitCurrentProject,
-} from "./init";
-import {
-  scaffoldCreateTemplate,
-} from "../templates/render-create-template";
+import { runInitCommand, shouldInitCurrentProject } from "./init";
+import { scaffoldCreateTemplate } from "../templates/render-create-template";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
@@ -26,10 +13,7 @@ import {
   type CreateTemplate,
   type SchemaPreset,
 } from "../types";
-import {
-  collectPrismaSetupContext,
-  executePrismaSetupContext,
-} from "../tasks/setup-prisma";
+import { collectPrismaSetupContext, executePrismaSetupContext } from "../tasks/setup-prisma";
 import {
   collectCreateAddonSetupContext,
   executeCreateAddonSetupContext,
@@ -168,16 +152,13 @@ export async function runCreateCommand(
   rawInput: CreateCommandInput = {},
   options: {
     allowInitCurrentProject?: boolean;
-  } = {}
+  } = {},
 ): Promise<void> {
   try {
     const input = CreateCommandInputSchema.parse(rawInput);
     const allowInitCurrentProject = options.allowInitCurrentProject === true;
 
-    if (
-      allowInitCurrentProject &&
-      (await shouldInitCurrentProject(input))
-    ) {
+    if (allowInitCurrentProject && (await shouldInitCurrentProject(input))) {
       await runInitCommand(input);
       return;
     }
@@ -191,16 +172,12 @@ export async function runCreateCommand(
 
     await executeCreateContext(context);
   } catch (error) {
-    cancel(
-      `Create command failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+    cancel(`Create command failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 async function collectCreateContext(
-  input: CreateCommandInput
+  input: CreateCommandInput,
 ): Promise<CreatePromptContext | undefined> {
   const useDefaults = input.yes === true;
   const force = input.force === true;
@@ -212,8 +189,7 @@ async function collectCreateContext(
   }
 
   const template =
-    input.template ??
-    (useDefaults ? DEFAULT_TEMPLATE : await promptForCreateTemplate());
+    input.template ?? (useDefaults ? DEFAULT_TEMPLATE : await promptForCreateTemplate());
   if (!template) {
     return;
   }
@@ -223,20 +199,16 @@ async function collectCreateContext(
   if (targetPathState.exists && !targetPathState.isDirectory) {
     cancel(
       `Target path ${formatPathForDisplay(
-        targetDirectory
-      )} already exists and is not a directory. Choose a different project name.`
+        targetDirectory,
+      )} already exists and is not a directory. Choose a different project name.`,
     );
     return;
   }
-  if (
-    targetPathState.exists &&
-    !targetPathState.isEmptyDirectory &&
-    !force
-  ) {
+  if (targetPathState.exists && !targetPathState.isEmptyDirectory && !force) {
     cancel(
       `Target directory ${formatPathForDisplay(
-        targetDirectory
-      )} is not empty. Use --force to continue.`
+        targetDirectory,
+      )} is not empty. Use --force to continue.`,
     );
     return;
   }
@@ -295,7 +267,7 @@ async function executeCreateContext(context: CreatePromptContext): Promise<void>
     context.force
   ) {
     log.warn(
-      `Used --force in non-empty directory ${formatPathForDisplay(context.targetDirectory)}.`
+      `Used --force in non-empty directory ${formatPathForDisplay(context.targetDirectory)}.`,
     );
   }
 

@@ -1,20 +1,26 @@
 {
   "name": "create-prisma",
   "version": "0.2.0",
+  "private": false,
   "description": "Create Prisma 7 projects with first-party templates and great DX.",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/prisma/create-prisma"
-  },
   "homepage": "https://github.com/prisma/create-prisma",
   "bugs": {
     "url": "https://github.com/prisma/create-prisma/issues"
   },
-  "private": false,
-  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/create-prisma"
+  },
   "bin": {
     "create-prisma": "dist/cli.mjs"
   },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "exports": {
@@ -26,21 +32,15 @@
       "import": "./dist/cli.mjs"
     }
   },
-  "files": [
-    "dist",
-    "templates",
-    "README.md",
-    "CHANGELOG.md"
-  ],
-  "engines": {
-    "node": ">=18.0.0",
-    "bun": ">=1.3.0"
-  },
-  "packageManager": "bun@1.3.9",
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
     "start": "bun run ./dist/cli.mjs",
+    "check": "bun run format:check && bun run lint",
+    "lint": "oxlint . --deny-warnings",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "typecheck": "tsc --noEmit",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run bump",
@@ -60,7 +60,14 @@
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^25.3.0",
     "changelogithub": "^14.0.0",
+    "oxfmt": "^0.37.0",
+    "oxlint": "^1.52.0",
     "tsdown": "^0.20.3",
     "typescript": "^5.9.3"
-  }
+  },
+  "engines": {
+    "bun": ">=1.3.0",
+    "node": ">=18.0.0"
+  },
+  "packageManager": "bun@1.3.9"
 }

@@ -27,7 +27,7 @@ export async function resolvePrismaProjectDir(projectDir: string): Promise<strin
 
 export async function findFirstExistingPath(
   baseDir: string,
-  candidates: readonly string[]
+  candidates: readonly string[],
 ): Promise<string | undefined> {
   for (const relativePath of candidates) {
     const absolutePath = path.join(baseDir, relativePath);
@@ -56,7 +56,7 @@ export function inferGeneratedClientDir(singletonPath: string): string {
 }
 
 export async function readGeneratedClientDirFromSchema(
-  prismaProjectDir: string
+  prismaProjectDir: string,
 ): Promise<string | undefined> {
   const schemaPath = path.join(prismaProjectDir, "prisma/schema.prisma");
   if (!(await fs.pathExists(schemaPath))) {
@@ -75,28 +75,22 @@ export async function readGeneratedClientDirFromSchema(
 
 export async function resolveGeneratedClientDirPath(
   prismaProjectDir: string,
-  singletonPath?: string
+  singletonPath?: string,
 ): Promise<string> {
-  const existingGeneratedClientDir =
-    await readGeneratedClientDirFromSchema(prismaProjectDir);
+  const existingGeneratedClientDir = await readGeneratedClientDirFromSchema(prismaProjectDir);
   if (existingGeneratedClientDir) {
     return existingGeneratedClientDir;
   }
 
-  return path.join(
-    prismaProjectDir,
-    inferGeneratedClientDir(singletonPath ?? "src/lib/prisma.ts")
-  );
+  return path.join(prismaProjectDir, inferGeneratedClientDir(singletonPath ?? "src/lib/prisma.ts"));
 }
 
 export function getGeneratedClientIgnoreEntry(
   prismaProjectDir: string,
-  generatedClientDir: string
+  generatedClientDir: string,
 ): string {
   const generatedRootDir = path.dirname(generatedClientDir);
-  const relativeGeneratedRoot = toPosixPath(
-    path.relative(prismaProjectDir, generatedRootDir)
-  );
+  const relativeGeneratedRoot = toPosixPath(path.relative(prismaProjectDir, generatedRootDir));
 
   if (relativeGeneratedRoot.length === 0 || relativeGeneratedRoot.startsWith("..")) {
     return "src/generated";
@@ -105,9 +99,6 @@ export function getGeneratedClientIgnoreEntry(
   return relativeGeneratedRoot;
 }
 
-export function getRelativePathFromBase(
-  baseDir: string,
-  targetPath: string
-): string {
+export function getRelativePathFromBase(baseDir: string, targetPath: string): string {
   return toPosixPath(path.relative(baseDir, targetPath));
 }

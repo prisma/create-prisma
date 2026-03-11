@@ -1,10 +1,7 @@
 import { execa } from "execa";
 
 import type { PackageManager, PrismaPostgresResult } from "../types";
-import {
-  getPackageExecutionArgs,
-  getPackageExecutionCommand,
-} from "../utils/package-manager";
+import { getPackageExecutionArgs, getPackageExecutionCommand } from "../utils/package-manager";
 
 type CreateDbJsonPayload = {
   success?: boolean;
@@ -56,10 +53,7 @@ function pickConnectionString(payload: CreateDbJsonPayload): string | undefined 
   return undefined;
 }
 
-function extractErrorMessage(
-  payload: CreateDbJsonPayload,
-  fallback: string
-): string {
+function extractErrorMessage(payload: CreateDbJsonPayload, fallback: string): string {
   if (typeof payload.message === "string" && payload.message.length > 0) {
     return payload.message;
   }
@@ -73,11 +67,9 @@ function extractErrorMessage(
 
 export async function provisionPrismaPostgres(
   packageManager: PackageManager,
-  projectDir = process.cwd()
+  projectDir = process.cwd(),
 ): Promise<PrismaPostgresResult> {
-  const command = getPackageExecutionArgs(packageManager, [
-    ...CREATE_DB_COMMAND_ARGS,
-  ]);
+  const command = getPackageExecutionArgs(packageManager, [...CREATE_DB_COMMAND_ARGS]);
   const commandString = getCreateDbCommand(packageManager);
 
   let stdout: string;

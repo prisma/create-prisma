@@ -1,11 +1,4 @@
-import {
-  cancel,
-  isCancel,
-  log,
-  multiselect,
-  select,
-  spinner,
-} from "@clack/prompts";
+import { cancel, isCancel, log, multiselect, select, spinner } from "@clack/prompts";
 import { execa } from "execa";
 
 import type {
@@ -18,9 +11,7 @@ import type {
   PackageManager,
   PrismaSkillName,
 } from "../types";
-import {
-  getPackageExecutionArgs,
-} from "../utils/package-manager";
+import { getPackageExecutionArgs } from "../utils/package-manager";
 
 type AgentOption = {
   value: string;
@@ -198,7 +189,7 @@ function uniqueValues<T>(values: T[]): T[] {
 
 function getRecommendedPrismaSkills(
   provider: DatabaseProvider,
-  shouldUsePrismaPostgres: boolean
+  shouldUsePrismaPostgres: boolean,
 ): PrismaSkillName[] {
   const skills = [...getAvailablePrismaSkills(provider)];
 
@@ -252,7 +243,7 @@ async function promptForAddonScope(): Promise<AddonInstallScope | undefined> {
 
 async function promptForPrismaSkills(
   provider: DatabaseProvider,
-  recommendedSkills: PrismaSkillName[]
+  recommendedSkills: PrismaSkillName[],
 ): Promise<PrismaSkillName[] | undefined> {
   const options = getSkillOptions(provider);
   const optionValues = new Set(options.map((option) => option.value));
@@ -325,12 +316,10 @@ export async function collectCreateAddonSetupContext(
     useDefaults: boolean;
     provider: DatabaseProvider;
     shouldUsePrismaPostgres: boolean;
-  }
+  },
 ): Promise<CreateAddonSetupContext | null | undefined> {
   const hasExplicitAddonSelection =
-    input.skills !== undefined ||
-    input.mcp !== undefined ||
-    input.extension !== undefined;
+    input.skills !== undefined || input.mcp !== undefined || input.extension !== undefined;
   const selectedFromInput = collectAddonsFromInput(input);
   const selectedAddons =
     selectedFromInput.length > 0
@@ -361,44 +350,40 @@ export async function collectCreateAddonSetupContext(
 
   const recommendedSkills = getRecommendedPrismaSkills(
     options.provider,
-    options.shouldUsePrismaPostgres
+    options.shouldUsePrismaPostgres,
   );
-  const skills =
-    !addons.includes("skills")
-      ? []
-      : options.useDefaults
-        ? recommendedSkills
-        : await promptForPrismaSkills(options.provider, recommendedSkills);
+  const skills = !addons.includes("skills")
+    ? []
+    : options.useDefaults
+      ? recommendedSkills
+      : await promptForPrismaSkills(options.provider, recommendedSkills);
   if (!skills) {
     return undefined;
   }
 
-  const skillsAgents =
-    !addons.includes("skills")
-      ? []
-      : options.useDefaults
-        ? [...DEFAULT_SKILLS_AGENTS]
-        : await promptForSkillsAgents();
+  const skillsAgents = !addons.includes("skills")
+    ? []
+    : options.useDefaults
+      ? [...DEFAULT_SKILLS_AGENTS]
+      : await promptForSkillsAgents();
   if (!skillsAgents) {
     return undefined;
   }
 
-  const mcpAgents =
-    !addons.includes("mcp")
-      ? []
-      : options.useDefaults
-        ? [...DEFAULT_MCP_AGENTS]
-        : await promptForMcpAgents();
+  const mcpAgents = !addons.includes("mcp")
+    ? []
+    : options.useDefaults
+      ? [...DEFAULT_MCP_AGENTS]
+      : await promptForMcpAgents();
   if (!mcpAgents) {
     return undefined;
   }
 
-  const extensionTargets =
-    !addons.includes("extension")
-      ? []
-      : options.useDefaults
-        ? [...DEFAULT_EXTENSION_TARGETS]
-        : await promptForExtensionTargets();
+  const extensionTargets = !addons.includes("extension")
+    ? []
+    : options.useDefaults
+      ? [...DEFAULT_EXTENSION_TARGETS]
+      : await promptForExtensionTargets();
   if (!extensionTargets) {
     return undefined;
   }
@@ -464,9 +449,7 @@ async function installSkillsAddon(params: {
     });
     return;
   } catch (error) {
-    return `Skills addon failed: ${
-      error instanceof Error ? error.message : String(error)
-    }`;
+    return `Skills addon failed: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -504,9 +487,7 @@ async function installMcpAddon(params: {
     });
     return;
   } catch (error) {
-    return `MCP addon failed: ${
-      error instanceof Error ? error.message : String(error)
-    }`;
+    return `MCP addon failed: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -548,7 +529,7 @@ async function installExtensionAddon(params: {
       });
     } catch {
       warnings.push(
-        `Skipped ${target} extension install because the \`${binary}\` CLI is not available.`
+        `Skipped ${target} extension install because the \`${binary}\` CLI is not available.`,
       );
       continue;
     }
@@ -564,7 +545,7 @@ async function installExtensionAddon(params: {
       warnings.push(
         `${target} extension install failed: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
     }
   }
