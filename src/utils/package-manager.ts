@@ -141,10 +141,9 @@ export function getInstallCommand(packageManager: PackageManager): string {
 
 export function getPrismaSeedCommand(packageManager: PackageManager | undefined): string {
   switch (packageManager) {
-    case "deno":
-      return "deno run -A prisma/seed.ts";
     case "bun":
       return "bun prisma/seed.ts";
+    case "deno":
     case "pnpm":
     case "yarn":
     case "npm":
