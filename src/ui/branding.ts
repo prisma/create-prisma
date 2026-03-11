@@ -2,7 +2,7 @@ import { styleText } from "node:util";
 
 const prismaTitle = `${styleText(["bold", "cyan"], "Create")} ${styleText(
   ["bold", "magenta"],
-  "Prisma"
+  "Prisma",
 )}`;
 
 export function getCreatePrismaIntro(): string {

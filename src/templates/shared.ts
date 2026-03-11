@@ -12,20 +12,18 @@ import {
 } from "../utils/package-manager";
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
-Handlebars.registerHelper(
-  "installCommand",
-  (packageManager: PackageManager | undefined) =>
-    packageManager ? getInstallCommand(packageManager) : ""
+Handlebars.registerHelper("installCommand", (packageManager: PackageManager | undefined) =>
+  packageManager ? getInstallCommand(packageManager) : "",
 );
 Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>
-    packageManager ? getRunScriptCommand(packageManager, scriptName) : ""
+    packageManager ? getRunScriptCommand(packageManager, scriptName) : "",
 );
 Handlebars.registerHelper(
   "packageManagerManifestValue",
   (packageManager: PackageManager | undefined) =>
-    getPackageManagerManifestValue(packageManager) ?? ""
+    getPackageManagerManifestValue(packageManager) ?? "",
 );
 
 export function findPackageRoot(startDir: string): string {
@@ -74,7 +72,7 @@ async function getTemplateFilesRecursively(dir: string): Promise<string[]> {
       }
 
       return [entryPath];
-    })
+    }),
   );
 
   return files.flat();
@@ -102,10 +100,7 @@ export async function renderTemplateFile<TContext>(opts: {
       })(context)
     : templateContent;
 
-  if (
-    templateFilePath.endsWith(".hbs") &&
-    outputContent.trim().length === 0
-  ) {
+  if (templateFilePath.endsWith(".hbs") && outputContent.trim().length === 0) {
     return;
   }
 

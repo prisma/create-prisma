@@ -17,9 +17,7 @@ export function getDbPackages(provider: DatabaseProvider): DbPackages {
       return { adapterPackage: "@prisma/adapter-mssql" };
     default: {
       const exhaustiveCheck: never = provider;
-      throw new Error(
-        `Unsupported database provider: ${String(exhaustiveCheck)}`
-      );
+      throw new Error(`Unsupported database provider: ${String(exhaustiveCheck)}`);
     }
   }
 }

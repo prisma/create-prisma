@@ -1,29 +1,123 @@
-name: Release
+name: Publish
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: publish-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  release:
-    name: Release to npm
-    if: startsWith(github.event.head_commit.message, 'chore(release):')
+  preview:
+    name: Publish PR preview
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Compute preview metadata
+        id: preview
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          BASE_VERSION=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));process.stdout.write(p.version)")
+          PREVIEW_VERSION="${BASE_VERSION}-pr.${PR_NUMBER}.${{ github.run_number }}.${{ github.run_attempt }}"
+          DIST_TAG="pr${PR_NUMBER}"
+
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$PREVIEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure npm version for trusted publishing
+        run: |
+          npm install -g npm@11.5.1
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Set preview package version
+        env:
+          PREVIEW_VERSION: ${{ steps.preview.outputs.version }}
+        run: |
+          node - <<'EOF'
+          const fs = require("fs");
+          const packageJsonPath = "package.json";
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+          packageJson.version = process.env.PREVIEW_VERSION;
+          fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+          EOF
+
+      - name: Check
+        run: bun run check
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      - name: Publish to npm
+        run: npm publish --access public --tag "${{ steps.preview.outputs.dist_tag }}"
+
+      - name: Preview summary
+        run: |
+          echo "## PR preview published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: \`${{ steps.preview.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Install with Bun: \`bunx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Install with npm: \`npm install create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Release to npm
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release):')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Extract version from commit message
         id: version
@@ -61,13 +155,6 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Node.js
-        if: steps.check-version.outputs.exists == 'false'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.14.0"
-          registry-url: "https://registry.npmjs.org"
-
       - name: Ensure npm version for trusted publishing
         if: steps.check-version.outputs.exists == 'false'
         run: |
@@ -84,6 +171,10 @@ jobs:
       - name: Install dependencies
         if: steps.check-version.outputs.exists == 'false'
         run: bun install --frozen-lockfile
+
+      - name: Check
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun run check
 
       - name: Typecheck
         if: steps.check-version.outputs.exists == 'false'
