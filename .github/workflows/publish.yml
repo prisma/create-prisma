@@ -107,11 +107,11 @@ jobs:
               "",
               `- Version: \`${process.env.PREVIEW_VERSION}\``,
               `- Tag: \`${process.env.DIST_TAG}\``,
-              `- Install with Bun: \`bunx create-prisma@${process.env.DIST_TAG}\``,
-              `- Install with npm: \`npm install create-prisma@${process.env.DIST_TAG}\``,
-              `- Install with Yarn: \`yarn add create-prisma@${process.env.DIST_TAG}\``,
-              `- Install with pnpm: \`pnpm add create-prisma@${process.env.DIST_TAG}\``,
-              `- Install with Deno: \`deno run -A npm:create-prisma@${process.env.DIST_TAG}\``,
+              `- Run with Bun: \`bunx create-prisma@${process.env.DIST_TAG}\``,
+              `- Run with npm: \`npx create-prisma@${process.env.DIST_TAG}\``,
+              `- Run with Yarn: \`yarn dlx create-prisma@${process.env.DIST_TAG}\``,
+              `- Run with pnpm: \`pnpm dlx create-prisma@${process.env.DIST_TAG}\``,
+              `- Run with Deno: \`deno run -A npm:create-prisma@${process.env.DIST_TAG}\``,
               `- Workflow run: ${process.env.RUN_URL}`,
             ].join("\n");
 
@@ -149,8 +149,11 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: \`${{ steps.preview.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: \`${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Install with Bun: \`bunx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Install with npm: \`npm install create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run with Bun: \`bunx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run with npm: \`npx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run with Yarn: \`yarn dlx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run with pnpm: \`pnpm dlx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run with Deno: \`deno run -A npm:create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Release to npm
