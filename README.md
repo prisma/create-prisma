@@ -156,16 +156,7 @@ Generated projects also include `db:seed` and configure Prisma's `migrations.see
 
 ## Telemetry
 
-The published CLI can send anonymous, high-signal telemetry to PostHog for completed and failed `create` runs. It currently emits `cli:create_command_completed` and `cli:create_command_failed`, following Prisma's `category:object_action` naming convention, and records resolved setup choices such as template, provider, package manager, add-ons, duration, and failure stage.
-
-It does not send project names, file paths, database URLs, or prompt-by-prompt interactions. A random anonymous ID is stored in the local config directory so repeat usage can be counted without fingerprinting, events are marked to avoid creating person profiles for anonymous CLI usage, and custom event properties use kebab-case to match Prisma's PostHog convention.
-
-Telemetry is disabled automatically when:
-
-- the package was built without `CREATE_PRISMA_TELEMETRY_API_KEY`
-- `CI`, `GITHUB_ACTIONS`, `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED` is set
-
-For preview and release builds, set `CREATE_PRISMA_TELEMETRY_API_KEY` and optionally `CREATE_PRISMA_TELEMETRY_HOST`. The default host is `https://us.i.posthog.com`.
+Published builds may send anonymous PostHog telemetry for `create` runs to help improve the CLI. It does not include project names, file paths, or database URLs. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.
 
 ## Scripts
 
