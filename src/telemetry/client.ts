@@ -117,8 +117,9 @@ export async function trackCliTelemetry(
     return;
   }
 
+  let client: PostHog | undefined;
   try {
-    const client = new PostHog(TELEMETRY_API_KEY, {
+    client = new PostHog(TELEMETRY_API_KEY, {
       host: TELEMETRY_HOST,
       captureMode: "json",
       disableGeoip: true,
@@ -138,9 +139,11 @@ export async function trackCliTelemetry(
       }),
       disableGeoip: true,
     });
-
-    await client.shutdown(TELEMETRY_SHUTDOWN_TIMEOUT_MS);
   } catch {
     // Telemetry should never interfere with CLI execution.
+  } finally {
+    if (client) {
+      await client.shutdown(TELEMETRY_SHUTDOWN_TIMEOUT_MS).catch(() => {});
+    }
   }
 }
