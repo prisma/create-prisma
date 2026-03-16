@@ -9,6 +9,7 @@ const TELEMETRY_HOST = process.env.CREATE_PRISMA_TELEMETRY_HOST || "https://us.i
 const TELEMETRY_CONFIG_FILE = "telemetry.json";
 const TELEMETRY_REQUEST_TIMEOUT_MS = 800;
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 800;
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type TelemetryValue = boolean | number | string | string[] | null | undefined;
 type TelemetryProperties = Record<string, TelemetryValue>;
@@ -35,9 +36,9 @@ function shouldDisableTelemetry(): boolean {
   }
 
   return (
-    isTruthyEnvValue(process.env.CREATE_PRISMA_DISABLE_TELEMETRY) ||
-    isTruthyEnvValue(process.env.CREATE_PRISMA_TELEMETRY_DISABLED) ||
-    isTruthyEnvValue(process.env.DO_NOT_TRACK)
+    process.env.CREATE_PRISMA_DISABLE_TELEMETRY !== undefined ||
+    process.env.CREATE_PRISMA_TELEMETRY_DISABLED !== undefined ||
+    process.env.DO_NOT_TRACK !== undefined
   );
 }
 
@@ -64,7 +65,7 @@ async function getAnonymousId(): Promise<string> {
 
   try {
     const config = (await fs.readJSON(telemetryConfigPath)) as Partial<TelemetryConfig>;
-    if (typeof config.anonymousId === "string" && config.anonymousId.length > 0) {
+    if (typeof config.anonymousId === "string" && UUID_V4_REGEX.test(config.anonymousId)) {
       return config.anonymousId;
     }
   } catch {
