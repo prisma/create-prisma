@@ -93,8 +93,8 @@ async function getAnonymousId(): Promise<string> {
 
 function getCommonProperties(): TelemetryProperties {
   return {
-    cli_version: process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0",
-    node_version: process.version,
+    "cli-version": process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0",
+    "node-version": process.version,
     platform: process.platform,
     arch: process.arch,
   };

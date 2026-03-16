@@ -46,25 +46,25 @@ function getBaseCreateProperties(
 
   return {
     command: "create",
-    uses_defaults: input.yes === true,
+    "uses-defaults": input.yes === true,
     verbose: input.verbose === true,
     force: input.force === true,
     template: context?.template ?? input.template ?? null,
-    database_provider: context?.prismaSetupContext.databaseProvider ?? input.provider ?? null,
-    package_manager: context?.prismaSetupContext.packageManager ?? input.packageManager ?? null,
-    schema_preset: context?.schemaPreset ?? input.schemaPreset ?? null,
-    should_install: context?.prismaSetupContext.shouldInstall ?? input.install ?? null,
-    should_generate: context?.prismaSetupContext.shouldGenerate ?? input.generate ?? null,
-    uses_prisma_postgres:
+    "database-provider": context?.prismaSetupContext.databaseProvider ?? input.provider ?? null,
+    "package-manager": context?.prismaSetupContext.packageManager ?? input.packageManager ?? null,
+    "schema-preset": context?.schemaPreset ?? input.schemaPreset ?? null,
+    "should-install": context?.prismaSetupContext.shouldInstall ?? input.install ?? null,
+    "should-generate": context?.prismaSetupContext.shouldGenerate ?? input.generate ?? null,
+    "uses-prisma-postgres":
       context?.prismaSetupContext.shouldUsePrismaPostgres ?? input.prismaPostgres ?? null,
     addons: resolvedAddons,
-    addon_count: resolvedAddons.length,
-    addon_scope: context?.addonSetupContext?.scope ?? null,
-    skills_count: context?.addonSetupContext?.skills.length ?? null,
-    skills_agents_count: context?.addonSetupContext?.skillsAgents.length ?? null,
-    mcp_agents_count: context?.addonSetupContext?.mcpAgents.length ?? null,
-    extension_target_count: context?.addonSetupContext?.extensionTargets.length ?? null,
-    target_directory_state: context ? getTargetDirectoryState(context) : null,
+    "addon-count": resolvedAddons.length,
+    "addon-scope": context?.addonSetupContext?.scope ?? null,
+    "skills-count": context?.addonSetupContext?.skills.length ?? null,
+    "skills-agents-count": context?.addonSetupContext?.skillsAgents.length ?? null,
+    "mcp-agents-count": context?.addonSetupContext?.mcpAgents.length ?? null,
+    "extension-target-count": context?.addonSetupContext?.extensionTargets.length ?? null,
+    "target-directory-state": context ? getTargetDirectoryState(context) : null,
   };
 }
 
@@ -95,9 +95,9 @@ export async function trackCreateCompleted(params: {
   context: CreatePromptContext;
   durationMs: number;
 }): Promise<void> {
-  await trackCliTelemetry("create_completed", {
+  await trackCliTelemetry("cli:create_command_completed", {
     ...getBaseCreateProperties(params.input, params.context),
-    duration_ms: params.durationMs,
+    "duration-ms": params.durationMs,
   });
 }
 
@@ -108,11 +108,11 @@ export async function trackCreateFailed(params: {
   error?: unknown;
   stage: CreateTelemetryFailureStage;
 }): Promise<void> {
-  await trackCliTelemetry("create_failed", {
+  await trackCliTelemetry("cli:create_command_failed", {
     ...getBaseCreateProperties(params.input, params.context),
-    duration_ms: params.durationMs,
-    failure_stage: params.stage,
-    error_name: getErrorName(params.error),
-    error_code: getErrorCode(params.error),
+    "duration-ms": params.durationMs,
+    "failure-stage": params.stage,
+    "error-name": getErrorName(params.error),
+    "error-code": getErrorCode(params.error),
   });
 }
