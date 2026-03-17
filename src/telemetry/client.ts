@@ -117,23 +117,24 @@ export async function trackCliTelemetry(
 
   let client: PostHog | undefined;
   try {
+    const distinctId = await getAnonymousId();
+    const sanitizedProperties = sanitizeProperties({
+      ...getCommonProperties(),
+      ...properties,
+      $process_person_profile: false,
+    });
+
     client = new PostHog(TELEMETRY_API_KEY, {
       host: TELEMETRY_HOST,
-      captureMode: "json",
       disableGeoip: true,
       flushAt: 1,
       flushInterval: 0,
-      persistence: "memory",
     });
 
     await client.captureImmediate({
-      distinctId: await getAnonymousId(),
+      distinctId,
       event,
-      properties: sanitizeProperties({
-        ...getCommonProperties(),
-        ...properties,
-        $process_person_profile: false,
-      }),
+      properties: sanitizedProperties,
       disableGeoip: true,
     });
   } catch {
