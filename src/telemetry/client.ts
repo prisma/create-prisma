@@ -7,8 +7,6 @@ import { PostHog } from "posthog-node";
 const TELEMETRY_API_KEY = process.env.CREATE_PRISMA_TELEMETRY_API_KEY ?? "";
 const TELEMETRY_HOST = process.env.CREATE_PRISMA_TELEMETRY_HOST || "https://us.i.posthog.com";
 const TELEMETRY_CONFIG_FILE = "telemetry.json";
-const TELEMETRY_REQUEST_TIMEOUT_MS = 800;
-const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 800;
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type TelemetryValue = boolean | number | string | string[] | null | undefined;
@@ -126,7 +124,6 @@ export async function trackCliTelemetry(
       flushAt: 1,
       flushInterval: 0,
       persistence: "memory",
-      requestTimeout: TELEMETRY_REQUEST_TIMEOUT_MS,
     });
 
     await client.captureImmediate({
@@ -143,7 +140,7 @@ export async function trackCliTelemetry(
     // Telemetry should never interfere with CLI execution.
   } finally {
     if (client) {
-      await client.shutdown(TELEMETRY_SHUTDOWN_TIMEOUT_MS).catch(() => {});
+      await client.shutdown().catch(() => {});
     }
   }
 }
