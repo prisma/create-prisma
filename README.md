@@ -154,6 +154,10 @@ When add-ons are enabled, `create` prompts for the relevant agent and IDE select
 When `postgresql` is selected, `create` can provision Prisma Postgres via `create-db --json` and auto-fill `DATABASE_URL`.
 Generated projects also include `db:seed` and configure Prisma's `migrations.seed` hook to run `tsx prisma/seed.ts`.
 
+## Telemetry
+
+Published builds may send anonymous PostHog telemetry for `create` runs to help improve the CLI. It does not include project names, file paths, or database URLs. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.
+
 ## Scripts
 
 - `bun run build` - Build to `dist/`

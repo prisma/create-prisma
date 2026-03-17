@@ -17,11 +17,24 @@ import {
   collectCreateAddonSetupContext,
   executeCreateAddonSetupContext,
 } from "../tasks/setup-addons";
+import {
+  trackCreateCompleted,
+  trackCreateFailed,
+  type CreateTelemetryFailureStage,
+} from "../telemetry";
 import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "hono";
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
+
+type ExecuteCreateContextResult =
+  | { ok: true }
+  | {
+      ok: false;
+      stage: CreateTelemetryFailureStage;
+      error?: unknown;
+    };
 
 function toPackageName(projectName: string): string {
   return (
@@ -148,19 +161,59 @@ async function inspectTargetPath(targetPath: string): Promise<CreateTargetPathSt
 }
 
 export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promise<void> {
+  const startedAt = Date.now();
+  let input: CreateCommandInput = {};
+  let context: CreatePromptContext | undefined;
+  let failureStage: CreateTelemetryFailureStage = "validate_input";
+
   try {
-    const input = CreateCommandInputSchema.parse(rawInput);
+    input = CreateCommandInputSchema.parse(rawInput);
 
     intro(getCreatePrismaIntro());
 
-    const context = await collectCreateContext(input);
+    failureStage = "collect_context";
+    context = await collectCreateContext(input);
     if (!context) {
       return;
     }
 
-    await executeCreateContext(context);
+    failureStage = "unknown";
+    const executionResult = await executeCreateContext(context);
+    if (!executionResult.ok) {
+      if (executionResult.error) {
+        cancel(
+          `Create command failed: ${
+            executionResult.error instanceof Error
+              ? executionResult.error.message
+              : String(executionResult.error)
+          }`,
+        );
+      }
+
+      await trackCreateFailed({
+        input,
+        context,
+        durationMs: Date.now() - startedAt,
+        error: executionResult.error,
+        stage: executionResult.stage,
+      });
+      return;
+    }
+
+    await trackCreateCompleted({
+      input,
+      context,
+      durationMs: Date.now() - startedAt,
+    });
   } catch (error) {
     cancel(`Create command failed: ${error instanceof Error ? error.message : String(error)}`);
+    await trackCreateFailed({
+      input,
+      context,
+      durationMs: Date.now() - startedAt,
+      error,
+      stage: failureStage,
+    });
   }
 }
 
@@ -230,7 +283,9 @@ async function collectCreateContext(
   };
 }
 
-async function executeCreateContext(context: CreatePromptContext): Promise<void> {
+async function executeCreateContext(
+  context: CreatePromptContext,
+): Promise<ExecuteCreateContextResult> {
   const scaffoldSpinner = spinner();
   scaffoldSpinner.start(`Scaffolding ${context.template} project...`);
   try {
@@ -245,8 +300,11 @@ async function executeCreateContext(context: CreatePromptContext): Promise<void>
     scaffoldSpinner.stop("Project files scaffolded.");
   } catch (error) {
     scaffoldSpinner.stop("Could not scaffold project files.");
-    cancel(error instanceof Error ? error.message : String(error));
-    return;
+    return {
+      ok: false,
+      stage: "scaffold_template",
+      error,
+    };
   }
 
   if (
@@ -261,17 +319,42 @@ async function executeCreateContext(context: CreatePromptContext): Promise<void>
 
   const cdStep = `- cd ${formatPathForDisplay(context.targetDirectory)}`;
   if (context.addonSetupContext) {
-    await executeCreateAddonSetupContext({
-      context: context.addonSetupContext,
-      packageManager: context.prismaSetupContext.packageManager,
-      projectDir: context.targetDirectory,
-      verbose: context.prismaSetupContext.verbose,
-    });
+    try {
+      await executeCreateAddonSetupContext({
+        context: context.addonSetupContext,
+        packageManager: context.prismaSetupContext.packageManager,
+        projectDir: context.targetDirectory,
+        verbose: context.prismaSetupContext.verbose,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        stage: "addons",
+        error,
+      };
+    }
   }
 
-  await executePrismaSetupContext(context.prismaSetupContext, {
-    prependNextSteps: [cdStep],
-    projectDir: context.targetDirectory,
-    includeDevNextStep: true,
-  });
+  try {
+    const prismaSetupResult = await executePrismaSetupContext(context.prismaSetupContext, {
+      prependNextSteps: [cdStep],
+      projectDir: context.targetDirectory,
+      includeDevNextStep: true,
+    });
+
+    if (!prismaSetupResult) {
+      return {
+        ok: false,
+        stage: "prisma_setup",
+      };
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      stage: "prisma_setup",
+      error,
+    };
+  }
+
+  return { ok: true };
 }
