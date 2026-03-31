@@ -4,7 +4,7 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 {{#if (eq schemaPreset "basic")}}
-import { prisma } from "./lib/prisma";
+import { prisma } from "./lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
 {{/if}}
 
 const app = new Hono();
@@ -28,8 +28,8 @@ app.get("/users", async (c) => {
 });
 {{/if}}
 
-const rawPort = {{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}};
-const parsedPort = Number(rawPort);
+const rawPort = ({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? "").trim();
+const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;
 const port =
   Number.isFinite(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 3000;
 serve({

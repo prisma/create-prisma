@@ -10,7 +10,9 @@ import path from "node:path";
 
 const distDir = path.resolve("dist");
 const entryPath = path.join(distDir, "main.js");
-const useShell = process.platform === "win32";
+const binDir = path.resolve("node_modules", ".bin");
+const tsxCommand = path.join(binDir, process.platform === "win32" ? "tsx.cmd" : "tsx");
+const tscCommand = path.join(binDir, process.platform === "win32" ? "tsc.cmd" : "tsc");
 
 let appProcess: ChildProcess | undefined;
 let distWatcher: fs.FSWatcher | undefined;
@@ -32,9 +34,8 @@ async function startApp() {
     await once(previousAppProcess, "exit");
   }
 
-  appProcess = spawn("tsx", [entryPath], {
+  appProcess = spawn(tsxCommand, [entryPath], {
     stdio: "inherit",
-    shell: useShell,
   });
 }
 
@@ -95,9 +96,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => shutdown(0));
 }
 
-const tscProcess = spawn("tsc", ["--watch", "--preserveWatchOutput"], {
+const tscProcess = spawn(tscCommand, ["--watch", "--preserveWatchOutput"], {
   stdio: "inherit",
-  shell: useShell,
 });
 
 tscProcess.on("exit", (code) => {
