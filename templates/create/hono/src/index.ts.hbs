@@ -1,3 +1,6 @@
+{{#if (requiresDotenvConfigImport packageManager)}}
+import "dotenv/config";
+{{/if}}
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 {{#if (eq schemaPreset "basic")}}
@@ -25,7 +28,7 @@ app.get("/users", async (c) => {
 });
 {{/if}}
 
-const port = 3000;
+const port = Number({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? 3000);
 serve({
   fetch: app.fetch,
   port,

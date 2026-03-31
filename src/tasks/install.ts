@@ -2,7 +2,7 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { getDenoPrismaSpecifier } from "../utils/package-manager";
+import { getDenoPrismaSpecifier, requiresDotenvConfigImport } from "../utils/package-manager";
 import { dependencyVersionMap, type AvailableDependency } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
 import type { DatabaseProvider, DependencyWriteResult, PackageManager } from "../types";
@@ -13,10 +13,21 @@ function getPrismaScriptMap(packageManager: PackageManager) {
     const prismaSpecifier = getDenoPrismaSpecifier();
 
     return {
-      "db:generate": `deno run -A ${prismaSpecifier} generate`,
-      "db:push": `deno run -A ${prismaSpecifier} db push`,
-      "db:migrate": `deno run -A ${prismaSpecifier} migrate dev`,
-      "db:seed": `deno run -A ${prismaSpecifier} db seed`,
+      "db:generate": `deno run -A --env-file=.env ${prismaSpecifier} generate`,
+      "db:push": `deno run -A --env-file=.env ${prismaSpecifier} db push`,
+      "db:migrate": `deno run -A --env-file=.env ${prismaSpecifier} migrate dev`,
+      "db:seed": `deno run -A --env-file=.env ${prismaSpecifier} db seed`,
+    } as const;
+  }
+
+  if (packageManager === "bun") {
+    const prismaCli = "bun --env-file=.env ./node_modules/.bin/prisma";
+
+    return {
+      "db:generate": `${prismaCli} generate`,
+      "db:push": `${prismaCli} db push`,
+      "db:migrate": `${prismaCli} migrate dev`,
+      "db:seed": `${prismaCli} db seed`,
     } as const;
   }
 
@@ -38,6 +49,51 @@ function unique(items: string[]): string[] {
 
 function sortRecord(record: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+async function projectContainsText(projectDir: string, text: string): Promise<boolean> {
+  const entries = await fs.readdir(projectDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (entry.name === "node_modules" || entry.name === ".git") {
+      continue;
+    }
+
+    const entryPath = path.join(projectDir, entry.name);
+
+    if (entry.isDirectory()) {
+      if (await projectContainsText(entryPath, text)) {
+        return true;
+      }
+      continue;
+    }
+
+    if (!entry.isFile() || !/\.(c|m)?[jt]sx?$/.test(entry.name)) {
+      continue;
+    }
+
+    const content = await fs.readFile(entryPath, "utf8");
+    if (content.includes(text)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function scriptUsesBinary(command: string, binaryName: string): boolean {
+  return command.split(/\s+/).includes(binaryName);
+}
+
+async function projectUsesScriptBinary(projectDir: string, binaryName: string): Promise<boolean> {
+  const pkgJsonPath = path.join(projectDir, "package.json");
+  if (!(await fs.pathExists(pkgJsonPath))) {
+    return false;
+  }
+
+  const pkgJson = await fs.readJson(pkgJsonPath);
+  const scripts = Object.values(pkgJson.scripts ?? {});
+  return scripts.some((script) => typeof script === "string" && scriptUsesBinary(script, binaryName));
 }
 
 export async function addPackageDependency(opts: {
@@ -143,10 +199,17 @@ export async function writePrismaDependencies(
   packageManager: PackageManager,
   projectDir = process.cwd(),
 ): Promise<DependencyWriteResult> {
-  const dependencies: string[] = ["@prisma/client", "dotenv"];
+  const dependencies: string[] = ["@prisma/client"];
   const devDependencies: string[] = ["prisma"];
   const { adapterPackage } = getDbPackages(provider);
   dependencies.push(adapterPackage);
+
+  if (
+    requiresDotenvConfigImport(packageManager) ||
+    (await projectContainsText(projectDir, "dotenv/config"))
+  ) {
+    dependencies.push("dotenv");
+  }
 
   // Deno needs node-gyp available when sqlite pulls in better-sqlite3.
   if (provider === "sqlite" && packageManager === "deno") {
@@ -170,6 +233,22 @@ export async function writePrismaDependencies(
     addedScripts: scriptWriteResult.addedScripts,
     existingScripts: scriptWriteResult.existingScripts,
   };
+}
+
+export async function writeCreateTemplateDependencies(opts: {
+  projectDir?: string;
+}): Promise<void> {
+  const { projectDir = process.cwd() } = opts;
+  const devDependencies = (await projectUsesScriptBinary(projectDir, "tsx")) ? ["tsx"] : [];
+
+  if (devDependencies.length === 0) {
+    return;
+  }
+
+  await addPackageDependency({
+    devDependencies,
+    projectDir,
+  });
 }
 
 export async function installProjectDependencies(

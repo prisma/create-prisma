@@ -1,4 +1,6 @@
-import prisma from "../src/lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { createPrismaClient } from "../src/lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
+
+const prisma = createPrismaClient();
 
 async function main() {
 {{#if (eq schemaPreset "basic")}}

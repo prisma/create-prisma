@@ -7,6 +7,7 @@ export const dependencyVersionMap = {
   dotenv: "^17.2.3",
   "node-gyp": "^11.5.0",
   prisma: "^7.4.0",
+  tsx: "^4.21.0",
 } as const;
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;

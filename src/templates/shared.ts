@@ -8,8 +8,25 @@ import type { PackageManager } from "../types";
 import {
   getInstallCommand,
   getPackageManagerManifestValue,
+  getRuntimeScriptCommand,
   getRunScriptCommand,
+  requiresDotenvConfigImport,
 } from "../utils/package-manager";
+
+function getOptionalHashString(
+  hash: Handlebars.HelperOptions["hash"],
+  key: string,
+): string | undefined {
+  const value = hash[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function getOptionalHashStringList(
+  hash: Handlebars.HelperOptions["hash"],
+  key: string,
+): string[] {
+  return getOptionalHashString(hash, key)?.split(" ") ?? [];
+}
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
 Handlebars.registerHelper("installCommand", (packageManager: PackageManager | undefined) =>
@@ -24,6 +41,37 @@ Handlebars.registerHelper(
   "packageManagerManifestValue",
   (packageManager: PackageManager | undefined) =>
     getPackageManagerManifestValue(packageManager) ?? "",
+);
+Handlebars.registerHelper(
+  "requiresDotenvConfigImport",
+  (packageManager: PackageManager | undefined) => requiresDotenvConfigImport(packageManager),
+);
+Handlebars.registerHelper(
+  "runtimeScript",
+  (
+    packageManager: PackageManager | undefined,
+    kind: "dev" | "build" | "start",
+    sourceEntrypoint: string,
+    builtEntrypoint: string | undefined,
+    options: Handlebars.HelperOptions,
+  ) => {
+    if (!packageManager) {
+      return "";
+    }
+    const hash = options.hash;
+
+    return getRuntimeScriptCommand(packageManager, kind, {
+      sourceEntrypoint,
+      builtEntrypoint,
+      denoFlags: getOptionalHashStringList(hash, "denoFlags"),
+      nodeDevCommand: getOptionalHashString(hash, "nodeDev"),
+      nodeBuildCommand: getOptionalHashString(hash, "nodeBuild"),
+      nodeStartCommand: getOptionalHashString(hash, "nodeStart"),
+      bunDevCommand: getOptionalHashString(hash, "bunDev"),
+      bunBuildCommand: getOptionalHashString(hash, "bunBuild"),
+      bunStartCommand: getOptionalHashString(hash, "bunStart"),
+    });
+  },
 );
 
 export function findPackageRoot(startDir: string): string {

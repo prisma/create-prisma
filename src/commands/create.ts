@@ -3,6 +3,7 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import { scaffoldCreateTemplate } from "../templates/render-create-template";
+import { writeCreateTemplateDependencies } from "../tasks/install";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
@@ -56,8 +57,8 @@ function validateProjectName(value: string | undefined): string | undefined {
     return "Please enter a project name.";
   }
 
-  if (trimmed === "." || trimmed === "..") {
-    return "Project name cannot be '.' or '..'.";
+  if (trimmed === "..") {
+    return "Project name cannot be '..'.";
   }
 
   if (path.isAbsolute(trimmed)) {
@@ -92,6 +93,16 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         value: "hono",
         label: "Hono",
         hint: "TypeScript API starter",
+      },
+      {
+        value: "elysia",
+        label: "Elysia",
+        hint: "TypeScript API starter with Elysia's Node adapter",
+      },
+      {
+        value: "nest",
+        label: "NestJS",
+        hint: "Official Nest-style API starter with a Prisma service",
       },
       {
         value: "next",
@@ -223,9 +234,16 @@ async function collectCreateContext(
   const useDefaults = input.yes === true;
   const force = input.force === true;
 
-  const projectName =
+  const projectNameInput =
     input.name ?? (useDefaults ? DEFAULT_PROJECT_NAME : await promptForProjectName());
-  if (!projectName) {
+  if (!projectNameInput) {
+    return;
+  }
+
+  const projectName = String(projectNameInput).trim();
+  const projectNameValidationError = validateProjectName(projectName);
+  if (projectNameValidationError) {
+    cancel(projectNameValidationError);
     return;
   }
 
@@ -307,6 +325,18 @@ async function executeCreateContext(
     };
   }
 
+  try {
+    await writeCreateTemplateDependencies({
+      projectDir: context.targetDirectory,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      stage: "scaffold_template",
+      error,
+    };
+  }
+
   if (
     context.targetPathState.exists &&
     !context.targetPathState.isEmptyDirectory &&
@@ -317,7 +347,10 @@ async function executeCreateContext(
     );
   }
 
-  const cdStep = `- cd ${formatPathForDisplay(context.targetDirectory)}`;
+  const nextSteps =
+    formatPathForDisplay(context.targetDirectory) === "."
+      ? []
+      : [`- cd ${formatPathForDisplay(context.targetDirectory)}`];
   if (context.addonSetupContext) {
     try {
       await executeCreateAddonSetupContext({
@@ -337,7 +370,7 @@ async function executeCreateContext(
 
   try {
     const prismaSetupResult = await executePrismaSetupContext(context.prismaSetupContext, {
-      prependNextSteps: [cdStep],
+      prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       includeDevNextStep: true,
     });

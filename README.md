@@ -44,6 +44,24 @@ Create a Hono project non-interactively:
 create-prisma --name my-api --template hono --provider postgresql
 ```
 
+Scaffold into the current directory:
+
+```bash
+create-prisma --name . --template hono --provider postgresql
+```
+
+Create an Elysia project non-interactively:
+
+```bash
+create-prisma --name my-elysia-api --template elysia --provider postgresql
+```
+
+Create a NestJS project non-interactively:
+
+```bash
+create-prisma --name my-nest-api --template nest --provider postgresql
+```
+
 Create a Next.js project non-interactively:
 
 ```bash
@@ -137,7 +155,7 @@ The CLI updates `package.json` with Prisma dependencies, optionally runs depende
 
 `create` is the default command and currently supports:
 
-- templates: `hono`, `next`, `svelte`, `astro`, `nuxt`, `tanstack-start`, `turborepo`
+- templates: `hono`, `elysia`, `nest`, `next`, `svelte`, `astro`, `nuxt`, `tanstack-start`, `turborepo`
 - project name via `--name`
 - schema presets via `--schema-preset empty|basic` (default: `basic`)
 

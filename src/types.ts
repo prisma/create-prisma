@@ -12,6 +12,8 @@ export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
 export const createTemplates = [
   "hono",
+  "elysia",
+  "nest",
   "next",
   "svelte",
   "astro",

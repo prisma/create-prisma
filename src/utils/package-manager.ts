@@ -9,12 +9,29 @@ type CommandAndArgs = {
   args: string[];
 };
 
+type RuntimeScriptKind = "dev" | "build" | "start";
+type RuntimeScriptOptions = {
+  sourceEntrypoint: string;
+  builtEntrypoint?: string;
+  denoFlags?: string[];
+  nodeDevCommand?: string;
+  nodeBuildCommand?: string;
+  nodeStartCommand?: string;
+  bunDevCommand?: string;
+  bunBuildCommand?: string;
+  bunStartCommand?: string;
+};
+
 const packageManagerManifestValues = {
   npm: "npm@10.9.0",
   pnpm: "pnpm@10.16.1",
   yarn: "yarn@4.13.0",
   bun: "bun@1.3.9",
 } as const;
+
+function normalizeVersion(version: string): string {
+  return version.replace(/^[^0-9]*/, "");
+}
 
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
   if (userAgent?.startsWith("pnpm")) {
@@ -127,13 +144,21 @@ export function getPackageManagerManifestValue(
 }
 
 export function getDenoPrismaSpecifier(): string {
-  const prismaVersion = dependencyVersionMap.prisma.replace(/^[^0-9]*/, "");
+  const prismaVersion = normalizeVersion(dependencyVersionMap.prisma);
   return `npm:prisma@${prismaVersion}`;
+}
+
+function getDenoAllowedScriptSpecifiers(): string {
+  return [
+    `npm:prisma@${normalizeVersion(dependencyVersionMap.prisma)}`,
+    `npm:@prisma/client@${normalizeVersion(dependencyVersionMap["@prisma/client"])}`,
+    `npm:@prisma/engines@${normalizeVersion(dependencyVersionMap.prisma)}`,
+  ].join(",");
 }
 
 export function getInstallCommand(packageManager: PackageManager): string {
   if (packageManager === "deno") {
-    return "deno install --allow-scripts";
+    return `deno install --allow-scripts=${getDenoAllowedScriptSpecifiers()}`;
   }
 
   return `${packageManager} install`;
@@ -155,11 +180,87 @@ export function getRunScriptCommand(packageManager: PackageManager, scriptName: 
   }
 }
 
+function joinCommandParts(parts: Array<string | undefined>): string {
+  return parts.filter((part) => typeof part === "string" && part.length > 0).join(" ");
+}
+
+function usesNodeStyleRuntime(packageManager: PackageManager | undefined): boolean {
+  return packageManager !== undefined && packageManager !== "bun" && packageManager !== "deno";
+}
+
+export function requiresDotenvConfigImport(packageManager: PackageManager | undefined): boolean {
+  return usesNodeStyleRuntime(packageManager);
+}
+
+export function getRuntimeScriptCommand(
+  packageManager: PackageManager,
+  kind: RuntimeScriptKind,
+  options: RuntimeScriptOptions,
+): string {
+  const {
+    sourceEntrypoint,
+    builtEntrypoint,
+    denoFlags = [],
+    nodeDevCommand,
+    nodeBuildCommand,
+    nodeStartCommand,
+    bunDevCommand,
+    bunBuildCommand,
+    bunStartCommand,
+  } = options;
+
+  if (packageManager === "deno") {
+    switch (kind) {
+      case "dev":
+        return joinCommandParts([
+          "deno",
+          "run",
+          "-A",
+          "--env-file=.env",
+          ...denoFlags,
+          "--watch",
+          sourceEntrypoint,
+        ]);
+      case "build":
+        return `deno check ${sourceEntrypoint}`;
+      case "start":
+        return joinCommandParts([
+          "deno",
+          "run",
+          "-A",
+          "--env-file=.env",
+          ...denoFlags,
+          sourceEntrypoint,
+        ]);
+    }
+  }
+
+  if (packageManager === "bun") {
+    switch (kind) {
+      case "dev":
+        return bunDevCommand ?? `bun --watch ${sourceEntrypoint}`;
+      case "build":
+        return bunBuildCommand ?? "tsc --noEmit";
+      case "start":
+        return bunStartCommand ?? `bun ${sourceEntrypoint}`;
+    }
+  }
+
+  switch (kind) {
+    case "dev":
+      return nodeDevCommand ?? `tsx watch ${sourceEntrypoint}`;
+    case "build":
+      return nodeBuildCommand ?? "tsc";
+    case "start":
+      return nodeStartCommand ?? `tsx ${builtEntrypoint ?? sourceEntrypoint}`;
+  }
+}
+
 export function getInstallArgs(packageManager: PackageManager): CommandAndArgs {
   if (packageManager === "deno") {
     return {
       command: "deno",
-      args: ["install", "--allow-scripts"],
+      args: ["install", `--allow-scripts=${getDenoAllowedScriptSpecifiers()}`],
     };
   }
 
@@ -216,7 +317,7 @@ export function getPrismaCliArgs(
   if (packageManager === "deno") {
     return {
       command: "deno",
-      args: ["run", "-A", getDenoPrismaSpecifier(), ...prismaArgs],
+      args: ["run", "-A", "--env-file=.env", getDenoPrismaSpecifier(), ...prismaArgs],
     };
   }
 

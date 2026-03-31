@@ -1,0 +1,105 @@
+{{#if (eq packageManager "deno")}}
+{{else}}
+{{#if (eq packageManager "bun")}}
+{{else}}
+import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import { access } from "node:fs/promises";
+import path from "node:path";
+
+const distDir = path.resolve("dist");
+const entryPath = path.join(distDir, "main.js");
+const useShell = process.platform === "win32";
+
+let appProcess: ChildProcess | undefined;
+let distWatcher: fs.FSWatcher | undefined;
+let restartTimer: NodeJS.Timeout | undefined;
+let shuttingDown = false;
+
+function killProcess(child: ChildProcess | undefined) {
+  if (!child || child.exitCode !== null || child.killed) {
+    return;
+  }
+
+  child.kill("SIGTERM");
+}
+
+function startApp() {
+  killProcess(appProcess);
+  appProcess = spawn("tsx", ["dist/main.js"], {
+    stdio: "inherit",
+    shell: useShell,
+  });
+}
+
+function scheduleRestart() {
+  if (restartTimer) {
+    clearTimeout(restartTimer);
+  }
+
+  restartTimer = setTimeout(() => {
+    restartTimer = undefined;
+    startApp();
+  }, 150);
+}
+
+async function waitForBuildOutput() {
+  while (!shuttingDown) {
+    try {
+      await access(entryPath);
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+}
+
+function watchDist() {
+  if (distWatcher) {
+    return;
+  }
+
+  distWatcher = fs.watch(distDir, { recursive: true }, (_eventType, filename) => {
+    if (!filename || !filename.endsWith(".js")) {
+      return;
+    }
+
+    scheduleRestart();
+  });
+}
+
+function shutdown(exitCode = 0) {
+  shuttingDown = true;
+  if (restartTimer) {
+    clearTimeout(restartTimer);
+    restartTimer = undefined;
+  }
+
+  distWatcher?.close();
+  killProcess(appProcess);
+  killProcess(tscProcess);
+  setTimeout(() => {
+    process.exit(exitCode);
+  }, 25);
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => shutdown(0));
+}
+
+const tscProcess = spawn("tsc", ["--watch", "--preserveWatchOutput"], {
+  stdio: "inherit",
+  shell: useShell,
+});
+
+tscProcess.on("exit", (code) => {
+  if (!shuttingDown) {
+    shutdown(code ?? 1);
+  }
+});
+
+await waitForBuildOutput();
+watchDist();
+startApp();
+{{/if}}
+{{/if}}

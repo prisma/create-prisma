@@ -1,0 +1,30 @@
+{{#if (requiresDotenvConfigImport packageManager)}}
+import "dotenv/config";
+{{/if}}
+import { node } from "@elysiajs/node";
+import { Elysia } from "elysia";
+{{#if (eq schemaPreset "basic")}}
+import { prisma } from "./lib/prisma";
+{{/if}}
+
+const port = Number({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? 3000);
+
+const app = new Elysia({ adapter: node() })
+  .get("/", () => {
+    return {
+      message: "hello from create-prisma + elysia",
+    };
+  })
+{{#if (eq schemaPreset "basic")}}
+  .get("/users", async () => {
+    return prisma.user.findMany({
+      take: 10,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  })
+{{/if}}
+  .listen(port);
+
+console.log(`Server running at http://localhost:${app.server?.port ?? port}`);

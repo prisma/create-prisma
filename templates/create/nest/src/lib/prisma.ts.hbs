@@ -1,6 +1,7 @@
 {{#if (requiresDotenvConfigImport packageManager)}}
 import "dotenv/config";
 {{/if}}
+
 import { PrismaClient } from "../generated/prisma/client";
 {{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -51,7 +52,8 @@ const adapter = new PrismaBetterSqlite3({
 const adapter = new PrismaMssql(databaseUrl);
 {{/if}}
 
-const prisma = new PrismaClient({ adapter });
+export const prismaClientOptions = { adapter };
 
-export { prisma };
-export default prisma;
+export function createPrismaClient() {
+  return new PrismaClient(prismaClientOptions);
+}
