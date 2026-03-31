@@ -29,10 +29,6 @@ const packageManagerManifestValues = {
   bun: "bun@1.3.9",
 } as const;
 
-function normalizeVersion(version: string): string {
-  return version.replace(/^[^0-9]*/, "");
-}
-
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
   if (userAgent?.startsWith("pnpm")) {
     return "pnpm";
@@ -144,15 +140,14 @@ export function getPackageManagerManifestValue(
 }
 
 export function getDenoPrismaSpecifier(): string {
-  const prismaVersion = normalizeVersion(dependencyVersionMap.prisma);
-  return `npm:prisma@${prismaVersion}`;
+  return `npm:prisma@${dependencyVersionMap.prisma}`;
 }
 
 function getDenoAllowedScriptSpecifiers(): string {
   return [
-    `npm:prisma@${normalizeVersion(dependencyVersionMap.prisma)}`,
-    `npm:@prisma/client@${normalizeVersion(dependencyVersionMap["@prisma/client"])}`,
-    `npm:@prisma/engines@${normalizeVersion(dependencyVersionMap.prisma)}`,
+    `npm:prisma@${dependencyVersionMap.prisma}`,
+    `npm:@prisma/client@${dependencyVersionMap["@prisma/client"]}`,
+    `npm:@prisma/engines@${dependencyVersionMap.prisma}`,
   ].join(",");
 }
 

@@ -28,7 +28,9 @@ app.get("/users", async (c) => {
 });
 {{/if}}
 
-const port = Number({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? 3000);
+const rawPort = {{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}};
+const parsedPort = Number(rawPort);
+const port = Number.isFinite(parsedPort) ? parsedPort : 3000;
 serve({
   fetch: app.fetch,
   port,

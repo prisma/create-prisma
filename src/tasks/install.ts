@@ -52,29 +52,36 @@ function sortRecord(record: Record<string, string>): Record<string, string> {
 }
 
 async function projectContainsText(projectDir: string, text: string): Promise<boolean> {
-  const entries = await fs.readdir(projectDir, { withFileTypes: true });
+  const directories = [projectDir];
 
-  for (const entry of entries) {
-    if (entry.name === "node_modules" || entry.name === ".git") {
+  while (directories.length > 0) {
+    const currentDirectory = directories.pop();
+    if (!currentDirectory) {
       continue;
     }
 
-    const entryPath = path.join(projectDir, entry.name);
+    const entries = await fs.readdir(currentDirectory, { withFileTypes: true });
 
-    if (entry.isDirectory()) {
-      if (await projectContainsText(entryPath, text)) {
+    for (const entry of entries) {
+      if (entry.name === "node_modules" || entry.name === ".git") {
+        continue;
+      }
+
+      const entryPath = path.join(currentDirectory, entry.name);
+
+      if (entry.isDirectory()) {
+        directories.push(entryPath);
+        continue;
+      }
+
+      if (!entry.isFile() || !/\.(c|m)?[jt]sx?$/.test(entry.name)) {
+        continue;
+      }
+
+      const content = await fs.readFile(entryPath, "utf8");
+      if (content.includes(text)) {
         return true;
       }
-      continue;
-    }
-
-    if (!entry.isFile() || !/\.(c|m)?[jt]sx?$/.test(entry.name)) {
-      continue;
-    }
-
-    const content = await fs.readFile(entryPath, "utf8");
-    if (content.includes(text)) {
-      return true;
     }
   }
 
@@ -82,7 +89,10 @@ async function projectContainsText(projectDir: string, text: string): Promise<bo
 }
 
 function scriptUsesBinary(command: string, binaryName: string): boolean {
-  return command.split(/\s+/).includes(binaryName);
+  return command.split(/\s+/).some((token) => {
+    const normalizedToken = token.replace(/^['"]|['"]$/g, "").replace(/\\/g, "/");
+    return normalizedToken === binaryName || normalizedToken.endsWith(`/${binaryName}`);
+  });
 }
 
 async function projectUsesScriptBinary(projectDir: string, binaryName: string): Promise<boolean> {

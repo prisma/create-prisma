@@ -3,6 +3,7 @@
 {{#if (eq packageManager "bun")}}
 {{else}}
 import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import fs from "node:fs";
 import { access } from "node:fs/promises";
 import path from "node:path";
@@ -24,9 +25,14 @@ function killProcess(child: ChildProcess | undefined) {
   child.kill("SIGTERM");
 }
 
-function startApp() {
-  killProcess(appProcess);
-  appProcess = spawn("tsx", ["dist/main.js"], {
+async function startApp() {
+  const previousAppProcess = appProcess;
+  killProcess(previousAppProcess);
+  if (previousAppProcess && previousAppProcess.exitCode === null) {
+    await once(previousAppProcess, "exit");
+  }
+
+  appProcess = spawn("tsx", [entryPath], {
     stdio: "inherit",
     shell: useShell,
   });
@@ -39,19 +45,21 @@ function scheduleRestart() {
 
   restartTimer = setTimeout(() => {
     restartTimer = undefined;
-    startApp();
+    void startApp();
   }, 150);
 }
 
-async function waitForBuildOutput() {
+async function waitForBuildOutput(): Promise<boolean> {
   while (!shuttingDown) {
     try {
       await access(entryPath);
-      return;
+      return true;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
+
+  return false;
 }
 
 function watchDist() {
@@ -98,8 +106,9 @@ tscProcess.on("exit", (code) => {
   }
 });
 
-await waitForBuildOutput();
-watchDist();
-startApp();
+if (await waitForBuildOutput()) {
+  watchDist();
+  void startApp();
+}
 {{/if}}
 {{/if}}

@@ -43,6 +43,8 @@ app.get("/users", async (c) => {
 });
 {{/if}}
 
-const port = Number(process.env.PORT ?? 3000);
+const rawPort = process.env.PORT;
+const parsedPort = Number(rawPort);
+const port = Number.isFinite(parsedPort) ? parsedPort : 3000;
 console.log(`API listening at http://localhost:${port}`);
 serve({ fetch: app.fetch, port });
