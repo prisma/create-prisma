@@ -9,7 +9,8 @@ import { prisma } from "./lib/prisma";
 
 const rawPort = {{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}};
 const parsedPort = Number(rawPort);
-const port = Number.isFinite(parsedPort) ? parsedPort : 3000;
+const port =
+  Number.isFinite(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 3000;
 
 const app = new Elysia({ adapter: node() })
   .get("/", () => {
