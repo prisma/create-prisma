@@ -21,10 +21,7 @@ function getOptionalHashString(
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function getOptionalHashStringList(
-  hash: Handlebars.HelperOptions["hash"],
-  key: string,
-): string[] {
+function getOptionalHashStringList(hash: Handlebars.HelperOptions["hash"], key: string): string[] {
   return getOptionalHashString(hash, key)?.split(" ") ?? [];
 }
 

@@ -93,7 +93,9 @@ async function projectUsesScriptBinary(projectDir: string, binaryName: string): 
 
   const pkgJson = await fs.readJson(pkgJsonPath);
   const scripts = Object.values(pkgJson.scripts ?? {});
-  return scripts.some((script) => typeof script === "string" && scriptUsesBinary(script, binaryName));
+  return scripts.some(
+    (script) => typeof script === "string" && scriptUsesBinary(script, binaryName),
+  );
 }
 
 export async function addPackageDependency(opts: {
