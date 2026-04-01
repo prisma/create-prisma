@@ -3,7 +3,11 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { installProjectDependencies, writePrismaDependencies } from "./install";
+import {
+  installProjectDependencies,
+  writePrismaDependencies,
+  type DependencyWriteResult,
+} from "./install";
 import {
   getCreateDbCommand,
   PRISMA_POSTGRES_TEMPORARY_NOTICE,
@@ -13,17 +17,7 @@ import {
   DatabaseProviderSchema,
   PackageManagerSchema,
   type DatabaseProvider,
-  type DependencyWriteResult,
-  type EnvStatus,
-  type FileAppendStatus,
-  type FinalizePrismaOptions,
-  type FinalizePrismaResult,
-  type PrismaGenerateResult,
-  type PrismaPostgresProvisionResult,
   type PrismaSetupCommandInput,
-  type PrismaSetupContext,
-  type PrismaSetupResult,
-  type PrismaSetupRunOptions,
   type PackageManager,
   type SchemaPreset,
 } from "../types";
@@ -36,6 +30,59 @@ import {
 } from "../utils/package-manager";
 
 type EnvWriteMode = "keep-existing" | "upsert";
+type EnvStatus = "created" | "appended" | "existing" | "updated";
+type FileAppendStatus = "created" | "appended" | "existing";
+
+type PrismaSetupRunOptions = {
+  prependNextSteps?: string[];
+  projectDir?: string;
+  includeDevNextStep?: boolean;
+};
+
+type PrismaSetupResult = {
+  packageManager: PackageManager;
+};
+
+type PrismaPostgresProvisionResult = {
+  databaseUrl?: string;
+  claimUrl?: string;
+  warning?: string;
+};
+
+type PrismaGenerateResult = {
+  didGenerateClient: boolean;
+  warning?: string;
+};
+
+export type PrismaSetupContext = {
+  projectDir: string;
+  verbose: boolean;
+  shouldGenerate: boolean;
+  databaseProvider: DatabaseProvider;
+  schemaPreset: SchemaPreset;
+  databaseUrl?: string;
+  shouldUsePrismaPostgres: boolean;
+  packageManager: PackageManager;
+  shouldInstall: boolean;
+};
+
+type FinalizePrismaOptions = {
+  provider: DatabaseProvider;
+  databaseUrl?: string;
+  claimUrl?: string;
+  projectDir?: string;
+};
+
+type FinalizePrismaResult = {
+  schemaPath: string;
+  configPath: string;
+  singletonPath: string;
+  envPath: string;
+  envStatus: EnvStatus;
+  gitignorePath: string;
+  gitignoreStatus: FileAppendStatus;
+  claimEnvStatus?: EnvStatus;
+};
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "empty";

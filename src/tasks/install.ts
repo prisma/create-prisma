@@ -9,13 +9,16 @@ import {
   type AvailableDependency,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
-import type {
-  CreateTemplate,
-  DatabaseProvider,
-  DependencyWriteResult,
-  PackageManager,
-} from "../types";
+import type { CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { getInstallArgs } from "../utils/package-manager";
+
+export type DependencyWriteResult = {
+  dependencies: string[];
+  devDependencies: string[];
+  scripts: string[];
+  addedScripts: string[];
+  existingScripts: string[];
+};
 
 function getPrismaScriptMap(packageManager: PackageManager) {
   if (packageManager === "deno") {
@@ -95,26 +98,6 @@ async function projectContainsText(projectDir: string, text: string): Promise<bo
   }
 
   return false;
-}
-
-function scriptUsesBinary(command: string, binaryName: string): boolean {
-  return command.split(/\s+/).some((token) => {
-    const normalizedToken = token.replace(/^['"]|['"]$/g, "").replace(/\\/g, "/");
-    return normalizedToken === binaryName || normalizedToken.endsWith(`/${binaryName}`);
-  });
-}
-
-async function projectUsesScriptBinary(projectDir: string, binaryName: string): Promise<boolean> {
-  const pkgJsonPath = path.join(projectDir, "package.json");
-  if (!(await fs.pathExists(pkgJsonPath))) {
-    return false;
-  }
-
-  const pkgJson = await fs.readJson(pkgJsonPath);
-  const scripts = Object.values(pkgJson.scripts ?? {});
-  return scripts.some(
-    (script) => typeof script === "string" && scriptUsesBinary(script, binaryName),
-  );
 }
 
 export async function addPackageDependency(opts: {
@@ -262,22 +245,29 @@ export async function writeCreateTemplateDependencies(opts: {
   projectDir?: string;
 }): Promise<void> {
   const { template, packageManager, projectDir = process.cwd() } = opts;
-  const templateDependencies = getCreateTemplateDependencies(template, packageManager);
-  const devDependencies = [...templateDependencies.devDependencies];
+  const targets = getCreateTemplateDependencies(template, packageManager);
 
-  if (await projectUsesScriptBinary(projectDir, "tsx")) {
-    devDependencies.push("tsx");
+  for (const dependencyTarget of targets) {
+    const targetDirectory = path.join(projectDir, path.dirname(dependencyTarget.packageJsonPath));
+
+    const hasDependencyWrites =
+      dependencyTarget.dependencies.length > 0 ||
+      dependencyTarget.devDependencies.length > 0 ||
+      Object.keys(dependencyTarget.customDependencies ?? {}).length > 0 ||
+      Object.keys(dependencyTarget.customDevDependencies ?? {}).length > 0;
+
+    if (!hasDependencyWrites) {
+      continue;
+    }
+
+    await addPackageDependency({
+      dependencies: dependencyTarget.dependencies,
+      devDependencies: dependencyTarget.devDependencies,
+      customDependencies: dependencyTarget.customDependencies,
+      customDevDependencies: dependencyTarget.customDevDependencies,
+      projectDir: targetDirectory,
+    });
   }
-
-  if (templateDependencies.dependencies.length === 0 && devDependencies.length === 0) {
-    return;
-  }
-
-  await addPackageDependency({
-    dependencies: templateDependencies.dependencies,
-    devDependencies,
-    projectDir,
-  });
 }
 
 export async function installProjectDependencies(

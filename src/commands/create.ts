@@ -4,11 +4,11 @@ import path from "node:path";
 
 import { scaffoldCreateTemplate } from "../templates/render-create-template";
 import { writeCreateTemplateDependencies } from "../tasks/install";
+import type { CreateAddonSetupContext } from "../tasks/setup-addons";
+import type { PrismaSetupContext } from "../tasks/setup-prisma";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
-  type CreatePromptContext,
-  type CreateTargetPathState,
   type CreateCommandInput,
   type CreateTemplate,
   type SchemaPreset,
@@ -28,6 +28,23 @@ import { getCreatePrismaIntro } from "../ui/branding";
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "hono";
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
+
+export type CreateTargetPathState = {
+  exists: boolean;
+  isDirectory: boolean;
+  isEmptyDirectory: boolean;
+};
+
+export type CreatePromptContext = {
+  targetDirectory: string;
+  targetPathState: CreateTargetPathState;
+  force: boolean;
+  template: CreateTemplate;
+  schemaPreset: SchemaPreset;
+  projectPackageName: string;
+  prismaSetupContext: PrismaSetupContext;
+  addonSetupContext?: CreateAddonSetupContext;
+};
 
 type ExecuteCreateContextResult =
   | { ok: true }

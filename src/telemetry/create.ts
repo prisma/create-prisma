@@ -1,4 +1,5 @@
-import type { CreateCommandInput, CreatePromptContext } from "../types";
+import type { CreatePromptContext } from "../commands/create";
+import type { CreateCommandInput } from "../types";
 
 import { trackCliTelemetry } from "./client";
 

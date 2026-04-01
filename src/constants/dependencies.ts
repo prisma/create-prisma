@@ -16,22 +16,58 @@ export const dependencyVersionMap = {
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 
+export type CreateTemplateDependencyTarget = {
+  packageJsonPath: string;
+  dependencies: AvailableDependency[];
+  devDependencies: AvailableDependency[];
+  customDependencies?: Record<string, string>;
+  customDevDependencies?: Record<string, string>;
+};
+
+function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
+  return packageManager === "npm" ? "*" : "workspace:*";
+}
+
+function usesNodeStyleRuntime(packageManager: PackageManager): boolean {
+  return packageManager !== "bun" && packageManager !== "deno";
+}
+
 export function getCreateTemplateDependencies(
   template: CreateTemplate,
   packageManager: PackageManager,
-): {
-  dependencies: AvailableDependency[];
-  devDependencies: AvailableDependency[];
-} {
-  if (template === "elysia" && packageManager !== "deno") {
-    return {
-      dependencies: ["@elysiajs/node"],
-      devDependencies: ["@types/node"],
-    };
+): CreateTemplateDependencyTarget[] {
+  const targets: CreateTemplateDependencyTarget[] = [];
+
+  if (template === "hono" || template === "elysia" || template === "nest") {
+    const runtimeDevDependencies: AvailableDependency[] = usesNodeStyleRuntime(packageManager)
+      ? ["tsx"]
+      : [];
+
+    if (template === "elysia" && packageManager !== "deno") {
+      targets.push({
+        packageJsonPath: "package.json",
+        dependencies: ["@elysiajs/node"],
+        devDependencies: ["@types/node", ...runtimeDevDependencies],
+      });
+    } else if (runtimeDevDependencies.length > 0) {
+      targets.push({
+        packageJsonPath: "package.json",
+        dependencies: [],
+        devDependencies: runtimeDevDependencies,
+      });
+    }
   }
 
-  return {
-    dependencies: [],
-    devDependencies: [],
-  };
+  if (template === "turborepo") {
+    targets.push({
+      packageJsonPath: "apps/api/package.json",
+      dependencies: [],
+      devDependencies: ["tsx"],
+      customDependencies: {
+        "@repo/db": getWorkspaceDependencyVersion(packageManager),
+      },
+    });
+  }
+
+  return targets;
 }
