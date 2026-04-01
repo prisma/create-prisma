@@ -1,20 +1,16 @@
 import type { DatabaseProvider } from "../types";
 
-export type DbPackages = {
-  adapterPackage: string;
-};
-
-export function getDbPackages(provider: DatabaseProvider): DbPackages {
+export function getDbPackages(provider: DatabaseProvider): string {
   switch (provider) {
     case "postgresql":
     case "cockroachdb":
-      return { adapterPackage: "@prisma/adapter-pg" };
+      return "@prisma/adapter-pg";
     case "mysql":
-      return { adapterPackage: "@prisma/adapter-mariadb" };
+      return "@prisma/adapter-mariadb";
     case "sqlite":
-      return { adapterPackage: "@prisma/adapter-better-sqlite3" };
+      return "@prisma/adapter-better-sqlite3";
     case "sqlserver":
-      return { adapterPackage: "@prisma/adapter-mssql" };
+      return "@prisma/adapter-mssql";
     default: {
       const exhaustiveCheck: never = provider;
       throw new Error(`Unsupported database provider: ${String(exhaustiveCheck)}`);

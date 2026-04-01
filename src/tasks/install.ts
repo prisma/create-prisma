@@ -2,7 +2,7 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { getDenoPrismaSpecifier, requiresDotenvConfigImport } from "../utils/package-manager";
+import { getDenoPrismaSpecifier } from "../utils/package-manager";
 import {
   dependencyVersionMap,
   getCreateTemplateDependencies,
@@ -11,14 +11,7 @@ import {
 import { getDbPackages } from "../constants/db-packages";
 import type { CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { getInstallArgs } from "../utils/package-manager";
-
-export type DependencyWriteResult = {
-  dependencies: string[];
-  devDependencies: string[];
-  scripts: string[];
-  addedScripts: string[];
-  existingScripts: string[];
-};
+import { requiresDotenvConfigImport } from "../utils/runtime";
 
 function getPrismaScriptMap(packageManager: PackageManager) {
   if (packageManager === "deno") {
@@ -104,25 +97,18 @@ export async function addPackageDependency(opts: {
   dependencies?: string[];
   devDependencies?: string[];
   customDependencies?: Record<string, string>;
-  customDevDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
-  scriptMode?: "if-missing" | "upsert";
+  scriptMode?: "if-missing";
   projectDir: string;
-}): Promise<{
-  addedScripts: string[];
-  existingScripts: string[];
-}> {
+}): Promise<void> {
   const {
     dependencies = [],
     devDependencies = [],
     customDependencies = {},
-    customDevDependencies = {},
     scripts = {},
-    scriptMode = "upsert",
+    scriptMode,
     projectDir,
   } = opts;
-  const addedScripts: string[] = [];
-  const existingScripts: string[] = [];
 
   const pkgJsonPath = path.join(projectDir, "package.json");
   if (!(await fs.pathExists(pkgJsonPath))) {
@@ -159,10 +145,6 @@ export async function addPackageDependency(opts: {
     pkgJson.dependencies[pkgName] = version;
   }
 
-  for (const [pkgName, version] of Object.entries(customDevDependencies)) {
-    pkgJson.devDependencies[pkgName] = version;
-  }
-
   for (const [scriptName, command] of Object.entries(scripts)) {
     if (scriptMode === "if-missing") {
       if (
@@ -170,18 +152,10 @@ export async function addPackageDependency(opts: {
         pkgJson.scripts[scriptName].trim().length === 0
       ) {
         pkgJson.scripts[scriptName] = command;
-        addedScripts.push(scriptName);
-      } else {
-        existingScripts.push(scriptName);
       }
       continue;
     }
 
-    if (pkgJson.scripts[scriptName] === command) {
-      existingScripts.push(scriptName);
-    } else {
-      addedScripts.push(scriptName);
-    }
     pkgJson.scripts[scriptName] = command;
   }
 
@@ -191,22 +165,16 @@ export async function addPackageDependency(opts: {
   await fs.writeJson(pkgJsonPath, pkgJson, {
     spaces: 2,
   });
-
-  return {
-    addedScripts,
-    existingScripts,
-  };
 }
 
 export async function writePrismaDependencies(
   provider: DatabaseProvider,
   packageManager: PackageManager,
   projectDir = process.cwd(),
-): Promise<DependencyWriteResult> {
+): Promise<void> {
   const dependencies: string[] = ["@prisma/client"];
   const devDependencies: string[] = ["prisma"];
-  const { adapterPackage } = getDbPackages(provider);
-  dependencies.push(adapterPackage);
+  dependencies.push(getDbPackages(provider));
 
   if (
     requiresDotenvConfigImport(packageManager) ||
@@ -222,21 +190,13 @@ export async function writePrismaDependencies(
 
   const prismaScriptMap = getPrismaScriptMap(packageManager);
 
-  const scriptWriteResult = await addPackageDependency({
+  await addPackageDependency({
     dependencies,
     devDependencies,
     scripts: prismaScriptMap,
     scriptMode: "if-missing",
     projectDir,
   });
-
-  return {
-    dependencies,
-    devDependencies,
-    scripts: Object.keys(prismaScriptMap),
-    addedScripts: scriptWriteResult.addedScripts,
-    existingScripts: scriptWriteResult.existingScripts,
-  };
 }
 
 export async function writeCreateTemplateDependencies(opts: {
@@ -250,21 +210,10 @@ export async function writeCreateTemplateDependencies(opts: {
   for (const dependencyTarget of targets) {
     const targetDirectory = path.join(projectDir, path.dirname(dependencyTarget.packageJsonPath));
 
-    const hasDependencyWrites =
-      dependencyTarget.dependencies.length > 0 ||
-      dependencyTarget.devDependencies.length > 0 ||
-      Object.keys(dependencyTarget.customDependencies ?? {}).length > 0 ||
-      Object.keys(dependencyTarget.customDevDependencies ?? {}).length > 0;
-
-    if (!hasDependencyWrites) {
-      continue;
-    }
-
     await addPackageDependency({
       dependencies: dependencyTarget.dependencies,
       devDependencies: dependencyTarget.devDependencies,
       customDependencies: dependencyTarget.customDependencies,
-      customDevDependencies: dependencyTarget.customDevDependencies,
       projectDir: targetDirectory,
     });
   }

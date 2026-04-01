@@ -173,14 +173,6 @@ function joinCommandParts(parts: Array<string | undefined>): string {
   return parts.filter((part) => typeof part === "string" && part.length > 0).join(" ");
 }
 
-function usesNodeStyleRuntime(packageManager: PackageManager | undefined): boolean {
-  return packageManager !== undefined && packageManager !== "bun" && packageManager !== "deno";
-}
-
-export function requiresDotenvConfigImport(packageManager: PackageManager | undefined): boolean {
-  return usesNodeStyleRuntime(packageManager);
-}
-
 export function getRuntimeScriptCommand(
   packageManager: PackageManager,
   kind: RuntimeScriptKind,

@@ -6,12 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import type { PackageManager } from "../types";
 import {
-  getInstallCommand,
   getPackageManagerManifestValue,
   getRuntimeScriptCommand,
   getRunScriptCommand,
-  requiresDotenvConfigImport,
 } from "../utils/package-manager";
+import { requiresDotenvConfigImport } from "../utils/runtime";
 
 function getOptionalHashString(
   hash: Handlebars.HelperOptions["hash"],
@@ -26,9 +25,6 @@ function getOptionalHashStringList(hash: Handlebars.HelperOptions["hash"], key: 
 }
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
-Handlebars.registerHelper("installCommand", (packageManager: PackageManager | undefined) =>
-  packageManager ? getInstallCommand(packageManager) : "",
-);
 Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>

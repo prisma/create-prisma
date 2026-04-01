@@ -3,11 +3,7 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import {
-  installProjectDependencies,
-  writePrismaDependencies,
-  type DependencyWriteResult,
-} from "./install";
+import { installProjectDependencies, writePrismaDependencies } from "./install";
 import {
   getCreateDbCommand,
   PRISMA_POSTGRES_TEMPORARY_NOTICE,
@@ -30,17 +26,11 @@ import {
 } from "../utils/package-manager";
 
 type EnvWriteMode = "keep-existing" | "upsert";
-type EnvStatus = "created" | "appended" | "existing" | "updated";
-type FileAppendStatus = "created" | "appended" | "existing";
 
 type PrismaSetupRunOptions = {
   prependNextSteps?: string[];
   projectDir?: string;
   includeDevNextStep?: boolean;
-};
-
-type PrismaSetupResult = {
-  packageManager: PackageManager;
 };
 
 type PrismaPostgresProvisionResult = {
@@ -71,17 +61,6 @@ type FinalizePrismaOptions = {
   databaseUrl?: string;
   claimUrl?: string;
   projectDir?: string;
-};
-
-type FinalizePrismaResult = {
-  schemaPath: string;
-  configPath: string;
-  singletonPath: string;
-  envPath: string;
-  envStatus: EnvStatus;
-  gitignorePath: string;
-  gitignoreStatus: FileAppendStatus;
-  claimEnvStatus?: EnvStatus;
 };
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
@@ -349,39 +328,37 @@ async function ensureEnvVarInEnv(
     mode: EnvWriteMode;
     comment?: string;
   },
-): Promise<{ envPath: string; status: EnvStatus }> {
+): Promise<void> {
   const envPath = path.join(projectDir, ".env");
   const envLine = `${envVarName}="${escapeEnvValue(envVarValue)}"`;
 
   if (!(await fs.pathExists(envPath))) {
     const content = opts.comment ? `# ${opts.comment}\n${envLine}\n` : `${envLine}\n`;
     await fs.writeFile(envPath, content, "utf8");
-    return { envPath, status: "created" };
+    return;
   }
 
   const existingContent = await fs.readFile(envPath, "utf8");
   if (hasEnvVar(existingContent, envVarName)) {
     if (opts.mode === "keep-existing") {
-      return { envPath, status: "existing" };
+      return;
     }
 
     const escapedName = escapeRegExp(envVarName);
     const lineRegex = new RegExp(`(^|\\n)\\s*${escapedName}\\s*=.*(?=\\n|$)`, "gm");
     const updatedContent = existingContent.replace(lineRegex, `$1${envLine}`);
     if (updatedContent === existingContent) {
-      return { envPath, status: "existing" };
+      return;
     }
 
     await fs.writeFile(envPath, updatedContent, "utf8");
-    return { envPath, status: "updated" };
+    return;
   }
 
   const separator = existingContent.endsWith("\n") ? "" : "\n";
   const commentLine = opts.comment ? `\n# ${opts.comment}\n` : "\n";
   const insertion = `${separator}${commentLine}${envLine}\n`;
   await fs.appendFile(envPath, insertion, "utf8");
-
-  return { envPath, status: "appended" };
 }
 
 async function ensureEnvComment(projectDir: string, comment: string): Promise<void> {
@@ -412,25 +389,21 @@ function hasGitignoreEntry(content: string, entry: string): boolean {
   ).test(content);
 }
 
-async function ensureGitignoreEntry(
-  projectDir: string,
-  entry: string,
-): Promise<{ gitignorePath: string; status: FileAppendStatus }> {
+async function ensureGitignoreEntry(projectDir: string, entry: string): Promise<void> {
   const gitignorePath = path.join(projectDir, ".gitignore");
 
   if (!(await fs.pathExists(gitignorePath))) {
     await fs.writeFile(gitignorePath, `${entry}\n`, "utf8");
-    return { gitignorePath, status: "created" };
+    return;
   }
 
   const existingContent = await fs.readFile(gitignorePath, "utf8");
   if (hasGitignoreEntry(existingContent, entry)) {
-    return { gitignorePath, status: "existing" };
+    return;
   }
 
   const separator = existingContent.endsWith("\n") ? "" : "\n";
   await fs.appendFile(gitignorePath, `${separator}${entry}\n`, "utf8");
-  return { gitignorePath, status: "appended" };
 }
 
 async function ensureRequiredPrismaFiles(projectDir: string): Promise<void> {
@@ -457,54 +430,30 @@ async function ensureRequiredPrismaFiles(projectDir: string): Promise<void> {
   }
 }
 
-async function finalizePrismaFiles(options: FinalizePrismaOptions): Promise<FinalizePrismaResult> {
+async function finalizePrismaFiles(options: FinalizePrismaOptions): Promise<void> {
   const projectDir = options.projectDir ?? process.cwd();
   const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
-  const schemaPath = path.join(prismaProjectDir, "prisma/schema.prisma");
-  const configPath = path.join(prismaProjectDir, "prisma.config.ts");
 
   await ensureRequiredPrismaFiles(projectDir);
-  const singletonPath = (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.ts")))
-    ? path.join(prismaProjectDir, "src/lib/prisma.ts")
-    : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/prisma.server.ts")))
-      ? path.join(prismaProjectDir, "src/lib/prisma.server.ts")
-      : (await fs.pathExists(path.join(prismaProjectDir, "src/lib/server/prisma.ts")))
-        ? path.join(prismaProjectDir, "src/lib/server/prisma.ts")
-        : (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))
-          ? path.join(prismaProjectDir, "server/utils/prisma.ts")
-          : path.join(prismaProjectDir, "src/client.ts");
   const generatedDir = (await fs.pathExists(path.join(prismaProjectDir, "server/utils/prisma.ts")))
     ? "server/generated"
     : "src/generated";
 
   const databaseUrl = options.databaseUrl ?? getDefaultDatabaseUrl(options.provider);
-  const envResult = await ensureEnvVarInEnv(prismaProjectDir, "DATABASE_URL", databaseUrl, {
+  await ensureEnvVarInEnv(prismaProjectDir, "DATABASE_URL", databaseUrl, {
     mode: options.databaseUrl ? "upsert" : "keep-existing",
     comment: "Added by create-prisma",
   });
 
-  let claimEnvStatus: EnvStatus | undefined;
   if (options.claimUrl) {
-    const claimResult = await ensureEnvVarInEnv(prismaProjectDir, "CLAIM_URL", options.claimUrl, {
+    await ensureEnvVarInEnv(prismaProjectDir, "CLAIM_URL", options.claimUrl, {
       mode: "upsert",
       comment: PRISMA_POSTGRES_TEMPORARY_NOTICE,
     });
-    claimEnvStatus = claimResult.status;
     await ensureEnvComment(prismaProjectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
   }
 
-  const gitignoreResult = await ensureGitignoreEntry(prismaProjectDir, generatedDir);
-
-  return {
-    schemaPath,
-    configPath,
-    singletonPath,
-    envPath: envResult.envPath,
-    envStatus: envResult.status,
-    gitignorePath: gitignoreResult.gitignorePath,
-    gitignoreStatus: gitignoreResult.status,
-    claimEnvStatus,
-  };
+  await ensureGitignoreEntry(prismaProjectDir, generatedDir);
 }
 
 async function provisionPrismaPostgresIfNeeded(
@@ -543,17 +492,18 @@ async function provisionPrismaPostgresIfNeeded(
 async function writeDependenciesForContext(
   context: PrismaSetupContext,
   projectDir: string,
-): Promise<DependencyWriteResult | undefined> {
+): Promise<boolean> {
   const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
   try {
-    return await writePrismaDependencies(
+    await writePrismaDependencies(
       context.databaseProvider,
       context.packageManager,
       prismaProjectDir,
     );
+    return true;
   } catch (error) {
     cancel(getCommandErrorMessage(error));
-    return;
+    return false;
   }
 }
 
@@ -599,12 +549,12 @@ async function finalizePrismaFilesForContext(
   context: PrismaSetupContext,
   projectDir: string,
   provisionResult: PrismaPostgresProvisionResult,
-): Promise<FinalizePrismaResult | undefined> {
+): Promise<boolean> {
   const initSpinner = spinner();
   initSpinner.start("Preparing Prisma files...");
 
   try {
-    const finalizeResult = await finalizePrismaFiles({
+    await finalizePrismaFiles({
       provider: context.databaseProvider,
       databaseUrl: provisionResult.databaseUrl,
       claimUrl: provisionResult.claimUrl,
@@ -612,11 +562,11 @@ async function finalizePrismaFilesForContext(
     });
 
     initSpinner.stop("Prisma files ready.");
-    return finalizeResult;
+    return true;
   } catch (error) {
     initSpinner.stop("Could not prepare Prisma files.");
     cancel(getCommandErrorMessage(error));
-    return;
+    return false;
   }
 }
 
@@ -709,26 +659,30 @@ function buildNextStepsForContext(opts: {
 export async function executePrismaSetupContext(
   context: PrismaSetupContext,
   options: PrismaSetupRunOptions = {},
-): Promise<PrismaSetupResult | undefined> {
+): Promise<boolean> {
   const projectDir = path.resolve(options.projectDir ?? context.projectDir);
   const provisionResult = await provisionPrismaPostgresIfNeeded(context, projectDir);
   if (!provisionResult) {
-    return;
+    return false;
   }
 
-  const dependencyWriteResult = await writeDependenciesForContext(context, projectDir);
-  if (!dependencyWriteResult) {
-    return;
+  const didWriteDependencies = await writeDependenciesForContext(context, projectDir);
+  if (!didWriteDependencies) {
+    return false;
   }
 
   const dependenciesInstalled = await installDependenciesForContext(context, projectDir);
   if (!dependenciesInstalled) {
-    return;
+    return false;
   }
 
-  const finalizeResult = await finalizePrismaFilesForContext(context, projectDir, provisionResult);
-  if (!finalizeResult) {
-    return;
+  const didFinalizePrismaFiles = await finalizePrismaFilesForContext(
+    context,
+    projectDir,
+    provisionResult,
+  );
+  if (!didFinalizePrismaFiles) {
+    return false;
   }
 
   const generateResult = await generatePrismaClientForContext(context, projectDir);
@@ -747,7 +701,5 @@ export async function executePrismaSetupContext(
 Next steps:
 ${nextSteps.join("\n")}`);
 
-  return {
-    packageManager: context.packageManager,
-  };
+  return true;
 }

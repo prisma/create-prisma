@@ -1,4 +1,5 @@
 import type { CreateTemplate, PackageManager } from "../types";
+import { usesNodeStyleRuntime } from "../utils/runtime";
 
 export const dependencyVersionMap = {
   "@elysiajs/node": "^1.4.5",
@@ -21,15 +22,10 @@ export type CreateTemplateDependencyTarget = {
   dependencies: AvailableDependency[];
   devDependencies: AvailableDependency[];
   customDependencies?: Record<string, string>;
-  customDevDependencies?: Record<string, string>;
 };
 
 function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
   return packageManager === "npm" ? "*" : "workspace:*";
-}
-
-function usesNodeStyleRuntime(packageManager: PackageManager): boolean {
-  return packageManager !== "bun" && packageManager !== "deno";
 }
 
 export function getCreateTemplateDependencies(

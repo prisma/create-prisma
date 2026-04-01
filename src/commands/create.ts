@@ -40,7 +40,6 @@ export type CreatePromptContext = {
   targetPathState: CreateTargetPathState;
   force: boolean;
   template: CreateTemplate;
-  schemaPreset: SchemaPreset;
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
   addonSetupContext?: CreateAddonSetupContext;
@@ -311,7 +310,6 @@ async function collectCreateContext(
     targetPathState,
     force,
     template,
-    schemaPreset: prismaSetupContext.schemaPreset,
     projectPackageName: toPackageName(path.basename(targetDirectory)),
     prismaSetupContext,
     addonSetupContext: addonSetupContext ?? undefined,
@@ -328,7 +326,7 @@ async function executeCreateContext(
       projectDir: context.targetDirectory,
       projectName: context.projectPackageName,
       template: context.template,
-      schemaPreset: context.schemaPreset,
+      schemaPreset: context.prismaSetupContext.schemaPreset,
       provider: context.prismaSetupContext.databaseProvider,
       packageManager: context.prismaSetupContext.packageManager,
     });
@@ -388,13 +386,13 @@ async function executeCreateContext(
   }
 
   try {
-    const prismaSetupResult = await executePrismaSetupContext(context.prismaSetupContext, {
+    const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       includeDevNextStep: true,
     });
 
-    if (!prismaSetupResult) {
+    if (!didSetupPrisma) {
       return {
         ok: false,
         stage: "prisma_setup",
