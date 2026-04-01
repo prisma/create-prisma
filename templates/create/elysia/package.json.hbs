@@ -11,19 +11,11 @@
     "start": "{{runtimeScript packageManager "start" "src/index.ts" "dist/src/index.js" denoFlags="--unstable-net"}}"
   },
   "dependencies": {
-    {{#if (eq packageManager "deno")}}
-    {{else}}
-    "@elysiajs/node": "^1.4.5",
-    {{/if}}
     "@sinclair/typebox": "^0.34.48",
     "elysia": "^1.4.28",
     "openapi-types": "^12.1.3"
   },
   "devDependencies": {
-    {{#if (eq packageManager "deno")}}
-    {{else}}
-    "@types/node": "^24.3.0",
-    {{/if}}
     "typescript": "^5.9.3"
   }
 }

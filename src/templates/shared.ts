@@ -61,12 +61,6 @@ Handlebars.registerHelper(
       sourceEntrypoint,
       builtEntrypoint,
       denoFlags: getOptionalHashStringList(hash, "denoFlags"),
-      nodeDevCommand: getOptionalHashString(hash, "nodeDev"),
-      nodeBuildCommand: getOptionalHashString(hash, "nodeBuild"),
-      nodeStartCommand: getOptionalHashString(hash, "nodeStart"),
-      bunDevCommand: getOptionalHashString(hash, "bunDev"),
-      bunBuildCommand: getOptionalHashString(hash, "bunBuild"),
-      bunStartCommand: getOptionalHashString(hash, "bunStart"),
     });
   },
 );

@@ -327,6 +327,8 @@ async function executeCreateContext(
 
   try {
     await writeCreateTemplateDependencies({
+      template: context.template,
+      packageManager: context.prismaSetupContext.packageManager,
       projectDir: context.targetDirectory,
     });
   } catch (error) {

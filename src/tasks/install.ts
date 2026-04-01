@@ -3,9 +3,18 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import { getDenoPrismaSpecifier, requiresDotenvConfigImport } from "../utils/package-manager";
-import { dependencyVersionMap, type AvailableDependency } from "../constants/dependencies";
+import {
+  dependencyVersionMap,
+  getCreateTemplateDependencies,
+  type AvailableDependency,
+} from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
-import type { DatabaseProvider, DependencyWriteResult, PackageManager } from "../types";
+import type {
+  CreateTemplate,
+  DatabaseProvider,
+  DependencyWriteResult,
+  PackageManager,
+} from "../types";
 import { getInstallArgs } from "../utils/package-manager";
 
 function getPrismaScriptMap(packageManager: PackageManager) {
@@ -248,16 +257,24 @@ export async function writePrismaDependencies(
 }
 
 export async function writeCreateTemplateDependencies(opts: {
+  template: CreateTemplate;
+  packageManager: PackageManager;
   projectDir?: string;
 }): Promise<void> {
-  const { projectDir = process.cwd() } = opts;
-  const devDependencies = (await projectUsesScriptBinary(projectDir, "tsx")) ? ["tsx"] : [];
+  const { template, packageManager, projectDir = process.cwd() } = opts;
+  const templateDependencies = getCreateTemplateDependencies(template, packageManager);
+  const devDependencies = [...templateDependencies.devDependencies];
 
-  if (devDependencies.length === 0) {
+  if (await projectUsesScriptBinary(projectDir, "tsx")) {
+    devDependencies.push("tsx");
+  }
+
+  if (templateDependencies.dependencies.length === 0 && devDependencies.length === 0) {
     return;
   }
 
   await addPackageDependency({
+    dependencies: templateDependencies.dependencies,
     devDependencies,
     projectDir,
   });

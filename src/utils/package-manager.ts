@@ -14,12 +14,6 @@ type RuntimeScriptOptions = {
   sourceEntrypoint: string;
   builtEntrypoint?: string;
   denoFlags?: string[];
-  nodeDevCommand?: string;
-  nodeBuildCommand?: string;
-  nodeStartCommand?: string;
-  bunDevCommand?: string;
-  bunBuildCommand?: string;
-  bunStartCommand?: string;
 };
 
 const packageManagerManifestValues = {
@@ -192,17 +186,7 @@ export function getRuntimeScriptCommand(
   kind: RuntimeScriptKind,
   options: RuntimeScriptOptions,
 ): string {
-  const {
-    sourceEntrypoint,
-    builtEntrypoint,
-    denoFlags = [],
-    nodeDevCommand,
-    nodeBuildCommand,
-    nodeStartCommand,
-    bunDevCommand,
-    bunBuildCommand,
-    bunStartCommand,
-  } = options;
+  const { sourceEntrypoint, builtEntrypoint, denoFlags = [] } = options;
 
   if (packageManager === "deno") {
     switch (kind) {
@@ -233,21 +217,21 @@ export function getRuntimeScriptCommand(
   if (packageManager === "bun") {
     switch (kind) {
       case "dev":
-        return bunDevCommand ?? `bun --watch ${sourceEntrypoint}`;
+        return `bun --watch ${sourceEntrypoint}`;
       case "build":
-        return bunBuildCommand ?? "tsc --noEmit";
+        return "tsc --noEmit";
       case "start":
-        return bunStartCommand ?? `bun ${sourceEntrypoint}`;
+        return `bun ${sourceEntrypoint}`;
     }
   }
 
   switch (kind) {
     case "dev":
-      return nodeDevCommand ?? `tsx watch ${sourceEntrypoint}`;
+      return `tsx watch ${sourceEntrypoint}`;
     case "build":
-      return nodeBuildCommand ?? "tsc";
+      return "tsc";
     case "start":
-      return nodeStartCommand ?? `tsx ${builtEntrypoint ?? sourceEntrypoint}`;
+      return `tsx ${builtEntrypoint ?? sourceEntrypoint}`;
   }
 }
 
