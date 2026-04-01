@@ -252,7 +252,7 @@ async function collectCreateContext(
 
   const projectNameInput =
     input.name ?? (useDefaults ? DEFAULT_PROJECT_NAME : await promptForProjectName());
-  if (!projectNameInput) {
+  if (projectNameInput === undefined) {
     return;
   }
 

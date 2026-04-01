@@ -223,7 +223,7 @@ export function getRuntimeScriptCommand(
     case "build":
       return "tsc";
     case "start":
-      return `tsx ${builtEntrypoint ?? sourceEntrypoint}`;
+      return builtEntrypoint ? `node ${builtEntrypoint}` : `tsx ${sourceEntrypoint}`;
   }
 }
 
