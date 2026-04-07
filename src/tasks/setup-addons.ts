@@ -4,7 +4,6 @@ import { execa } from "execa";
 import type {
   AddonInstallScope,
   CreateAddon,
-  CreateAddonSetupContext,
   CreateCommandInput,
   DatabaseProvider,
   ExtensionTarget,
@@ -12,6 +11,15 @@ import type {
   PrismaSkillName,
 } from "../types";
 import { getPackageExecutionArgs } from "../utils/package-manager";
+
+export type CreateAddonSetupContext = {
+  addons: CreateAddon[];
+  scope: AddonInstallScope;
+  skills: PrismaSkillName[];
+  skillsAgents: string[];
+  mcpAgents: string[];
+  extensionTargets: ExtensionTarget[];
+};
 
 type AgentOption = {
   value: string;

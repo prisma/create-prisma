@@ -1,0 +1,24 @@
+{
+  "name": "{{projectName}}",
+  "private": true,
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
+  "type": "module",
+  "scripts": {
+    "dev": "{{runtimeScript packageManager "dev" "src/main.ts" "dist/main.js"}}",
+    "build": "{{runtimeScript packageManager "build" "src/main.ts" "dist/main.js"}}",
+    "start": "{{runtimeScript packageManager "start" "src/main.ts" "dist/main.js"}}"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.17",
+    "@nestjs/core": "^11.1.17",
+    "@nestjs/platform-express": "^11.1.17",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3"
+  }
+}

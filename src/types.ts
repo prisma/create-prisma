@@ -12,6 +12,8 @@ export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
 export const createTemplates = [
   "hono",
+  "elysia",
+  "nest",
   "next",
   "svelte",
   "astro",
@@ -94,109 +96,3 @@ export const CreateCommandInputSchema = PrismaSetupCommandInputSchema.extend(
   CreateScaffoldOptionsSchema.shape,
 );
 export type CreateCommandInput = z.infer<typeof CreateCommandInputSchema>;
-
-export type CreateTargetPathState = {
-  exists: boolean;
-  isDirectory: boolean;
-  isEmptyDirectory: boolean;
-};
-
-export type PrismaSetupRunOptions = {
-  prependNextSteps?: string[];
-  projectDir?: string;
-  includeDevNextStep?: boolean;
-};
-
-export type PrismaSetupResult = {
-  packageManager: PackageManager;
-};
-
-export type PrismaPostgresProvisionResult = {
-  databaseUrl?: string;
-  claimUrl?: string;
-  warning?: string;
-};
-
-export type PrismaGenerateResult = {
-  didGenerateClient: boolean;
-  warning?: string;
-};
-
-export type PrismaSetupContext = {
-  projectDir: string;
-  verbose: boolean;
-  shouldGenerate: boolean;
-  databaseProvider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
-  databaseUrl?: string;
-  shouldUsePrismaPostgres: boolean;
-  packageManager: PackageManager;
-  shouldInstall: boolean;
-};
-
-export type CreatePromptContext = {
-  targetDirectory: string;
-  targetPathState: CreateTargetPathState;
-  force: boolean;
-  template: CreateTemplate;
-  schemaPreset: SchemaPreset;
-  projectPackageName: string;
-  prismaSetupContext: PrismaSetupContext;
-  addonSetupContext?: CreateAddonSetupContext;
-};
-
-export type CreateAddonSetupContext = {
-  addons: CreateAddon[];
-  scope: AddonInstallScope;
-  skills: PrismaSkillName[];
-  skillsAgents: string[];
-  mcpAgents: string[];
-  extensionTargets: ExtensionTarget[];
-};
-
-export type CreateTemplateContext = {
-  projectName: string;
-  provider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
-  packageManager?: PackageManager;
-};
-
-export type ScaffoldedPrismaPaths = {
-  schemaPath: string;
-  configPath: string;
-  singletonPath: string;
-};
-
-export type PrismaPostgresResult = {
-  databaseUrl: string;
-  claimUrl?: string;
-};
-
-export type DependencyWriteResult = {
-  dependencies: string[];
-  devDependencies: string[];
-  scripts: string[];
-  addedScripts: string[];
-  existingScripts: string[];
-};
-
-export type EnvStatus = "created" | "appended" | "existing" | "updated";
-export type FileAppendStatus = "created" | "appended" | "existing";
-
-export type FinalizePrismaOptions = {
-  provider: DatabaseProvider;
-  databaseUrl?: string;
-  claimUrl?: string;
-  projectDir?: string;
-};
-
-export type FinalizePrismaResult = {
-  schemaPath: string;
-  configPath: string;
-  singletonPath: string;
-  envPath: string;
-  envStatus: EnvStatus;
-  gitignorePath: string;
-  gitignoreStatus: FileAppendStatus;
-  claimEnvStatus?: EnvStatus;
-};

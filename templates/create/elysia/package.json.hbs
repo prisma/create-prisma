@@ -6,16 +6,16 @@
   {{/if}}
   "type": "module",
   "scripts": {
-    "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js"}}",
+    "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js" denoFlags="--unstable-net"}}",
     "build": "{{runtimeScript packageManager "build" "src/index.ts" "dist/src/index.js"}}",
-    "start": "{{runtimeScript packageManager "start" "src/index.ts" "dist/src/index.js"}}"
+    "start": "{{runtimeScript packageManager "start" "src/index.ts" "dist/src/index.js" denoFlags="--unstable-net"}}"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.9",
-    "hono": "^4.12.2"
+    "@sinclair/typebox": "^0.34.48",
+    "elysia": "^1.4.28",
+    "openapi-types": "^12.1.3"
   },
   "devDependencies": {
-    "@types/node": "^20.11.17",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   }
 }

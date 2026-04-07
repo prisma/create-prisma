@@ -1,4 +1,5 @@
-import type { CreateCommandInput, CreatePromptContext } from "../types";
+import type { CreatePromptContext } from "../commands/create";
+import type { CreateCommandInput } from "../types";
 
 import { trackCliTelemetry } from "./client";
 
@@ -52,7 +53,7 @@ function getBaseCreateProperties(
     template: context?.template ?? input.template ?? null,
     "database-provider": context?.prismaSetupContext.databaseProvider ?? input.provider ?? null,
     "package-manager": context?.prismaSetupContext.packageManager ?? input.packageManager ?? null,
-    "schema-preset": context?.schemaPreset ?? input.schemaPreset ?? null,
+    "schema-preset": context?.prismaSetupContext.schemaPreset ?? input.schemaPreset ?? null,
     "should-install": context?.prismaSetupContext.shouldInstall ?? input.install ?? null,
     "should-generate": context?.prismaSetupContext.shouldGenerate ?? input.generate ?? null,
     "uses-prisma-postgres":

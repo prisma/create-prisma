@@ -1,11 +1,12 @@
-import type {
-  CreateTemplate,
-  CreateTemplateContext,
-  DatabaseProvider,
-  PackageManager,
-  SchemaPreset,
-} from "../types";
+import type { CreateTemplate, DatabaseProvider, PackageManager, SchemaPreset } from "../types";
 import { renderTemplateTree, resolveTemplatesDir } from "./shared";
+
+type CreateTemplateContext = {
+  projectName: string;
+  provider: DatabaseProvider;
+  schemaPreset: SchemaPreset;
+  packageManager?: PackageManager;
+};
 
 function getCreateTemplateDir(template: CreateTemplate): string {
   return resolveTemplatesDir(`templates/create/${template}`);

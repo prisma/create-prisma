@@ -1,3 +1,6 @@
+{{#if (requiresDotenvConfigImport packageManager)}}
+import "dotenv/config";
+{{/if}}
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 {{#if (eq schemaPreset "basic")}}
@@ -40,6 +43,9 @@ app.get("/users", async (c) => {
 });
 {{/if}}
 
-const port = Number(process.env.PORT ?? 3000);
+const rawPort = (process.env.PORT ?? "").trim();
+const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;
+const port =
+  Number.isFinite(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 3000;
 console.log(`API listening at http://localhost:${port}`);
 serve({ fetch: app.fetch, port });
