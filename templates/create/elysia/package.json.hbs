@@ -5,9 +5,7 @@
   "packageManager": "{{packageManagerManifestValue packageManager}}",
   {{/if}}
   "type": "module",
-  {{#if compute}}
   "main": "src/index.ts",
-  {{/if}}
   "scripts": {
     "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js" denoFlags="--unstable-net"}}",
     "build": "{{runtimeScript packageManager "build" "src/index.ts" "dist/src/index.js"}}",
