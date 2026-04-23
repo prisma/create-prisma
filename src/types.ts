@@ -68,6 +68,12 @@ export const PrismaSetupOptionsSchema = z.object({
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
   generate: z.boolean().optional().describe("Generate Prisma Client after scaffolding"),
+  migrateAndSeed: z
+    .boolean()
+    .optional()
+    .describe(
+      "Run prisma migrate dev --name init and then prisma db seed after generating the client",
+    ),
   schemaPreset: SchemaPresetSchema.optional().describe(
     "Schema preset to scaffold in prisma/schema.prisma",
   ),
@@ -89,8 +95,22 @@ export const CreateScaffoldOptionsSchema = z.object({
   skills: z.boolean().optional().describe("Enable skills addon"),
   mcp: z.boolean().optional().describe("Enable MCP addon"),
   extension: z.boolean().optional().describe("Enable extension addon"),
+  deploy: z.boolean().optional().describe("Deploy the scaffolded project to Prisma Compute"),
   force: z.boolean().optional().describe("Allow scaffolding into a non-empty target directory"),
 });
+
+export const COMPUTE_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set<CreateTemplate>([
+  "hono",
+  "elysia",
+  "next",
+  "astro",
+  "nuxt",
+  "tanstack-start",
+]);
+
+export function isComputeDeployableTemplate(template: CreateTemplate): boolean {
+  return COMPUTE_DEPLOYABLE_TEMPLATES.has(template);
+}
 
 export const CreateCommandInputSchema = PrismaSetupCommandInputSchema.extend(
   CreateScaffoldOptionsSchema.shape,

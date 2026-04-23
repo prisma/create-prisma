@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  {{#if compute}}
+  output: "standalone",
+  {{else}}
   // Add Next config here when needed.
+  {{/if}}
 };
 
 export default nextConfig;

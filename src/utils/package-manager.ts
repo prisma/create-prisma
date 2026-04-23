@@ -281,10 +281,6 @@ export function getPrismaCliArgs(
   packageManager: PackageManager,
   prismaArgs: string[],
 ): CommandAndArgs {
-  if (packageManager === "bun") {
-    return getPackageExecutionArgs(packageManager, ["--bun", "prisma", ...prismaArgs]);
-  }
-
   if (packageManager === "deno") {
     return {
       command: "deno",

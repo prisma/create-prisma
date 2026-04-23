@@ -1,4 +1,4 @@
-import { cancel, intro, isCancel, log, select, spinner, text } from "@clack/prompts";
+import { cancel, intro, isCancel, log, outro, select, spinner, text } from "@clack/prompts";
 import fs from "fs-extra";
 import path from "node:path";
 
@@ -18,6 +18,12 @@ import {
   collectCreateAddonSetupContext,
   executeCreateAddonSetupContext,
 } from "../tasks/setup-addons";
+import {
+  collectComputeDeployContext,
+  executeComputeDeployContext,
+  type ComputeDeployContext,
+  type ComputeDeployResult,
+} from "../tasks/deploy-to-compute";
 import {
   trackCreateCompleted,
   trackCreateFailed,
@@ -43,6 +49,7 @@ export type CreatePromptContext = {
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
   addonSetupContext?: CreateAddonSetupContext;
+  computeDeployContext?: ComputeDeployContext;
 };
 
 type ExecuteCreateContextResult =
@@ -305,14 +312,26 @@ async function collectCreateContext(
     return;
   }
 
+  const projectPackageName = toPackageName(path.basename(targetDirectory));
+
+  const computeDeployContext = await collectComputeDeployContext(input, {
+    template,
+    useDefaults,
+    defaultServiceName: projectPackageName,
+  });
+  if (computeDeployContext === undefined) {
+    return;
+  }
+
   return {
     targetDirectory,
     targetPathState,
     force,
     template,
-    projectPackageName: toPackageName(path.basename(targetDirectory)),
+    projectPackageName,
     prismaSetupContext,
     addonSetupContext: addonSetupContext ?? undefined,
+    computeDeployContext: computeDeployContext ?? undefined,
   };
 }
 
@@ -329,6 +348,7 @@ async function executeCreateContext(
       schemaPreset: context.prismaSetupContext.schemaPreset,
       provider: context.prismaSetupContext.databaseProvider,
       packageManager: context.prismaSetupContext.packageManager,
+      compute: Boolean(context.computeDeployContext),
     });
     scaffoldSpinner.stop("Project files scaffolded.");
   } catch (error) {
@@ -385,14 +405,15 @@ async function executeCreateContext(
     }
   }
 
+  let prismaResult: Awaited<ReturnType<typeof executePrismaSetupContext>>;
   try {
-    const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
+    prismaResult = await executePrismaSetupContext(context.prismaSetupContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       includeDevNextStep: true,
     });
 
-    if (!didSetupPrisma) {
+    if (!prismaResult.ok) {
       return {
         ok: false,
         stage: "prisma_setup",
@@ -405,6 +426,43 @@ async function executeCreateContext(
       error,
     };
   }
+
+  let deployResult: ComputeDeployResult | undefined;
+  if (context.computeDeployContext) {
+    const envVars: Record<string, string> = {};
+    if (prismaResult.databaseUrl) {
+      envVars.DATABASE_URL = prismaResult.databaseUrl;
+    }
+
+    const result = await executeComputeDeployContext({
+      context: context.computeDeployContext,
+      projectDir: context.targetDirectory,
+      envVars,
+    });
+    if (!result.ok && !result.cancelled) {
+      return {
+        ok: false,
+        stage: "compute_deploy",
+        error: result.error,
+      };
+    }
+    if (result.ok) {
+      deployResult = result.result;
+    }
+  }
+
+  const summaryLines: string[] = [];
+  summaryLines.push(`Setup complete.${prismaResult.warningSection}`);
+  if (deployResult) {
+    summaryLines.push(
+      "",
+      "Deployed to Prisma Compute:",
+      `- Service URL: ${deployResult.serviceUrl}`,
+      `- Version URL: ${deployResult.versionUrl}`,
+    );
+  }
+  summaryLines.push("", "Next steps:", prismaResult.nextSteps.join("\n"));
+  outro(summaryLines.join("\n"));
 
   return { ok: true };
 }
