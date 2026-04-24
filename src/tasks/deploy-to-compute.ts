@@ -58,10 +58,6 @@ function runComputeCli(packageManager: PackageManager, args: string[], options: 
 }
 
 async function isAuthenticated(packageManager: PackageManager): Promise<boolean> {
-  if (process.env.PRISMA_API_TOKEN && process.env.PRISMA_API_TOKEN.trim().length > 0) {
-    return true;
-  }
-
   try {
     await runComputeCli(packageManager, ["projects", "list", "--json"], { stdio: "pipe" });
     return true;
@@ -232,6 +228,9 @@ export async function collectComputeDeployContext(
   if (!wantsDeploy) return null;
 
   if (!(await ensureComputeCliAvailable(options.packageManager))) {
+    if (input.deploy === true) {
+      throw createExplicitDeployError("the Compute CLI is not available");
+    }
     return null;
   }
 
@@ -243,6 +242,9 @@ export async function collectComputeDeployContext(
       log.warn(
         `Compute login was not completed${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
       );
+      if (input.deploy === true) {
+        throw createExplicitDeployError("authentication failed", error);
+      }
       return null;
     }
   }
@@ -254,6 +256,9 @@ export async function collectComputeDeployContext(
     log.warn(
       `Could not list Compute projects${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
     );
+    if (input.deploy === true) {
+      throw createExplicitDeployError("could not list Compute projects", error);
+    }
     return null;
   }
 
@@ -310,6 +315,9 @@ export async function collectComputeDeployContext(
   }
 
   if (!selectedProject) {
+    if (input.deploy === true) {
+      throw createExplicitDeployError("no Compute project was selected or created");
+    }
     return null;
   }
 
@@ -401,6 +409,27 @@ function createDeployError(message: string | undefined): Error {
   return new Error(redactSecrets(message ?? "unknown error"));
 }
 
+function createExplicitDeployError(reason: string, error?: unknown): Error {
+  const detail = error instanceof Error ? `: ${redactSecrets(error.message)}` : "";
+  return new Error(`Deploy requested but ${reason}${detail}`);
+}
+
+function toUrl(domainOrUrl: string): string {
+  return /^https?:\/\//.test(domainOrUrl) ? domainOrUrl : `https://${domainOrUrl}`;
+}
+
+function toComputeDeployResult(data: DeployJsonOk["data"]): ComputeDeployResult {
+  const serviceDomain = data.serviceEndpointDomain ?? data.versionEndpointDomain;
+  return {
+    serviceUrl: toUrl(serviceDomain),
+    versionUrl: toUrl(data.versionEndpointDomain),
+    serviceId: data.serviceId,
+    versionId: data.versionId,
+    projectId: data.projectId,
+    region: data.region,
+  };
+}
+
 export async function executeComputeDeployContext(params: {
   context: ComputeDeployContext;
   projectDir: string;
@@ -432,8 +461,9 @@ export async function executeComputeDeployContext(params: {
   deploySpinner.start("Deploying to Prisma Compute...");
 
   try {
-    const { stdout } = await runComputeCli(params.context.packageManager, args, {
+    const { stdout, exitCode } = await runComputeCli(params.context.packageManager, args, {
       cwd: params.projectDir,
+      reject: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -443,8 +473,8 @@ export async function executeComputeDeployContext(params: {
       return { ok: false, cancelled: false, error: new Error("Invalid compute deploy output") };
     }
 
-    if (!parsed.ok) {
-      const error = createDeployError(parsed.error.message);
+    if (exitCode !== 0 || !parsed.ok) {
+      const error = createDeployError(parsed.ok ? "Compute deploy failed." : parsed.error.message);
       deploySpinner.error(`Deploy failed: ${error.message}`);
       return { ok: false, cancelled: false, error };
     }
@@ -452,14 +482,7 @@ export async function executeComputeDeployContext(params: {
     deploySpinner.stop("Deployed to Prisma Compute.");
     return {
       ok: true,
-      result: {
-        serviceUrl: parsed.data.serviceEndpointDomain ?? parsed.data.versionEndpointDomain,
-        versionUrl: parsed.data.versionEndpointDomain,
-        serviceId: parsed.data.serviceId,
-        versionId: parsed.data.versionId,
-        projectId: parsed.data.projectId,
-        region: parsed.data.region,
-      },
+      result: toComputeDeployResult(parsed.data),
     };
   } catch (error) {
     const parsed = parseDeployJson((error as { stdout?: unknown })?.stdout);
@@ -467,14 +490,7 @@ export async function executeComputeDeployContext(params: {
       deploySpinner.stop("Deployed to Prisma Compute.");
       return {
         ok: true,
-        result: {
-          serviceUrl: parsed.data.serviceEndpointDomain ?? parsed.data.versionEndpointDomain,
-          versionUrl: parsed.data.versionEndpointDomain,
-          serviceId: parsed.data.serviceId,
-          versionId: parsed.data.versionId,
-          projectId: parsed.data.projectId,
-          region: parsed.data.region,
-        },
+        result: toComputeDeployResult(parsed.data),
       };
     }
 

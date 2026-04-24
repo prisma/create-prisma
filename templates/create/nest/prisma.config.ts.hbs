@@ -1,6 +1,6 @@
-{{#unless (eq packageManager "deno")}}
+{{#if (requiresPrismaConfigDotenvImport packageManager)}}
 import "dotenv/config";
-{{/unless}}
+{{/if}}
 import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({

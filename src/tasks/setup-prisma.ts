@@ -732,10 +732,15 @@ export async function executePrismaSetupContext(
     return { ok: false };
   }
 
+  const databaseUrl =
+    provisionResult.databaseUrl ??
+    context.databaseUrl ??
+    getDefaultDatabaseUrl(context.databaseProvider);
+
   const generateResult = await generatePrismaClientForContext(context, projectDir);
 
   const migrateAndSeedResult = await migrateAndSeedIfRequested(context, projectDir, {
-    databaseUrl: provisionResult.databaseUrl,
+    databaseUrl,
     didGenerateClient: generateResult.didGenerateClient,
   });
 
@@ -758,7 +763,7 @@ export async function executePrismaSetupContext(
     ok: true,
     nextSteps,
     warningSection,
-    databaseUrl: provisionResult.databaseUrl,
+    databaseUrl,
   };
 }
 
@@ -767,6 +772,8 @@ async function migrateAndSeedIfRequested(
   projectDir: string,
   options: { databaseUrl?: string; didGenerateClient: boolean },
 ): Promise<{ didMigrate: boolean; didSeed: boolean; warning?: string }> {
+  const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
+
   if (!context.shouldMigrateAndSeed) {
     return { didMigrate: false, didSeed: false };
   }
@@ -803,7 +810,7 @@ async function migrateAndSeedIfRequested(
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
     await execa(migrateInvocation.command, migrateInvocation.args, {
-      cwd: projectDir,
+      cwd: prismaProjectDir,
       stdio: context.verbose ? "inherit" : "pipe",
     });
     migrateSpinner.stop("Initial migration applied.");
@@ -822,7 +829,7 @@ async function migrateAndSeedIfRequested(
   let didSeed = false;
   try {
     await execa(seedInvocation.command, seedInvocation.args, {
-      cwd: projectDir,
+      cwd: prismaProjectDir,
       stdio: context.verbose ? "inherit" : "pipe",
     });
     seedSpinner.stop("Database seeded.");

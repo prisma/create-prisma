@@ -10,7 +10,7 @@ import {
   getRuntimeScriptCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
-import { requiresDotenvConfigImport } from "../utils/runtime";
+import { requiresDotenvConfigImport, requiresPrismaConfigDotenvImport } from "../utils/runtime";
 
 function getOptionalHashString(
   hash: Handlebars.HelperOptions["hash"],
@@ -38,6 +38,10 @@ Handlebars.registerHelper(
 Handlebars.registerHelper(
   "requiresDotenvConfigImport",
   (packageManager: PackageManager | undefined) => requiresDotenvConfigImport(packageManager),
+);
+Handlebars.registerHelper(
+  "requiresPrismaConfigDotenvImport",
+  (packageManager: PackageManager | undefined) => requiresPrismaConfigDotenvImport(packageManager),
 );
 Handlebars.registerHelper(
   "runtimeScript",
