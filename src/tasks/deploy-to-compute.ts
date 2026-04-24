@@ -1,11 +1,13 @@
 import { cancel, confirm, isCancel, log, select, spinner, text } from "@clack/prompts";
-import { execa } from "execa";
+import { execa, type Options as ExecaOptions } from "execa";
 
 import {
   isComputeDeployableTemplate,
   type CreateCommandInput,
   type CreateTemplate,
+  type PackageManager,
 } from "../types";
+import { getPackageExecutionArgs, getPackageExecutionCommand } from "../utils/package-manager";
 
 // Mirrors sdk/src/types.ts:KNOWN_REGION_IDS. Drift risk: low — region list rarely
 // changes; if it does, this falls out of sync until someone updates it.
@@ -17,15 +19,22 @@ const COMPUTE_REGIONS = [
   "ap-northeast-1",
   "ap-southeast-1",
 ] as const;
+const COMPUTE_CLI_PACKAGE = "@prisma/compute-cli";
 
 type ComputeProject = {
   id: string;
   name: string;
   defaultRegion?: string;
 };
+type ProjectJsonResult =
+  | { ok: true; data: ComputeProject }
+  | { ok: false; error: { message?: string; name?: string } };
+
+const CREATE_NEW_PROJECT = "__create_new_project__";
 
 export type ComputeDeployContext = {
   template: CreateTemplate;
+  packageManager: PackageManager;
   projectId: string;
   serviceName: string;
   region: string;
@@ -40,43 +49,58 @@ export type ComputeDeployResult = {
   region: string;
 };
 
-async function isAuthenticated(): Promise<boolean> {
+function getComputeCliCommand(packageManager: PackageManager): string {
+  return getPackageExecutionCommand(packageManager, [COMPUTE_CLI_PACKAGE]);
+}
+
+function runComputeCli(packageManager: PackageManager, args: string[], options: ExecaOptions = {}) {
+  const execution = getPackageExecutionArgs(packageManager, [COMPUTE_CLI_PACKAGE, ...args]);
+  return execa(execution.command, execution.args, options);
+}
+
+async function isAuthenticated(packageManager: PackageManager): Promise<boolean> {
   if (process.env.PRISMA_API_TOKEN && process.env.PRISMA_API_TOKEN.trim().length > 0) {
     return true;
   }
 
   try {
-    await execa("compute", ["projects", "list", "--json"], { stdio: "pipe" });
+    await runComputeCli(packageManager, ["projects", "list", "--json"], { stdio: "pipe" });
     return true;
   } catch {
     return false;
   }
 }
 
-async function ensureComputeOnPath(): Promise<boolean> {
+async function ensureComputeCliAvailable(packageManager: PackageManager): Promise<boolean> {
   try {
-    await execa("compute", ["--help"], { stdio: "pipe" });
+    await runComputeCli(packageManager, ["--help"], { stdio: "pipe" });
     return true;
   } catch (error) {
+    const command = getComputeCliCommand(packageManager);
     const isMissing =
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
       (error as { code?: string }).code === "ENOENT";
     if (isMissing) {
-      log.warn(
-        "`compute` CLI not found on PATH. Install with `bun link` (local dev) or `npm i -g @prisma/compute-cli`, then re-run.",
-      );
+      log.warn(`Could not find the selected package manager. Re-run ${command} manually.`);
       return false;
     }
-    return true; // non-ENOENT — assume present, let later calls fail with their own messages
+    log.warn(
+      `Could not run ${command}${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
+    );
+    return false;
   }
 }
 
-async function fetchProjects(): Promise<ComputeProject[]> {
-  const { stdout } = await execa("compute", ["projects", "list", "--json"], {
+async function fetchProjects(packageManager: PackageManager): Promise<ComputeProject[]> {
+  const { stdout } = await runComputeCli(packageManager, ["projects", "list", "--json"], {
     stdio: "pipe",
   });
+  if (typeof stdout !== "string") {
+    throw new Error("Failed to list Compute projects: invalid command output");
+  }
+
   const parsed = JSON.parse(stdout) as
     | { ok: true; data: ComputeProject[] }
     | { ok: false; error: { message?: string } };
@@ -86,10 +110,97 @@ async function fetchProjects(): Promise<ComputeProject[]> {
   return parsed.data;
 }
 
+function parseProjectJson(stdout: unknown): ProjectJsonResult | null {
+  if (typeof stdout !== "string" || stdout.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stdout) as ProjectJsonResult;
+  } catch {
+    return null;
+  }
+}
+
+async function createComputeProject(
+  packageManager: PackageManager,
+  name: string,
+): Promise<ComputeProject> {
+  try {
+    const { stdout } = await runComputeCli(packageManager, [
+      "projects",
+      "create",
+      "--json",
+      "--name",
+      name,
+    ]);
+    const parsed = parseProjectJson(stdout);
+    if (!parsed) {
+      throw new Error("Could not parse Compute project creation output.");
+    }
+    if (!parsed.ok) {
+      throw new Error(parsed.error.message ?? "Failed to create Compute project.");
+    }
+    return parsed.data;
+  } catch (error) {
+    const parsed = parseProjectJson((error as { stdout?: unknown })?.stdout);
+    if (parsed?.ok) {
+      return parsed.data;
+    }
+    if (parsed && !parsed.ok) {
+      throw new Error(redactSecrets(parsed.error.message ?? "Failed to create Compute project."));
+    }
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+async function promptForNewProjectName(defaultProjectName: string): Promise<string | undefined> {
+  const projectNameInput = await text({
+    message: "Compute project name",
+    placeholder: defaultProjectName,
+    initialValue: defaultProjectName,
+    validate: (value) => {
+      if (!value || value.trim().length === 0) {
+        return "Project name is required";
+      }
+      return undefined;
+    },
+  });
+  if (isCancel(projectNameInput)) {
+    cancel("Operation cancelled.");
+    return undefined;
+  }
+  return projectNameInput.trim();
+}
+
+async function createProjectFromPrompt(options: {
+  packageManager: PackageManager;
+  defaultProjectName: string;
+}): Promise<ComputeProject | undefined> {
+  const projectName = await promptForNewProjectName(options.defaultProjectName);
+  if (!projectName) {
+    return undefined;
+  }
+
+  const createSpinner = spinner();
+  createSpinner.start("Creating Compute project...");
+  try {
+    const project = await createComputeProject(options.packageManager, projectName);
+    createSpinner.stop(`Created Compute project: ${project.name} (${project.id})`);
+    return project;
+  } catch (error) {
+    createSpinner.error(
+      `Could not create Compute project${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
+    );
+    return undefined;
+  }
+}
+
 export async function collectComputeDeployContext(
   input: CreateCommandInput,
   options: {
     template: CreateTemplate;
+    packageManager: PackageManager;
     useDefaults: boolean;
     defaultServiceName: string;
   },
@@ -121,17 +232,17 @@ export async function collectComputeDeployContext(
 
   if (!wantsDeploy) return null;
 
-  if (!(await ensureComputeOnPath())) {
+  if (!(await ensureComputeCliAvailable(options.packageManager))) {
     return null;
   }
 
-  if (!(await isAuthenticated())) {
+  if (!(await isAuthenticated(options.packageManager))) {
     log.info("Authenticating with Prisma Compute...");
     try {
-      await execa("compute", ["login"], { stdio: "inherit" });
+      await runComputeCli(options.packageManager, ["login"], { stdio: "inherit" });
     } catch (error) {
       log.warn(
-        `Compute login was not completed${error instanceof Error ? `: ${error.message}` : "."}`,
+        `Compute login was not completed${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
       );
       return null;
     }
@@ -139,43 +250,65 @@ export async function collectComputeDeployContext(
 
   let projects: ComputeProject[];
   try {
-    projects = await fetchProjects();
+    projects = await fetchProjects(options.packageManager);
   } catch (error) {
     log.warn(
-      `Could not list Compute projects${error instanceof Error ? `: ${error.message}` : "."}`,
+      `Could not list Compute projects${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
     );
     return null;
   }
 
-  if (projects.length === 0) {
-    log.warn(
-      "No Compute projects found in your workspace. Create one in the Prisma Console and try again.",
-    );
-    return null;
-  }
-
-  let projectId: string;
+  let selectedProject: ComputeProject | undefined;
   if (projects.length === 1) {
     // biome-ignore lint/style/noNonNullAssertion: length === 1
     const only = projects[0]!;
-    log.info(`Using project: ${only.name} (${only.id})`);
-    projectId = only.id;
-  } else {
+    const shouldUseExistingProject = await confirm({
+      message: `Use Compute project ${only.name}?`,
+      initialValue: true,
+    });
+    if (isCancel(shouldUseExistingProject)) {
+      cancel("Operation cancelled.");
+      return undefined;
+    }
+    if (shouldUseExistingProject) {
+      selectedProject = only;
+    } else {
+      selectedProject = await createProjectFromPrompt({
+        packageManager: options.packageManager,
+        defaultProjectName: options.defaultServiceName,
+      });
+    }
+  } else if (projects.length > 1) {
+    const sortedProjects = projects.slice().sort((a, b) => a.name.localeCompare(b.name));
     const selection = await select<string>({
       message: "Select Compute project",
-      options: projects
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((p) => ({ value: p.id, label: p.name, hint: p.id })),
+      options: [
+        { value: CREATE_NEW_PROJECT, label: "Create new project" },
+        ...sortedProjects.map((p) => ({ value: p.id, label: p.name, hint: p.id })),
+      ],
     });
     if (isCancel(selection)) {
       cancel("Operation cancelled.");
       return undefined;
     }
-    projectId = selection;
+    selectedProject =
+      selection === CREATE_NEW_PROJECT
+        ? await createProjectFromPrompt({
+            packageManager: options.packageManager,
+            defaultProjectName: options.defaultServiceName,
+          })
+        : projects.find((p) => p.id === selection);
+  } else {
+    log.info("No Compute projects found.");
+    selectedProject = await createProjectFromPrompt({
+      packageManager: options.packageManager,
+      defaultProjectName: options.defaultServiceName,
+    });
   }
 
-  const selectedProject = projects.find((p) => p.id === projectId);
+  if (!selectedProject) {
+    return null;
+  }
 
   const serviceNameInput = await text({
     message: "Service name",
@@ -206,7 +339,8 @@ export async function collectComputeDeployContext(
 
   return {
     template: options.template,
-    projectId,
+    packageManager: options.packageManager,
+    projectId: selectedProject.id,
     serviceName,
     region,
   };
@@ -230,9 +364,44 @@ type DeployJsonErr = {
   error: { message?: string; name?: string };
 };
 
+type DeployJsonResult = DeployJsonOk | DeployJsonErr;
+
+function redactSecrets(message: string): string {
+  return message
+    .replace(
+      /(['"])([A-Z0-9_]*(?:DATABASE_URL|DIRECT_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*=)(.*?)\1/g,
+      "$1$2<redacted>$1",
+    )
+    .replace(
+      /\b([A-Z0-9_]*(?:DATABASE_URL|DIRECT_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*=)[^\s]+/g,
+      "$1<redacted>",
+    );
+}
+
+function parseDeployJson(stdout: unknown): DeployJsonResult | null {
+  if (typeof stdout !== "string" || stdout.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stdout) as DeployJsonResult;
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  return redactSecrets(error instanceof Error ? error.message : String(error));
+}
+
+function createDeployError(message: string | undefined): Error {
+  return new Error(redactSecrets(message ?? "unknown error"));
+}
+
 export async function executeComputeDeployContext(params: {
   context: ComputeDeployContext;
   projectDir: string;
+  envFilePath?: string;
   envVars?: Record<string, string>;
 }): Promise<
   { ok: true; result: ComputeDeployResult } | { ok: false; cancelled: boolean; error?: unknown }
@@ -248,6 +417,10 @@ export async function executeComputeDeployContext(params: {
     params.context.region,
   ];
 
+  if (params.envFilePath) {
+    args.push("--env", params.envFilePath);
+  }
+
   for (const [key, value] of Object.entries(params.envVars ?? {})) {
     args.push("--env", `${key}=${value}`);
   }
@@ -256,22 +429,21 @@ export async function executeComputeDeployContext(params: {
   deploySpinner.start("Deploying to Prisma Compute...");
 
   try {
-    const { stdout } = await execa("compute", args, {
+    const { stdout } = await runComputeCli(params.context.packageManager, args, {
       cwd: params.projectDir,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    let parsed: DeployJsonOk | DeployJsonErr;
-    try {
-      parsed = JSON.parse(stdout) as DeployJsonOk | DeployJsonErr;
-    } catch (parseError) {
+    const parsed = parseDeployJson(stdout);
+    if (!parsed) {
       deploySpinner.error("Deploy failed: could not parse compute deploy output.");
-      return { ok: false, cancelled: false, error: parseError };
+      return { ok: false, cancelled: false, error: new Error("Invalid compute deploy output") };
     }
 
     if (!parsed.ok) {
-      deploySpinner.error(`Deploy failed: ${parsed.error.message ?? "unknown error"}`);
-      return { ok: false, cancelled: false, error: new Error(parsed.error.message) };
+      const error = createDeployError(parsed.error.message);
+      deploySpinner.error(`Deploy failed: ${error.message}`);
+      return { ok: false, cancelled: false, error };
     }
 
     deploySpinner.stop("Deployed to Prisma Compute.");
@@ -287,7 +459,30 @@ export async function executeComputeDeployContext(params: {
       },
     };
   } catch (error) {
-    deploySpinner.error(`Deploy failed${error instanceof Error ? `: ${error.message}` : "."}`);
-    return { ok: false, cancelled: false, error };
+    const parsed = parseDeployJson((error as { stdout?: unknown })?.stdout);
+    if (parsed?.ok) {
+      deploySpinner.stop("Deployed to Prisma Compute.");
+      return {
+        ok: true,
+        result: {
+          serviceUrl: parsed.data.serviceEndpointDomain ?? parsed.data.versionEndpointDomain,
+          versionUrl: parsed.data.versionEndpointDomain,
+          serviceId: parsed.data.serviceId,
+          versionId: parsed.data.versionId,
+          projectId: parsed.data.projectId,
+          region: parsed.data.region,
+        },
+      };
+    }
+
+    if (parsed && !parsed.ok) {
+      const deployError = createDeployError(parsed.error.message);
+      deploySpinner.error(`Deploy failed: ${deployError.message}`);
+      return { ok: false, cancelled: false, error: deployError };
+    }
+
+    const message = getErrorMessage(error);
+    deploySpinner.error(`Deploy failed${message ? `: ${message}` : "."}`);
+    return { ok: false, cancelled: false, error: new Error(message) };
   }
 }

@@ -316,6 +316,7 @@ async function collectCreateContext(
 
   const computeDeployContext = await collectComputeDeployContext(input, {
     template,
+    packageManager: prismaSetupContext.packageManager,
     useDefaults,
     defaultServiceName: projectPackageName,
   });
@@ -429,15 +430,10 @@ async function executeCreateContext(
 
   let deployResult: ComputeDeployResult | undefined;
   if (context.computeDeployContext) {
-    const envVars: Record<string, string> = {};
-    if (prismaResult.databaseUrl) {
-      envVars.DATABASE_URL = prismaResult.databaseUrl;
-    }
-
     const result = await executeComputeDeployContext({
       context: context.computeDeployContext,
       projectDir: context.targetDirectory,
-      envVars,
+      envFilePath: prismaResult.databaseUrl ? ".env" : undefined,
     });
     if (!result.ok && !result.cancelled) {
       return {
