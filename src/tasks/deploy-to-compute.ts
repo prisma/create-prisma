@@ -29,8 +29,7 @@ type ComputeProject = {
 type ProjectJsonResult =
   | { ok: true; data: ComputeProject }
   | { ok: false; error: { message?: string; name?: string } };
-
-const CREATE_NEW_PROJECT = "__create_new_project__";
+type ProjectSelection = { type: "create" } | { type: "existing"; project: ComputeProject };
 
 export type ComputeDeployContext = {
   template: CreateTemplate;
@@ -280,11 +279,15 @@ export async function collectComputeDeployContext(
     }
   } else if (projects.length > 1) {
     const sortedProjects = projects.slice().sort((a, b) => a.name.localeCompare(b.name));
-    const selection = await select<string>({
+    const selection = await select<ProjectSelection>({
       message: "Select Compute project",
       options: [
-        { value: CREATE_NEW_PROJECT, label: "Create new project" },
-        ...sortedProjects.map((p) => ({ value: p.id, label: p.name, hint: p.id })),
+        { value: { type: "create" }, label: "Create new project" },
+        ...sortedProjects.map((project) => ({
+          value: { type: "existing" as const, project },
+          label: project.name,
+          hint: project.id,
+        })),
       ],
     });
     if (isCancel(selection)) {
@@ -292,12 +295,12 @@ export async function collectComputeDeployContext(
       return undefined;
     }
     selectedProject =
-      selection === CREATE_NEW_PROJECT
+      selection.type === "create"
         ? await createProjectFromPrompt({
             packageManager: options.packageManager,
             defaultProjectName: options.defaultServiceName,
           })
-        : projects.find((p) => p.id === selection);
+        : selection.project;
   } else {
     log.info("No Compute projects found.");
     selectedProject = await createProjectFromPrompt({
