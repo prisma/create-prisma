@@ -693,17 +693,6 @@ function buildNextStepsForContext(opts: {
   return nextSteps;
 }
 
-function getDenoSchemaEngineEnv(packageManager: PackageManager): NodeJS.ProcessEnv | undefined {
-  if (packageManager !== "deno") {
-    return undefined;
-  }
-
-  return {
-    ...process.env,
-    RUST_LOG: "info",
-  };
-}
-
 export async function executePrismaSetupContext(
   context: PrismaSetupContext,
   options: PrismaSetupRunOptions = {},
@@ -810,7 +799,6 @@ async function migrateAndSeedIfRequested(
     await execa(migrateInvocation.command, migrateInvocation.args, {
       cwd: prismaProjectDir,
       stdio: context.verbose ? "inherit" : "pipe",
-      env: getDenoSchemaEngineEnv(context.packageManager),
     });
     migrateSpinner.stop("Initial migration applied.");
     didMigrate = true;

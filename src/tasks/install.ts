@@ -17,12 +17,11 @@ function getPrismaScriptMap(packageManager: PackageManager) {
   if (packageManager === "deno") {
     const prismaSpecifier = getDenoPrismaSpecifier();
     const prismaCli = `deno run -A --env-file=.env ${prismaSpecifier}`;
-    const prismaSchemaCli = `RUST_LOG=info ${prismaCli}`;
 
     return {
       "db:generate": `${prismaCli} generate`,
-      "db:push": `${prismaSchemaCli} db push`,
-      "db:migrate": `${prismaSchemaCli} migrate dev`,
+      "db:push": `${prismaCli} db push`,
+      "db:migrate": `${prismaCli} migrate dev`,
       "db:seed": `${prismaCli} db seed`,
     } as const;
   }
