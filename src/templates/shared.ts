@@ -24,6 +24,18 @@ function getOptionalHashStringList(hash: Handlebars.HelperOptions["hash"], key: 
   return getOptionalHashString(hash, key)?.split(" ") ?? [];
 }
 
+function getSeedCommand(packageManager: PackageManager | undefined): string {
+  if (packageManager === "deno") {
+    return "deno run -A --env-file=.env ./prisma/seed.ts";
+  }
+
+  if (packageManager === "bun") {
+    return "bun ./prisma/seed.ts";
+  }
+
+  return "tsx ./prisma/seed.ts";
+}
+
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
 Handlebars.registerHelper(
   "runScriptCommand",
@@ -48,6 +60,9 @@ Handlebars.registerHelper("sqliteAdapterPackage", (packageManager: PackageManage
 );
 Handlebars.registerHelper("sqliteAdapterClass", (packageManager: PackageManager | undefined) =>
   packageManager === "deno" ? "PrismaLibSql" : "PrismaBetterSqlite3",
+);
+Handlebars.registerHelper("seedCommand", (packageManager: PackageManager | undefined) =>
+  getSeedCommand(packageManager),
 );
 Handlebars.registerHelper(
   "runtimeScript",

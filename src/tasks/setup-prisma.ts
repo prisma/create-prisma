@@ -70,6 +70,7 @@ const DEFAULT_PRISMA_POSTGRES = true;
 const DEFAULT_INSTALL = true;
 const DEFAULT_GENERATE = true;
 const DEFAULT_MIGRATE_AND_SEED = true;
+const PRISMA_POSTGRES_MIGRATION_DELAY_MS = 2000;
 
 const requiredPrismaFileGroups = [
   ["prisma/schema.prisma", "packages/db/prisma/schema.prisma"],
@@ -724,12 +725,7 @@ export async function executePrismaSetupContext(
 
   const generateResult = await generatePrismaClientForContext(context, projectDir);
 
-  const databaseUrl =
-    provisionResult.databaseUrl ??
-    context.databaseUrl ??
-    getDefaultDatabaseUrl(context.databaseProvider);
   const migrateAndSeedResult = await migrateAndSeedIfRequested(context, projectDir, {
-    databaseUrl,
     didGenerateClient: generateResult.didGenerateClient,
   });
 
@@ -759,7 +755,7 @@ ${nextSteps.join("\n")}`);
 async function migrateAndSeedIfRequested(
   context: PrismaSetupContext,
   projectDir: string,
-  options: { databaseUrl?: string; didGenerateClient: boolean },
+  options: { didGenerateClient: boolean },
 ): Promise<{ didMigrate: boolean; didSeed: boolean; warning?: string }> {
   const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
 
@@ -773,14 +769,6 @@ async function migrateAndSeedIfRequested(
       warning: "Skipped migrate + seed because the Prisma Client was not generated.",
     };
   }
-  if (!options.databaseUrl) {
-    return {
-      didMigrate: false,
-      didSeed: false,
-      warning: "Skipped migrate + seed because no DATABASE_URL is available.",
-    };
-  }
-
   const migrateInvocation = getPrismaCliArgs(context.packageManager, [
     "migrate",
     "dev",
@@ -794,7 +782,9 @@ async function migrateAndSeedIfRequested(
   let didMigrate = false;
   try {
     if (context.shouldUsePrismaPostgres) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Newly provisioned Prisma Postgres databases can briefly reject the first migration.
+      // TODO(2026-04-26): replace this grace period with an explicit readiness probe.
+      await new Promise((resolve) => setTimeout(resolve, PRISMA_POSTGRES_MIGRATION_DELAY_MS));
     }
     await execa(migrateInvocation.command, migrateInvocation.args, {
       cwd: prismaProjectDir,
@@ -807,7 +797,7 @@ async function migrateAndSeedIfRequested(
     return {
       didMigrate: false,
       didSeed: false,
-      warning: "Migration failed; run `prisma migrate dev --name init` manually.",
+      warning: `Migration failed; run \`${getRunScriptCommand(context.packageManager, "db:migrate")}\` manually.`,
     };
   }
 
@@ -826,7 +816,7 @@ async function migrateAndSeedIfRequested(
     return {
       didMigrate,
       didSeed: false,
-      warning: "Seed failed; run `prisma db seed` manually.",
+      warning: `Seed failed; run \`${getRunScriptCommand(context.packageManager, "db:seed")}\` manually.`,
     };
   }
 

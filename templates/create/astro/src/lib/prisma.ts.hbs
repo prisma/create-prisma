@@ -1,4 +1,4 @@
-{{#if (requiresDotenvConfigImport packageManager)}}
+{{#if (requiresDotenvConfigImport this.packageManager)}}
 import "dotenv/config";
 {{/if}}
 import { PrismaClient } from "../generated/prisma/client";
@@ -12,7 +12,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 {{/if}}
 {{#if (eq provider "sqlite")}}
-import { {{sqliteAdapterClass packageManager}} } from "{{sqliteAdapterPackage packageManager}}";
+import { {{sqliteAdapterClass this.packageManager}} } from "{{sqliteAdapterPackage this.packageManager}}";
 {{/if}}
 {{#if (eq provider "sqlserver")}}
 import { PrismaMssql } from "@prisma/adapter-mssql";
@@ -42,7 +42,7 @@ const adapter = new PrismaPg({
 const adapter = new PrismaMariaDb(databaseUrl);
 {{/if}}
 {{#if (eq provider "sqlite")}}
-const adapter = new {{sqliteAdapterClass packageManager}}({
+const adapter = new {{sqliteAdapterClass this.packageManager}}({
   url: databaseUrl,
 });
 {{/if}}
