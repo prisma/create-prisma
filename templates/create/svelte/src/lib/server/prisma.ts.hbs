@@ -10,7 +10,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 {{/if}}
 {{#if (eq provider "sqlite")}}
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { {{sqliteAdapterClass packageManager}} } from "{{sqliteAdapterPackage packageManager}}";
 {{/if}}
 {{#if (eq provider "sqlserver")}}
 import { PrismaMssql } from "@prisma/adapter-mssql";
@@ -39,7 +39,7 @@ const adapter = new PrismaPg({
 const adapter = new PrismaMariaDb(databaseUrl);
 {{/if}}
 {{#if (eq provider "sqlite")}}
-const adapter = new PrismaBetterSqlite3({
+const adapter = new {{sqliteAdapterClass packageManager}}({
   url: databaseUrl,
 });
 {{/if}}

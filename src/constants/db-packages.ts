@@ -1,6 +1,6 @@
-import type { DatabaseProvider } from "../types";
+import type { DatabaseProvider, PackageManager } from "../types";
 
-export function getDbPackages(provider: DatabaseProvider): string {
+export function getDbPackages(provider: DatabaseProvider, packageManager?: PackageManager): string {
   switch (provider) {
     case "postgresql":
     case "cockroachdb":
@@ -8,6 +8,9 @@ export function getDbPackages(provider: DatabaseProvider): string {
     case "mysql":
       return "@prisma/adapter-mariadb";
     case "sqlite":
+      if (packageManager === "deno") {
+        return "@prisma/adapter-libsql";
+      }
       return "@prisma/adapter-better-sqlite3";
     case "sqlserver":
       return "@prisma/adapter-mssql";

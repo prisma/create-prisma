@@ -43,6 +43,12 @@ Handlebars.registerHelper(
   "requiresPrismaConfigDotenvImport",
   (packageManager: PackageManager | undefined) => requiresPrismaConfigDotenvImport(packageManager),
 );
+Handlebars.registerHelper("sqliteAdapterPackage", (packageManager: PackageManager | undefined) =>
+  packageManager === "deno" ? "@prisma/adapter-libsql" : "@prisma/adapter-better-sqlite3",
+);
+Handlebars.registerHelper("sqliteAdapterClass", (packageManager: PackageManager | undefined) =>
+  packageManager === "deno" ? "PrismaLibSql" : "PrismaBetterSqlite3",
+);
 Handlebars.registerHelper(
   "runtimeScript",
   (
