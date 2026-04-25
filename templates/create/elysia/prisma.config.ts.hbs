@@ -1,4 +1,4 @@
-{{#if (requiresDotenvConfigImport packageManager)}}
+{{#if (requiresPrismaConfigDotenvImport packageManager)}}
 import "dotenv/config";
 {{/if}}
 import { defineConfig, env } from "prisma/config";
