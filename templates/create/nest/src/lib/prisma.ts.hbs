@@ -56,3 +56,8 @@ export const prismaClientOptions = { adapter };
 export function createPrismaClient() {
   return new PrismaClient(prismaClientOptions);
 }
+
+const prisma = createPrismaClient();
+
+export { prisma };
+export default prisma;

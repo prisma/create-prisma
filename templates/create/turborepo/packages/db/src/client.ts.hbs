@@ -1,7 +1,10 @@
+{{#if (eq packageManager "deno")}}
+{{else}}
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-import { PrismaClient } from "./generated/prisma/client";
+{{/if}}
+import { PrismaClient } from "./generated/prisma/client{{#if (eq packageManager "deno")}}.ts{{/if}}";
 {{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
 {{/if}}
@@ -18,13 +21,17 @@ import { {{sqliteAdapterClass packageManager}} } from "{{sqliteAdapterPackage pa
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
+{{#if (eq packageManager "deno")}}
+{{else}}
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(moduleDir, "../.env"), quiet: true });
+{{/if}}
 
+const rawDatabaseUrl = {{#if (eq packageManager "deno")}}Deno.env.get("DATABASE_URL"){{else}}process.env.DATABASE_URL{{/if}};
 {{#if (eq provider "sqlite")}}
-const databaseUrl = process.env.DATABASE_URL ?? "file:./dev.db";
+const databaseUrl = (rawDatabaseUrl ?? "").trim() || "file:./dev.db";
 {{else}}
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = (rawDatabaseUrl ?? "").trim();
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required");
 }
