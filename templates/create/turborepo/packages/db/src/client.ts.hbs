@@ -27,7 +27,7 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(moduleDir, "../.env"), quiet: true });
 {{/if}}
 
-const rawDatabaseUrl = {{#if (eq packageManager "deno")}}Deno.env.get("DATABASE_URL"){{else}}process.env.DATABASE_URL{{/if}};
+const rawDatabaseUrl = process.env.DATABASE_URL;
 {{#if (eq provider "sqlite")}}
 const databaseUrl = (rawDatabaseUrl ?? "").trim() || "file:./dev.db";
 {{else}}

@@ -3,11 +3,11 @@ import { usesNodeStyleRuntime } from "../utils/runtime";
 
 export const dependencyVersionMap = {
   "@elysiajs/node": "^1.4.5",
+  "@libsql/client": "^0.17.3",
   "@prisma/client": "^7.8.0",
   "@prisma/adapter-pg": "^7.8.0",
   "@prisma/adapter-libsql": "^7.8.0",
   "@prisma/adapter-mariadb": "^7.8.0",
-  "@prisma/adapter-better-sqlite3": "^7.8.0",
   "@prisma/adapter-mssql": "^7.8.0",
   "@types/node": "^24.3.0",
   dotenv: "^17.2.3",

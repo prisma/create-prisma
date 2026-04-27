@@ -176,6 +176,9 @@ export async function writePrismaDependencies(
   const dependencies: string[] = ["@prisma/client"];
   const devDependencies: string[] = ["prisma"];
   dependencies.push(getDbPackages(provider, packageManager));
+  if (provider === "sqlite") {
+    dependencies.push("@libsql/client");
+  }
 
   if (
     requiresDotenvConfigImport(packageManager) ||

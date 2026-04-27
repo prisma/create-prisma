@@ -34,9 +34,5 @@ main()
   .catch(async (error) => {
     console.error(error);
     await prisma.$disconnect();
-    {{#if (eq packageManager "deno")}}
-    Deno.exit(1);
-    {{else}}
     process.exit(1);
-    {{/if}}
   });

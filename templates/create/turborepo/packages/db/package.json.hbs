@@ -6,8 +6,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    {{#if (eq packageManager "deno")}}
+    "build": "deno check src/index.ts",
+    "typecheck": "deno check src/index.ts"
+    {{else}}
     "build": "tsc",
     "typecheck": "tsc --noEmit"
+    {{/if}}
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

@@ -18,7 +18,7 @@ import { {{sqliteAdapterClass this.packageManager}} } from "{{sqliteAdapterPacka
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
-const rawDatabaseUrl = {{#if (eq packageManager "deno")}}Deno.env.get("DATABASE_URL"){{else}}import.meta.env?.DATABASE_URL ?? process.env.DATABASE_URL{{/if}};
+const rawDatabaseUrl = {{#if (eq packageManager "deno")}}process.env.DATABASE_URL{{else}}import.meta.env?.DATABASE_URL ?? process.env.DATABASE_URL{{/if}};
 {{#if (eq provider "sqlite")}}
 const databaseUrl = (rawDatabaseUrl ?? "").trim() || "file:./dev.db";
 {{else}}
