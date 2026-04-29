@@ -1,5 +1,7 @@
+{{#if (requiresDotenvConfigImport this.packageManager)}}
 import "dotenv/config";
-import { PrismaClient } from "../generated/prisma/client";
+{{/if}}
+import { PrismaClient } from "../generated/prisma/client{{#if (eq packageManager "deno")}}.ts{{/if}}";
 {{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
 {{/if}}
@@ -10,17 +12,17 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 {{/if}}
 {{#if (eq provider "sqlite")}}
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { {{sqliteAdapterClass this.packageManager}} } from "{{sqliteAdapterPackage this.packageManager}}";
 {{/if}}
 {{#if (eq provider "sqlserver")}}
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
+const rawDatabaseUrl = {{#if (eq packageManager "deno")}}process.env.DATABASE_URL{{else}}import.meta.env?.DATABASE_URL ?? process.env.DATABASE_URL{{/if}};
 {{#if (eq provider "sqlite")}}
-const databaseUrl =
-  import.meta.env?.DATABASE_URL ?? process.env.DATABASE_URL ?? "file:./dev.db";
+const databaseUrl = (rawDatabaseUrl ?? "").trim() || "file:./dev.db";
 {{else}}
-const databaseUrl = import.meta.env?.DATABASE_URL ?? process.env.DATABASE_URL;
+const databaseUrl = (rawDatabaseUrl ?? "").trim();
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required");
 }
@@ -40,7 +42,7 @@ const adapter = new PrismaPg({
 const adapter = new PrismaMariaDb(databaseUrl);
 {{/if}}
 {{#if (eq provider "sqlite")}}
-const adapter = new PrismaBetterSqlite3({
+const adapter = new {{sqliteAdapterClass this.packageManager}}({
   url: databaseUrl,
 });
 {{/if}}

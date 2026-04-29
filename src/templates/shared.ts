@@ -4,13 +4,15 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { dependencyVersionMap } from "../constants/dependencies";
 import type { PackageManager } from "../types";
 import {
   getPackageManagerManifestValue,
+  getRunScriptInDirectoryCommand,
   getRuntimeScriptCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
-import { requiresDotenvConfigImport } from "../utils/runtime";
+import { requiresDotenvConfigImport, requiresPrismaConfigDotenvImport } from "../utils/runtime";
 
 function getOptionalHashString(
   hash: Handlebars.HelperOptions["hash"],
@@ -24,11 +26,40 @@ function getOptionalHashStringList(hash: Handlebars.HelperOptions["hash"], key: 
   return getOptionalHashString(hash, key)?.split(" ") ?? [];
 }
 
+function getSeedCommand(packageManager: PackageManager | undefined): string {
+  if (packageManager === "deno") {
+    return "deno run -A --env-file=.env ./prisma/seed.ts";
+  }
+
+  if (packageManager === "bun") {
+    return "bun ./prisma/seed.ts";
+  }
+
+  return "tsx ./prisma/seed.ts";
+}
+
+function getPrismaCommand(packageManager: PackageManager | undefined, subcommand: string): string {
+  if (packageManager === "deno") {
+    return `deno run -A --env-file=.env npm:prisma@${dependencyVersionMap.prisma} ${subcommand}`;
+  }
+
+  if (packageManager === "bun") {
+    return `bun --env-file=.env ./node_modules/.bin/prisma ${subcommand}`;
+  }
+
+  return `prisma ${subcommand}`;
+}
+
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
 Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>
     packageManager ? getRunScriptCommand(packageManager, scriptName) : "",
+);
+Handlebars.registerHelper(
+  "runScriptInDirectoryCommand",
+  (packageManager: PackageManager | undefined, directory: string, scriptName: string) =>
+    packageManager ? getRunScriptInDirectoryCommand(packageManager, directory, scriptName) : "",
 );
 Handlebars.registerHelper(
   "packageManagerManifestValue",
@@ -38,6 +69,20 @@ Handlebars.registerHelper(
 Handlebars.registerHelper(
   "requiresDotenvConfigImport",
   (packageManager: PackageManager | undefined) => requiresDotenvConfigImport(packageManager),
+);
+Handlebars.registerHelper(
+  "requiresPrismaConfigDotenvImport",
+  (packageManager: PackageManager | undefined) => requiresPrismaConfigDotenvImport(packageManager),
+);
+Handlebars.registerHelper("sqliteAdapterPackage", () => "@prisma/adapter-libsql");
+Handlebars.registerHelper("sqliteAdapterClass", () => "PrismaLibSql");
+Handlebars.registerHelper("seedCommand", (packageManager: PackageManager | undefined) =>
+  getSeedCommand(packageManager),
+);
+Handlebars.registerHelper(
+  "prismaCommand",
+  (packageManager: PackageManager | undefined, subcommand: string) =>
+    getPrismaCommand(packageManager, subcommand),
 );
 Handlebars.registerHelper(
   "runtimeScript",

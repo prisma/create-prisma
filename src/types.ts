@@ -68,6 +68,10 @@ export const PrismaSetupOptionsSchema = z.object({
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
   generate: z.boolean().optional().describe("Generate Prisma Client after scaffolding"),
+  migrateAndSeed: z
+    .boolean()
+    .optional()
+    .describe("Run an initial migration and seed after Prisma Client generation"),
   schemaPreset: SchemaPresetSchema.optional().describe(
     "Schema preset to scaffold in prisma/schema.prisma",
   ),

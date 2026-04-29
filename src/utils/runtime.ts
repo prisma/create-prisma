@@ -7,3 +7,9 @@ export function usesNodeStyleRuntime(packageManager: PackageManager | undefined)
 export function requiresDotenvConfigImport(packageManager: PackageManager | undefined): boolean {
   return usesNodeStyleRuntime(packageManager);
 }
+
+export function requiresPrismaConfigDotenvImport(
+  packageManager: PackageManager | undefined,
+): boolean {
+  return packageManager !== "deno";
+}
