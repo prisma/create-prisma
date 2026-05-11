@@ -134,8 +134,16 @@ async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined
     message: "Select your database",
     initialValue: DEFAULT_DATABASE_PROVIDER,
     options: [
-      { value: "postgres", label: "PostgreSQL", hint: "Default relational database" },
-      { value: "mongo", label: "MongoDB", hint: "Document database with local Docker helper" },
+      {
+        value: "postgres",
+        label: "PostgreSQL",
+        hint: "Relational models with typed ORM, relations, indexes, raw SQL",
+      },
+      {
+        value: "mongo",
+        label: "MongoDB",
+        hint: "Document models with typed ORM, indexes, aggregations",
+      },
     ],
   });
 
@@ -152,8 +160,12 @@ async function promptForAuthoringStyle(): Promise<AuthoringStyle | undefined> {
     message: "Choose contract authoring style",
     initialValue: DEFAULT_AUTHORING,
     options: [
-      { value: "psl", label: "PSL", hint: "Write prisma/contract.prisma, default" },
-      { value: "typescript", label: "TypeScript", hint: "Write prisma/contract.ts with builders" },
+      { value: "psl", label: "PSL", hint: "Schema syntax emits contract.json + types" },
+      {
+        value: "typescript",
+        label: "TypeScript",
+        hint: "Builder API emits the same contract artifacts",
+      },
     ],
   });
 

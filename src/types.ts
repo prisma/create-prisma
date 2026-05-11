@@ -54,7 +54,7 @@ export const CommonCommandOptionsSchema = z.object({
 
 export const PrismaSetupOptionsSchema = z.object({
   provider: DatabaseProviderSchema.optional().describe(
-    "Prisma Next target: postgres/postgresql or mongo/mongodb",
+    "Prisma Next database target: PostgreSQL relational models or MongoDB document models",
   ),
   authoring: AuthoringStyleSchema.optional().describe("Contract authoring style"),
   packageManager: PackageManagerSchema.optional().describe(
