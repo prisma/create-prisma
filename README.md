@@ -1,41 +1,44 @@
 # create-prisma
 
-Scaffold a new app with Prisma already wired up.
+Scaffold a new app with Prisma Next already wired up.
 
-`create-prisma` gives you a project template, Prisma setup, database scripts, and a working starting point without making you assemble everything by hand.
+`create-prisma@next` gives you a project template, Prisma Next setup, database scripts, and a working starting point without making you assemble everything by hand.
 
 ## What It Does
 
 - creates a new app from a supported template
-- adds Prisma 7 dependencies for your database
-- scaffolds `prisma/schema.prisma`, `prisma/seed.ts`, and `prisma.config.ts`
-- writes a Prisma client singleton in the right place for the selected template
-- adds `db:generate`, `db:migrate`, and `db:seed` scripts
+- adds Prisma Next dependencies for PostgreSQL or MongoDB
+- scaffolds `prisma/contract.prisma` or `prisma/contract.ts`
+- scaffolds `prisma-next.config.ts`
+- writes a template-specific Prisma Next runtime helper
+- adds `contract:emit`, `db:init`, `db:update`, `migration:plan`, and `migration:apply` scripts
 - creates or updates `.env` with `DATABASE_URL`
-- can install dependencies and run `prisma generate` for you
+- can install dependencies and run `prisma-next contract emit`
+
+`db:init`, migrations, and seeding are never run automatically. They are shown only as manual follow-up commands.
 
 ## Quick Start
 
 Use the package runner you already have:
 
 ```bash
-npx create-prisma@latest
+npx create-prisma@next
 ```
 
 ```bash
-pnpm dlx create-prisma@latest
+pnpm dlx create-prisma@next
 ```
 
 ```bash
-yarn dlx create-prisma@latest
+yarn dlx create-prisma@next
 ```
 
 ```bash
-bunx create-prisma@latest
+bunx create-prisma@next
 ```
 
 ```bash
-deno run -A npm:create-prisma@latest
+deno run -A npm:create-prisma@next
 ```
 
 If you already have it available locally:
@@ -55,25 +58,37 @@ create-prisma
 Create a Hono app non-interactively:
 
 ```bash
-create-prisma --name my-api --template hono --provider postgresql
+create-prisma --name my-api --template hono --provider postgres
+```
+
+Create a MongoDB app:
+
+```bash
+create-prisma --name my-api --template hono --provider mongodb
 ```
 
 Scaffold into the current directory:
 
 ```bash
-create-prisma --name . --template hono --provider postgresql
+create-prisma --name . --template hono --provider postgres
 ```
 
-Create a monorepo with a shared Prisma package:
+Create a monorepo with a shared Prisma Next package:
 
 ```bash
-create-prisma --name my-monorepo --template turborepo --provider postgresql
+create-prisma --name my-monorepo --template turborepo --provider postgres
+```
+
+Use TypeScript contract authoring:
+
+```bash
+create-prisma --name my-app --template next --authoring typescript
 ```
 
 Use Prisma Postgres auto-provisioning:
 
 ```bash
-create-prisma --name my-app --template nest --provider postgresql --prisma-postgres
+create-prisma --name my-app --template nest --provider postgres --prisma-postgres
 ```
 
 ## Supported Templates
@@ -90,11 +105,8 @@ create-prisma --name my-app --template nest --provider postgresql --prisma-postg
 
 ## Supported Databases
 
-- `postgresql`
-- `mysql`
-- `sqlite`
-- `sqlserver`
-- `cockroachdb`
+- `postgres` / `postgresql`
+- `mongo` / `mongodb`
 
 ## Supported Package Managers
 
@@ -108,16 +120,20 @@ create-prisma --name my-app --template nest --provider postgresql --prisma-postg
 
 - `--name` project name or relative path
 - `--template` choose the template
-- `--provider` choose the database provider
+- `--provider postgres|postgresql|mongo|mongodb`
+- `--authoring psl|typescript`
 - `--package-manager` choose the package manager/runtime
 - `--schema-preset empty|basic`
+- `--database-url` set `DATABASE_URL`
 - `--yes` accept defaults and skip prompts
 - `--no-install` scaffold only
-- `--no-generate` skip `prisma generate`
+- `--no-emit` skip `prisma-next contract emit`
 - `--prisma-postgres` provision Prisma Postgres for PostgreSQL
 - `--skills --mcp --extension` enable optional add-ons
 - `--force` allow scaffolding into a non-empty directory
 - `--verbose` print full command output
+
+Generated Node-based Prisma Next projects document Node.js 24 LTS or newer.
 
 ## Add-ons
 
