@@ -17,15 +17,6 @@ export const createTemplates = [
   "tanstack-start",
   "turborepo",
 ] as const;
-export const createAddons = ["skills", "mcp", "extension"] as const;
-export const addonInstallScopes = ["project", "global"] as const;
-export const extensionTargets = ["vscode", "cursor", "windsurf"] as const;
-export const prismaSkillNames = [
-  "prisma-cli",
-  "prisma-client-api",
-  "prisma-database-setup",
-  "prisma-postgres",
-] as const;
 
 type NormalizedDatabaseProvider = (typeof databaseProviders)[number];
 type DatabaseProviderInput = (typeof databaseProviderInputs)[number];
@@ -53,14 +44,6 @@ export const AuthoringStyleSchema = z.enum(authoringStyles);
 export type AuthoringStyle = z.infer<typeof AuthoringStyleSchema>;
 export const CreateTemplateSchema = z.enum(createTemplates);
 export type CreateTemplate = z.infer<typeof CreateTemplateSchema>;
-export const CreateAddonSchema = z.enum(createAddons);
-export type CreateAddon = z.infer<typeof CreateAddonSchema>;
-export const AddonInstallScopeSchema = z.enum(addonInstallScopes);
-export type AddonInstallScope = z.infer<typeof AddonInstallScopeSchema>;
-export const ExtensionTargetSchema = z.enum(extensionTargets);
-export type ExtensionTarget = z.infer<typeof ExtensionTargetSchema>;
-export const PrismaSkillNameSchema = z.enum(prismaSkillNames);
-export type PrismaSkillName = z.infer<typeof PrismaSkillNameSchema>;
 
 export const DatabaseUrlSchema = z.string().trim().min(1, "Please enter a valid database URL");
 
@@ -102,9 +85,6 @@ export const CreateScaffoldOptionsSchema = z.object({
     .optional()
     .describe("Project name / directory"),
   template: CreateTemplateSchema.optional().describe("Project template"),
-  skills: z.boolean().optional().describe("Enable skills addon"),
-  mcp: z.boolean().optional().describe("Enable MCP addon"),
-  extension: z.boolean().optional().describe("Enable extension addon"),
   force: z.boolean().optional().describe("Allow scaffolding into a non-empty target directory"),
 });
 

@@ -132,21 +132,10 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 - `--no-install` scaffold only
 - `--no-emit` skip `prisma-next contract emit`
 - `--prisma-postgres` provision Prisma Postgres for PostgreSQL
-- `--skills --mcp --extension` enable optional add-ons
 - `--force` allow scaffolding into a non-empty directory
 - `--verbose` print full command output
 
 Generated Node-based Prisma Next projects document Node.js 24 LTS or newer.
-
-## Add-ons
-
-`create-prisma` can also help with a few optional extras:
-
-- Prisma skills for coding agents
-- Prisma MCP setup
-- Prisma IDE extension install
-
-These can be selected interactively or enabled with flags.
 
 ## Local Development
 

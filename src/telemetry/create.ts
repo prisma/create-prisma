@@ -7,25 +7,8 @@ export type CreateTelemetryFailureStage =
   | "validate_input"
   | "collect_context"
   | "scaffold_template"
-  | "addons"
   | "prisma_setup"
   | "unknown";
-
-function getRequestedAddons(input: CreateCommandInput): string[] {
-  const addons: string[] = [];
-
-  if (input.skills === true) {
-    addons.push("skills");
-  }
-  if (input.mcp === true) {
-    addons.push("mcp");
-  }
-  if (input.extension === true) {
-    addons.push("extension");
-  }
-
-  return addons;
-}
 
 function getTargetDirectoryState(context: CreatePromptContext): string {
   if (!context.targetPathState.exists) {
@@ -43,8 +26,6 @@ function getBaseCreateProperties(
   input: CreateCommandInput,
   context?: CreatePromptContext,
 ): Record<string, boolean | number | string | string[] | null> {
-  const resolvedAddons = context?.addonSetupContext?.addons ?? getRequestedAddons(input);
-
   return {
     command: "create",
     "uses-defaults": input.yes === true,
@@ -59,13 +40,6 @@ function getBaseCreateProperties(
     "should-emit": context?.prismaSetupContext.shouldEmit ?? input.emit ?? null,
     "uses-prisma-postgres":
       context?.prismaSetupContext.shouldUsePrismaPostgres ?? input.prismaPostgres ?? null,
-    addons: resolvedAddons,
-    "addon-count": resolvedAddons.length,
-    "addon-scope": context?.addonSetupContext?.scope ?? null,
-    "skills-count": context?.addonSetupContext?.skills.length ?? null,
-    "skills-agents-count": context?.addonSetupContext?.skillsAgents.length ?? null,
-    "mcp-agents-count": context?.addonSetupContext?.mcpAgents.length ?? null,
-    "extension-target-count": context?.addonSetupContext?.extensionTargets.length ?? null,
     "target-directory-state": context ? getTargetDirectoryState(context) : null,
   };
 }

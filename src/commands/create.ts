@@ -2,10 +2,15 @@ import { cancel, intro, isCancel, log, select, spinner, text } from "@clack/prom
 import fs from "fs-extra";
 import path from "node:path";
 
+import {
+  trackCreateCompleted,
+  trackCreateFailed,
+  type CreateTelemetryFailureStage,
+} from "../telemetry";
 import { scaffoldCreateTemplate } from "../templates/render-create-template";
 import { writeCreateTemplateDependencies } from "../tasks/install";
-import type { CreateAddonSetupContext } from "../tasks/setup-addons";
 import type { PrismaSetupContext } from "../tasks/setup-prisma";
+import { collectPrismaSetupContext, executePrismaSetupContext } from "../tasks/setup-prisma";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
@@ -13,16 +18,6 @@ import {
   type CreateTemplate,
   type SchemaPreset,
 } from "../types";
-import { collectPrismaSetupContext, executePrismaSetupContext } from "../tasks/setup-prisma";
-import {
-  collectCreateAddonSetupContext,
-  executeCreateAddonSetupContext,
-} from "../tasks/setup-addons";
-import {
-  trackCreateCompleted,
-  trackCreateFailed,
-  type CreateTelemetryFailureStage,
-} from "../telemetry";
 import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
@@ -42,7 +37,6 @@ export type CreatePromptContext = {
   template: CreateTemplate;
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
-  addonSetupContext?: CreateAddonSetupContext;
 };
 
 type ExecuteCreateContextResult =
@@ -247,8 +241,8 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
 async function collectCreateContext(
   input: CreateCommandInput,
 ): Promise<CreatePromptContext | undefined> {
-  const useDefaults = input.yes === true;
   const force = input.force === true;
+  const useDefaults = input.yes === true;
 
   const projectNameInput =
     input.name ?? (useDefaults ? DEFAULT_PROJECT_NAME : await promptForProjectName());
@@ -296,15 +290,6 @@ async function collectCreateContext(
     return;
   }
 
-  const addonSetupContext = await collectCreateAddonSetupContext(input, {
-    useDefaults,
-    provider: prismaSetupContext.databaseProvider,
-    shouldUsePrismaPostgres: prismaSetupContext.shouldUsePrismaPostgres,
-  });
-  if (addonSetupContext === undefined) {
-    return;
-  }
-
   return {
     targetDirectory,
     targetPathState,
@@ -312,7 +297,6 @@ async function collectCreateContext(
     template,
     projectPackageName: toPackageName(path.basename(targetDirectory)),
     prismaSetupContext,
-    addonSetupContext: addonSetupContext ?? undefined,
   };
 }
 
@@ -369,22 +353,6 @@ async function executeCreateContext(
     formatPathForDisplay(context.targetDirectory) === "."
       ? []
       : [`- cd ${formatPathForDisplay(context.targetDirectory)}`];
-  if (context.addonSetupContext) {
-    try {
-      await executeCreateAddonSetupContext({
-        context: context.addonSetupContext,
-        packageManager: context.prismaSetupContext.packageManager,
-        projectDir: context.targetDirectory,
-        verbose: context.prismaSetupContext.verbose,
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        stage: "addons",
-        error,
-      };
-    }
-  }
 
   try {
     const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
