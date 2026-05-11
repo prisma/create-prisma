@@ -23,7 +23,7 @@ app.get("/users", async (c) => {
   });
 
   if (!users) {
-    return c.json({ error: "Could not query users yet. Run contract:emit and db:init first." }, 500);
+    return c.json({ error: "Could not query users yet. Run contract:emit and apply your schema first." }, 500);
   }
 
   return c.json(users);

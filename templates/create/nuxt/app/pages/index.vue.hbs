@@ -48,7 +48,7 @@ function formatCreatedAt(value: string): string {
       </div>
 
       <p v-if="data?.error" class="empty">
-        \{{ data.error }} Run <code>contract:emit</code> and <code>db:init</code>, then refresh after applying your schema.
+        \{{ data.error }} Run <code>contract:emit</code> and apply your schema, then refresh.
       </p>
       <p v-else-if="!data?.users?.length" class="empty">
         No users yet. Add rows after applying your first migration.

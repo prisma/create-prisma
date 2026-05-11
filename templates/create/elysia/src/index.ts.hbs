@@ -30,7 +30,7 @@ const app = new Elysia({{#if (eq packageManager "deno")}}{{else}}{ adapter: node
 
     if (!users) {
       set.status = 500;
-      return { error: "Could not query users yet. Run contract:emit and db:init first." };
+      return { error: "Could not query users yet. Run contract:emit and apply your schema first." };
     }
 
     return users;

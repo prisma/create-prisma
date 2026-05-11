@@ -34,8 +34,8 @@
 
 		{#if !data.users}
 			<p class="empty">
-				Could not query users yet. Run <code>contract:emit</code> and <code>db:init</code>, then
-				refresh after applying your schema.
+				Could not query users yet. Run <code>contract:emit</code> and apply your schema, then
+				refresh.
 			</p>
 		{:else if data.users.length === 0}
 			<p class="empty">No users yet. Add rows after applying your first migration.</p>
@@ -209,7 +209,7 @@
 			<li>
 				<div>
 					<strong>Manual database setup</strong>
-					<p>Run <code>db:init</code> and migrations when you are ready.</p>
+					<p>Run the schema setup commands when you are ready.</p>
 				</div>
 			</li>
 			<li>

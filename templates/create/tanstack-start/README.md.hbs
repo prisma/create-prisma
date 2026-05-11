@@ -20,10 +20,15 @@ Prisma Next setup is scaffolded in:
 Database helper scripts are added to `package.json`:
 
 - `{{runScriptCommand packageManager "contract:emit"}}` - emit contract artifacts after contract changes
+{{#if (eq provider "mongo")}}
+- `{{runScriptCommand packageManager "migration:plan"}}` - create a MongoDB migration plan
+- `{{runScriptCommand packageManager "migration:apply"}}` - apply the planned MongoDB migration
+{{else}}
 - `{{runScriptCommand packageManager "db:init"}}` - initialize database state manually
 - `{{runScriptCommand packageManager "db:update"}}` - update database state manually
 - `{{runScriptCommand packageManager "migration:plan"}}` - create a migration plan
 - `{{runScriptCommand packageManager "migration:apply"}}` - apply a planned migration
+{{/if}}
 
 Node-based Prisma Next projects expect Node.js 24 LTS or newer.
 {{#if (eq schemaPreset "basic")}}

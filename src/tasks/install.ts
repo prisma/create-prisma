@@ -8,12 +8,7 @@ import {
   type AvailableDependency,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
-import type {
-  AuthoringStyle,
-  CreateTemplate,
-  DatabaseProvider,
-  PackageManager,
-} from "../types";
+import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { getInstallArgs } from "../utils/package-manager";
 
 function getPrismaNextScriptMap(packageManager: PackageManager) {

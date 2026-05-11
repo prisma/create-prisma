@@ -15,7 +15,9 @@ Scaffold a new app with Prisma Next already wired up.
 - creates or updates `.env` with `DATABASE_URL`
 - can install dependencies and run `prisma-next contract emit`
 
-`db:init`, migrations, and seeding are never run automatically. They are shown only as manual follow-up commands.
+`db:init`, migrations, and seeding are never run automatically. PostgreSQL projects show
+`db:init` as a manual follow-up command; MongoDB projects show the migration plan/apply path
+for initial schema setup.
 
 ## Quick Start
 

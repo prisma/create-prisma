@@ -678,7 +678,9 @@ function buildNextStepsForContext(opts: {
   if (!didEmitContract || !context.shouldEmit) {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "contract:emit")}`);
   }
-  nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:init")}`);
+  if (context.databaseProvider === "postgres") {
+    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:init")}`);
+  }
   nextSteps.push(
     `- ${getRunScriptCommand(context.packageManager, "migration:plan")} -- --name describe-change`,
   );

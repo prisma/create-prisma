@@ -33,8 +33,8 @@ export default async function Home() {
 
         {!users ? (
           <p className="empty">
-            Could not query users yet. Run <code>contract:emit</code> and <code>db:init</code>,
-            then refresh after applying your schema.
+            Could not query users yet. Run <code>contract:emit</code> and apply your schema,
+            then refresh.
           </p>
         ) : users.length === 0 ? (
           <p className="empty">No users yet. Add rows after applying your first migration.</p>
@@ -82,7 +82,7 @@ export default async function Home() {
           <li>
             <div>
               <strong>Manual database setup</strong>
-              <p>Run <code>db:init</code> and migrations when you are ready.</p>
+              <p>Run the schema setup commands when you are ready.</p>
             </div>
           </li>
           <li>
