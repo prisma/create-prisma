@@ -77,7 +77,8 @@ const DEFAULT_AUTHORING: AuthoringStyle = "psl";
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
 const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
-const DEFAULT_PRISMA_POSTGRES = false;
+const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
+const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
 const MONGO_DOCKER_COMPOSE = `services:
   mongodb:
     image: mongo:latest
@@ -188,7 +189,7 @@ async function promptForPrismaPostgres(): Promise<boolean | undefined> {
     message: "Provision a Prisma Postgres database?",
     active: "Provision Prisma Postgres",
     inactive: "Use my own database",
-    initialValue: DEFAULT_PRISMA_POSTGRES,
+    initialValue: DEFAULT_INTERACTIVE_PRISMA_POSTGRES,
   });
 
   if (isCancel(shouldUsePrismaPostgres)) {
@@ -311,7 +312,7 @@ export async function collectPrismaSetupContext(
     input.prismaPostgres ??
     (databaseProvider === "postgres" && !databaseUrl && !useDefaults
       ? await promptForPrismaPostgres()
-      : DEFAULT_PRISMA_POSTGRES);
+      : DEFAULT_AUTOMATED_PRISMA_POSTGRES);
   if (shouldUsePrismaPostgres === undefined) {
     return;
   }
