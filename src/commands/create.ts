@@ -352,7 +352,12 @@ async function executeCreateContext(
   const nextSteps =
     formatPathForDisplay(context.targetDirectory) === "."
       ? []
-      : [`- cd ${formatPathForDisplay(context.targetDirectory)}`];
+      : [
+          {
+            command: `cd ${formatPathForDisplay(context.targetDirectory)}`,
+            description: "Enter your new project directory.",
+          },
+        ];
 
   try {
     const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {

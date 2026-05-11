@@ -1,4 +1,4 @@
-import { cancel, confirm, isCancel, log, outro, select, spinner } from "@clack/prompts";
+import { cancel, confirm, isCancel, log, note, outro, select, spinner } from "@clack/prompts";
 import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
@@ -31,7 +31,7 @@ import {
 type EnvWriteMode = "keep-existing" | "upsert";
 
 type PrismaSetupRunOptions = {
-  prependNextSteps?: string[];
+  prependNextSteps?: NextStep[];
   projectDir?: string;
   includeDevNextStep?: boolean;
 };
@@ -45,6 +45,11 @@ type PrismaPostgresProvisionResult = {
 type PrismaNextEmitResult = {
   didEmitContract: boolean;
   warning?: string;
+};
+
+type NextStep = {
+  command: string;
+  description: string;
 };
 
 export type PrismaSetupContext = {
@@ -776,32 +781,60 @@ function buildNextStepsForContext(opts: {
   context: PrismaSetupContext;
   options: PrismaSetupRunOptions;
   didEmitContract: boolean;
-}): string[] {
+}): NextStep[] {
   const { context, options, didEmitContract } = opts;
-  const nextSteps: string[] = [...(options.prependNextSteps ?? [])];
+  const nextSteps: NextStep[] = [...(options.prependNextSteps ?? [])];
 
   if (!context.shouldInstall) {
-    nextSteps.push(`- ${getInstallCommand(context.packageManager)}`);
+    nextSteps.push({
+      command: getInstallCommand(context.packageManager),
+      description: "Install the project dependencies.",
+    });
   }
   if (!didEmitContract || !context.shouldEmit) {
-    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "contract:emit")}`);
+    nextSteps.push({
+      command: getRunScriptCommand(context.packageManager, "contract:emit"),
+      description: "Emit contract.json and TypeScript types from your Prisma Next contract.",
+    });
   }
   if (context.databaseProvider === "postgres") {
-    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:init")}`);
+    nextSteps.push({
+      command: getRunScriptCommand(context.packageManager, "db:init"),
+      description: "Create the initial PostgreSQL database objects and sign the database.",
+    });
   }
   if (context.databaseProvider === "mongo" && !context.databaseUrl) {
-    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:up")}`);
+    nextSteps.push({
+      command: getRunScriptCommand(context.packageManager, "db:up"),
+      description: "Start the local MongoDB replica set with Docker.",
+    });
   }
-  nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "migration:plan")}`);
-  nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "migration:apply")}`);
+  nextSteps.push({
+    command: getRunScriptCommand(context.packageManager, "migration:plan"),
+    description: "Compare the contract to the database and write a migration plan.",
+  });
+  nextSteps.push({
+    command: getRunScriptCommand(context.packageManager, "migration:apply"),
+    description: "Apply the planned migration to the database.",
+  });
   if (context.schemaPreset === "basic") {
-    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:seed")}`);
+    nextSteps.push({
+      command: getRunScriptCommand(context.packageManager, "db:seed"),
+      description: "Insert the sample user and post data from prisma/seed.ts.",
+    });
   }
   if (options.includeDevNextStep) {
-    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "dev")}`);
+    nextSteps.push({
+      command: getRunScriptCommand(context.packageManager, "dev"),
+      description: "Start the development server.",
+    });
   }
 
   return nextSteps;
+}
+
+function formatNextSteps(nextSteps: NextStep[]): string {
+  return nextSteps.map((step) => `${step.command}\n  ${step.description}`).join("\n\n");
 }
 
 export async function executePrismaSetupContext(
@@ -847,12 +880,12 @@ export async function executePrismaSetupContext(
     didEmitContract: emitResult.didEmitContract,
   });
 
-  const warningSection = warningLines.length > 0 ? `\n\n${warningLines.join("\n")}` : "";
+  if (warningLines.length > 0) {
+    note(warningLines.map((line) => line.replace(/^- /, "")).join("\n"), "Heads up");
+  }
 
-  outro(`Setup complete.${warningSection}
-
-Next steps:
-${nextSteps.join("\n")}`);
+  note(formatNextSteps(nextSteps), "Next steps");
+  outro("Setup complete.");
 
   return true;
 }
