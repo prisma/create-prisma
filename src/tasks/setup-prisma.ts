@@ -152,8 +152,8 @@ async function promptForAuthoringStyle(): Promise<AuthoringStyle | undefined> {
     message: "Choose contract authoring style",
     initialValue: DEFAULT_AUTHORING,
     options: [
-      { value: "psl", label: "PSL", hint: "Prisma Schema Language, default" },
-      { value: "typescript", label: "TypeScript" },
+      { value: "psl", label: "PSL", hint: "Write prisma/contract.prisma, default" },
+      { value: "typescript", label: "TypeScript", hint: "Write prisma/contract.ts with builders" },
     ],
   });
 
