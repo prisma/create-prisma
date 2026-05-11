@@ -77,6 +77,7 @@ const DEFAULT_AUTHORING: AuthoringStyle = "psl";
 const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
 const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
+const DEFAULT_PRISMA_POSTGRES = false;
 const MONGO_DOCKER_COMPOSE = `services:
   mongodb:
     image: mongo:latest
@@ -180,6 +181,22 @@ async function promptForAuthoringStyle(): Promise<AuthoringStyle | undefined> {
   }
 
   return AuthoringStyleSchema.parse(authoring);
+}
+
+async function promptForPrismaPostgres(): Promise<boolean | undefined> {
+  const shouldUsePrismaPostgres = await confirm({
+    message: "Provision a Prisma Postgres database?",
+    active: "Provision Prisma Postgres",
+    inactive: "Use my own database",
+    initialValue: DEFAULT_PRISMA_POSTGRES,
+  });
+
+  if (isCancel(shouldUsePrismaPostgres)) {
+    cancel("Operation cancelled.");
+    return undefined;
+  }
+
+  return Boolean(shouldUsePrismaPostgres);
 }
 
 function getPackageManagerHint(
@@ -289,15 +306,15 @@ export async function collectPrismaSetupContext(
     return;
   }
 
-  const authoring =
-    input.authoring ?? (useDefaults ? DEFAULT_AUTHORING : await promptForAuthoringStyle());
-  if (!authoring) {
+  const databaseUrl = input.databaseUrl;
+  const shouldUsePrismaPostgres =
+    input.prismaPostgres ??
+    (databaseProvider === "postgres" && !databaseUrl && !useDefaults
+      ? await promptForPrismaPostgres()
+      : DEFAULT_PRISMA_POSTGRES);
+  if (shouldUsePrismaPostgres === undefined) {
     return;
   }
-
-  const schemaPreset = input.schemaPreset ?? options.defaultSchemaPreset ?? DEFAULT_SCHEMA_PRESET;
-  const databaseUrl = input.databaseUrl;
-  const shouldUsePrismaPostgres = input.prismaPostgres === true;
 
   if (shouldUsePrismaPostgres && databaseProvider !== "postgres") {
     cancel("--prisma-postgres is only supported with --provider postgres.");
@@ -307,6 +324,14 @@ export async function collectPrismaSetupContext(
     cancel("Use either --database-url or --prisma-postgres, not both.");
     return;
   }
+
+  const authoring =
+    input.authoring ?? (useDefaults ? DEFAULT_AUTHORING : await promptForAuthoringStyle());
+  if (!authoring) {
+    return;
+  }
+
+  const schemaPreset = input.schemaPreset ?? options.defaultSchemaPreset ?? DEFAULT_SCHEMA_PRESET;
 
   const detectedPackageManager = await detectPackageManager(projectDir);
   const packageManager =
