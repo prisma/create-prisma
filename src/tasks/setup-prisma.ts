@@ -23,8 +23,8 @@ import {
 import {
   detectPackageManager,
   getInstallCommand,
-  getPackageExecutionArgs,
-  getPackageExecutionCommand,
+  getLocalPackageBinaryArgs,
+  getLocalPackageBinaryCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
 
@@ -676,20 +676,31 @@ async function finalizePrismaFilesForContext(
 }
 
 function getPrismaNextCliCommand(packageManager: PackageManager, prismaNextArgs: string[]): string {
-  return getPackageExecutionCommand(packageManager, [
-    `prisma-next@${dependencyVersionMap["prisma-next"]}`,
-    ...prismaNextArgs,
-  ]);
+  if (packageManager === "deno") {
+    return `deno run -A --env-file=.env npm:prisma-next@${dependencyVersionMap["prisma-next"]} ${prismaNextArgs.join(" ")}`;
+  }
+
+  return getLocalPackageBinaryCommand(packageManager, "prisma-next", prismaNextArgs);
 }
 
 function getPrismaNextCliArgs(
   packageManager: PackageManager,
   prismaNextArgs: string[],
 ): { command: string; args: string[] } {
-  return getPackageExecutionArgs(packageManager, [
-    `prisma-next@${dependencyVersionMap["prisma-next"]}`,
-    ...prismaNextArgs,
-  ]);
+  if (packageManager === "deno") {
+    return {
+      command: "deno",
+      args: [
+        "run",
+        "-A",
+        "--env-file=.env",
+        `npm:prisma-next@${dependencyVersionMap["prisma-next"]}`,
+        ...prismaNextArgs,
+      ],
+    };
+  }
+
+  return getLocalPackageBinaryArgs(packageManager, "prisma-next", prismaNextArgs);
 }
 
 async function emitPrismaNextContractForContext(

@@ -26,7 +26,7 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
   }
 
   if (packageManager === "bun") {
-    const prismaNextCli = "bun ./node_modules/.bin/prisma-next";
+    const prismaNextCli = "bun prisma-next";
 
     return {
       "contract:emit": `${prismaNextCli} contract emit`,

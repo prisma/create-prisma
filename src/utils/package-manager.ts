@@ -306,6 +306,35 @@ export function getPackageExecutionCommand(
   return [execution.command, ...execution.args].join(" ");
 }
 
+export function getLocalPackageBinaryArgs(
+  packageManager: PackageManager,
+  binaryName: string,
+  binaryArgs: string[],
+): CommandAndArgs {
+  switch (packageManager) {
+    case "pnpm":
+      return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
+    case "yarn":
+      return { command: "yarn", args: [binaryName, ...binaryArgs] };
+    case "bun":
+      return { command: "bun", args: [binaryName, ...binaryArgs] };
+    case "deno":
+      return { command: "deno", args: ["run", "-A", `npm:${binaryName}`, ...binaryArgs] };
+    case "npm":
+    default:
+      return { command: "npm", args: ["exec", binaryName, "--", ...binaryArgs] };
+  }
+}
+
+export function getLocalPackageBinaryCommand(
+  packageManager: PackageManager,
+  binaryName: string,
+  binaryArgs: string[],
+): string {
+  const execution = getLocalPackageBinaryArgs(packageManager, binaryName, binaryArgs);
+  return [execution.command, ...execution.args].join(" ");
+}
+
 export function getPrismaCliArgs(
   packageManager: PackageManager,
   prismaArgs: string[],
