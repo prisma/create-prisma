@@ -1,5 +1,9 @@
 {{#if (eq packageManager "deno")}}
 {
-  "nodeModulesDir": "auto"
+  "nodeModulesDir": "manual",
+  "workspace": [
+    "apps/*",
+    "packages/*"
+  ]
 }
 {{/if}}

@@ -57,23 +57,33 @@ function sortRecord(record: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+function getGeneratedContractTypePackages(provider: DatabaseProvider): AvailableDependency[] {
+  if (provider === "mongo") {
+    return ["@prisma-next/adapter-mongo", "@prisma-next/contract", "@prisma-next/mongo-contract"];
+  }
+
+  return [
+    "@prisma-next/adapter-postgres",
+    "@prisma-next/contract",
+    "@prisma-next/sql-contract",
+    "@prisma-next/target-postgres",
+  ];
+}
+
 function getTypeScriptContractPackages(provider: DatabaseProvider): AvailableDependency[] {
   if (provider === "mongo") {
     return [
-      "@prisma-next/adapter-mongo",
+      ...getGeneratedContractTypePackages(provider),
       "@prisma-next/family-mongo",
-      "@prisma-next/mongo-contract",
       "@prisma-next/mongo-contract-ts",
       "@prisma-next/target-mongo",
     ];
   }
 
   return [
-    "@prisma-next/adapter-postgres",
+    ...getGeneratedContractTypePackages(provider),
     "@prisma-next/family-sql",
-    "@prisma-next/sql-contract",
     "@prisma-next/sql-contract-ts",
-    "@prisma-next/target-postgres",
   ];
 }
 
@@ -161,6 +171,8 @@ export async function writePrismaDependencies(
   const devDependencies: string[] = ["prisma-next", "@types/node"];
   if (authoring === "typescript") {
     devDependencies.push(...getTypeScriptContractPackages(provider));
+  } else if (packageManager === "deno") {
+    devDependencies.push(...getGeneratedContractTypePackages(provider));
   }
   const prismaScriptMap = getPrismaNextScriptMap(packageManager);
 
@@ -202,8 +214,16 @@ export async function installProjectDependencies(
 ): Promise<void> {
   const verbose = options.verbose === true;
   const installCommand = getInstallArgs(packageManager);
+  const env =
+    packageManager === "yarn"
+      ? {
+          YARN_ENABLE_IMMUTABLE_INSTALLS: "false",
+        }
+      : undefined;
+
   await execa(installCommand.command, installCommand.args, {
     cwd: projectDir,
+    env,
     stdio: verbose ? "inherit" : "pipe",
   });
 }
