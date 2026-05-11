@@ -134,8 +134,8 @@ async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined
     message: "Select your database",
     initialValue: DEFAULT_DATABASE_PROVIDER,
     options: [
-      { value: "postgres", label: "PostgreSQL", hint: "Default" },
-      { value: "mongo", label: "MongoDB" },
+      { value: "postgres", label: "PostgreSQL", hint: "Default relational database" },
+      { value: "mongo", label: "MongoDB", hint: "Document database with local Docker helper" },
     ],
   });
 
@@ -169,19 +169,16 @@ function getPackageManagerHint(
   option: PackageManager,
   detected: PackageManager,
 ): string | undefined {
-  if (option === detected) {
-    return "Detected";
-  }
+  const hintByPackageManager = {
+    npm: "Node.js default",
+    pnpm: "Fast, disk-efficient Node.js package manager",
+    yarn: "Yarn package manager",
+    bun: "Fast runtime + package manager",
+    deno: "Deno runtime + task runner",
+  } satisfies Record<PackageManager, string>;
 
-  if (option === "bun") {
-    return "Fast runtime + package manager";
-  }
-
-  if (option === "deno") {
-    return "Runtime + package manager";
-  }
-
-  return undefined;
+  const hint = hintByPackageManager[option];
+  return option === detected ? `Detected; ${hint}` : hint;
 }
 
 async function promptForPackageManager(
@@ -232,7 +229,9 @@ async function promptForDependencyInstall(
 ): Promise<boolean | undefined> {
   const installCommand = getInstallCommand(packageManager);
   const shouldInstall = await confirm({
-    message: `Install dependencies now with ${installCommand}?`,
+    message: `Install dependencies now with ${installCommand}? You can run it later.`,
+    active: "Install now",
+    inactive: "Skip for now",
     initialValue: true,
   });
 
