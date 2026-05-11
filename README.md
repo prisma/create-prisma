@@ -11,7 +11,7 @@ Scaffold a new app with Prisma Next already wired up.
 - scaffolds `prisma/contract.prisma` or `prisma/contract.ts`
 - scaffolds `prisma-next.config.ts`
 - writes a template-specific Prisma Next runtime helper
-- adds `contract:emit`, `db:init`, `db:update`, `migration:plan`, and `migration:apply` scripts
+- adds `contract:emit`, `db:init`, `db:update`, `db:seed`, `migration:plan`, and `migration:apply` scripts
 - adds `db:up` / `db:down` and `docker-compose.yml` for default MongoDB projects
 - creates or updates `.env` with `DATABASE_URL`
 - can install dependencies and run `prisma-next contract emit`

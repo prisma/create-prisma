@@ -19,6 +19,7 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
       "contract:emit": `${prismaNextCli} contract emit`,
       "db:init": `${prismaNextCli} db init`,
       "db:update": `${prismaNextCli} db update`,
+      "db:seed": "deno run -A --env-file=.env prisma/seed.ts",
       "migration:plan": `${prismaNextCli} migration plan`,
       "migration:apply": `${prismaNextCli} migration apply`,
     } as const;
@@ -31,6 +32,7 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
       "contract:emit": `${prismaNextCli} contract emit`,
       "db:init": `${prismaNextCli} db init`,
       "db:update": `${prismaNextCli} db update`,
+      "db:seed": "bun --env-file=.env prisma/seed.ts",
       "migration:plan": `${prismaNextCli} migration plan`,
       "migration:apply": `${prismaNextCli} migration apply`,
     } as const;
@@ -40,6 +42,7 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
     "contract:emit": "prisma-next contract emit",
     "db:init": "prisma-next db init",
     "db:update": "prisma-next db update",
+    "db:seed": "tsx prisma/seed.ts",
     "migration:plan": "prisma-next migration plan",
     "migration:apply": "prisma-next migration apply",
   } as const;

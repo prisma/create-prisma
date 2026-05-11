@@ -37,7 +37,7 @@ export default async function Home() {
             then refresh.
           </p>
         ) : users.length === 0 ? (
-          <p className="empty">No users yet. Add rows after applying your first migration.</p>
+          <p className="empty">No users yet. Run db:seed after applying your first migration.</p>
         ) : (
           <ul className="users">
             {users.map((user) => (

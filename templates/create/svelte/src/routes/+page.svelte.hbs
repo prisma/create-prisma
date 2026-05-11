@@ -38,7 +38,7 @@
 				refresh.
 			</p>
 		{:else if data.users.length === 0}
-			<p class="empty">No users yet. Add rows after applying your first migration.</p>
+			<p class="empty">No users yet. Run db:seed after applying your first migration.</p>
 		{:else}
 			<ul class="users">
 				{#each data.users as user}

@@ -772,6 +772,9 @@ function buildNextStepsForContext(opts: {
   }
   nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "migration:plan")}`);
   nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "migration:apply")}`);
+  if (context.schemaPreset === "basic") {
+    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:seed")}`);
+  }
   if (options.includeDevNextStep) {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "dev")}`);
   }

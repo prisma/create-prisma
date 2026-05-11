@@ -44,7 +44,7 @@ const users = await listUsers(10).catch(() => undefined);
             then refresh.
           </p>
         ) : users.length === 0 ? (
-          <p class="empty">No users yet. Add rows after applying your first migration.</p>
+          <p class="empty">No users yet. Run db:seed after applying your first migration.</p>
         ) : (
           <ul class="users">
             {users.map((user) => (

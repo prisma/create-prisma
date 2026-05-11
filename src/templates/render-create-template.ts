@@ -9,6 +9,7 @@ import { renderTemplateTree, resolveTemplatesDir } from "./shared";
 
 type CreateTemplateContext = {
   projectName: string;
+  template: CreateTemplate;
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   schemaPreset: SchemaPreset;
@@ -19,8 +20,13 @@ function getCreateTemplateDir(template: CreateTemplate): string {
   return resolveTemplatesDir(`templates/create/${template}`);
 }
 
+function getCreateSharedTemplateDir(): string {
+  return resolveTemplatesDir("templates/create/_shared");
+}
+
 function createTemplateContext(
   projectName: string,
+  template: CreateTemplate,
   provider: DatabaseProvider,
   authoring: AuthoringStyle,
   schemaPreset: SchemaPreset,
@@ -28,6 +34,7 @@ function createTemplateContext(
 ): CreateTemplateContext {
   return {
     projectName,
+    template,
     provider,
     authoring,
     schemaPreset,
@@ -47,13 +54,20 @@ export async function scaffoldCreateTemplate(opts: {
   const { projectDir, projectName, template, provider, authoring, schemaPreset, packageManager } =
     opts;
   const templateRoot = getCreateTemplateDir(template);
+  const sharedTemplateRoot = getCreateSharedTemplateDir();
   const context = createTemplateContext(
     projectName,
+    template,
     provider,
     authoring,
     schemaPreset,
     packageManager,
   );
+  await renderTemplateTree<CreateTemplateContext>({
+    templateRoot: sharedTemplateRoot,
+    outputDir: projectDir,
+    context,
+  });
   await renderTemplateTree<CreateTemplateContext>({
     templateRoot,
     outputDir: projectDir,
