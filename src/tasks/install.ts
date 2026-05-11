@@ -2,7 +2,6 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { getDenoPrismaSpecifier } from "../utils/package-manager";
 import {
   dependencyVersionMap,
   getCreateTemplateDependencies,
@@ -11,37 +10,38 @@ import {
 import { getDbPackages } from "../constants/db-packages";
 import type { CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { getInstallArgs } from "../utils/package-manager";
-import { requiresDotenvConfigImport } from "../utils/runtime";
 
-function getPrismaScriptMap(packageManager: PackageManager) {
+function getPrismaNextScriptMap(packageManager: PackageManager) {
   if (packageManager === "deno") {
-    const prismaSpecifier = getDenoPrismaSpecifier();
-    const prismaCli = `deno run -A --env-file=.env ${prismaSpecifier}`;
+    const prismaNextCli = `deno run -A --env-file=.env npm:prisma-next@${dependencyVersionMap["prisma-next"]}`;
 
     return {
-      "db:generate": `${prismaCli} generate`,
-      "db:push": `${prismaCli} db push`,
-      "db:migrate": `${prismaCli} migrate dev`,
-      "db:seed": `${prismaCli} db seed`,
+      "contract:emit": `${prismaNextCli} contract emit`,
+      "db:init": `${prismaNextCli} db init`,
+      "db:update": `${prismaNextCli} db update`,
+      "migration:plan": `${prismaNextCli} migration plan`,
+      "migration:apply": `${prismaNextCli} migration apply`,
     } as const;
   }
 
   if (packageManager === "bun") {
-    const prismaCli = "bun --env-file=.env ./node_modules/.bin/prisma";
+    const prismaNextCli = "bun --env-file=.env ./node_modules/.bin/prisma-next";
 
     return {
-      "db:generate": `${prismaCli} generate`,
-      "db:push": `${prismaCli} db push`,
-      "db:migrate": `${prismaCli} migrate dev`,
-      "db:seed": `${prismaCli} db seed`,
+      "contract:emit": `${prismaNextCli} contract emit`,
+      "db:init": `${prismaNextCli} db init`,
+      "db:update": `${prismaNextCli} db update`,
+      "migration:plan": `${prismaNextCli} migration plan`,
+      "migration:apply": `${prismaNextCli} migration apply`,
     } as const;
   }
 
   return {
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:seed": "prisma db seed",
+    "contract:emit": "prisma-next contract emit",
+    "db:init": "prisma-next db init",
+    "db:update": "prisma-next db update",
+    "migration:plan": "prisma-next migration plan",
+    "migration:apply": "prisma-next migration apply",
   } as const;
 }
 
@@ -55,43 +55,6 @@ function unique(items: string[]): string[] {
 
 function sortRecord(record: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
-}
-
-async function projectContainsText(projectDir: string, text: string): Promise<boolean> {
-  const directories = [projectDir];
-
-  while (directories.length > 0) {
-    const currentDirectory = directories.pop();
-    if (!currentDirectory) {
-      continue;
-    }
-
-    const entries = await fs.readdir(currentDirectory, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (entry.name === "node_modules" || entry.name === ".git") {
-        continue;
-      }
-
-      const entryPath = path.join(currentDirectory, entry.name);
-
-      if (entry.isDirectory()) {
-        directories.push(entryPath);
-        continue;
-      }
-
-      if (!entry.isFile() || !/\.(c|m)?[jt]sx?$/.test(entry.name)) {
-        continue;
-      }
-
-      const content = await fs.readFile(entryPath, "utf8");
-      if (content.includes(text)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
 }
 
 export async function addPackageDependency(opts: {
@@ -173,21 +136,9 @@ export async function writePrismaDependencies(
   packageManager: PackageManager,
   projectDir = process.cwd(),
 ): Promise<void> {
-  const dependencies: string[] = ["@prisma/client"];
-  const devDependencies: string[] = ["prisma"];
-  dependencies.push(getDbPackages(provider, packageManager));
-  if (provider === "sqlite") {
-    dependencies.push("@libsql/client");
-  }
-
-  if (
-    requiresDotenvConfigImport(packageManager) ||
-    (await projectContainsText(projectDir, "dotenv/config"))
-  ) {
-    dependencies.push("dotenv");
-  }
-
-  const prismaScriptMap = getPrismaScriptMap(packageManager);
+  const dependencies: string[] = [getDbPackages(provider, packageManager), "dotenv"];
+  const devDependencies: string[] = ["prisma-next", "@types/node"];
+  const prismaScriptMap = getPrismaNextScriptMap(packageManager);
 
   await addPackageDependency({
     dependencies,

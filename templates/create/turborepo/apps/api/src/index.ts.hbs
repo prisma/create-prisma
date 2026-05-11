@@ -4,7 +4,7 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 {{#if (eq schemaPreset "basic")}}
-import { prisma } from "@repo/db";
+import { listUsers } from "@repo/db";
 {{/if}}
 
 const app = new Hono();
@@ -18,22 +18,15 @@ app.get("/", (c) => {
 {{#if (eq schemaPreset "basic")}}
 
 app.get("/users", async (c) => {
-  const users = await prisma.user
-    .findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
-    .catch((error) => {
-      console.error("Failed to query users:", error);
-      return undefined;
-    });
+  const users = await listUsers(10).catch((error) => {
+    console.error("Failed to query users:", error);
+    return undefined;
+  });
 
   if (!users) {
     return c.json(
       {
-        error: "Could not query users yet. Run db:migrate and db:seed first.",
+        error: "Could not query users yet. Run contract:emit and db:init first.",
       },
       500
     );

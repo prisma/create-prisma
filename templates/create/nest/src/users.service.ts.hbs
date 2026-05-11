@@ -8,12 +8,7 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll() {
-    return this.prisma.user.findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    return this.prisma.listUsers(10);
   }
 }
 {{/if}}

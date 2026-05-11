@@ -19,10 +19,11 @@
     "dev": "turbo run dev --filter=@repo/api",
     "typecheck": "turbo run typecheck",
     {{/if}}
-    "db:generate": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:generate"}}",
-    "db:push": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:push"}}",
-    "db:migrate": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:migrate"}}",
-    "db:seed": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:seed"}}"
+    "contract:emit": "{{runScriptInDirectoryCommand packageManager "packages/db" "contract:emit"}}",
+    "db:init": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:init"}}",
+    "db:update": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:update"}}",
+    "migration:plan": "{{runScriptInDirectoryCommand packageManager "packages/db" "migration:plan"}}",
+    "migration:apply": "{{runScriptInDirectoryCommand packageManager "packages/db" "migration:apply"}}"
   },
   "devDependencies": {
     "turbo": "^2.5.6"

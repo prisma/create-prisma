@@ -1,34 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 {{#if (eq schemaPreset "basic")}}
-import { prisma } from "../lib/prisma.server";
+import { listUsers as listStarterUsers } from "../lib/prisma.server";
 {{/if}}
 
 {{#if (eq schemaPreset "basic")}}
-function isBootstrapQueryError(error: unknown): error is { code?: string } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "P2021"
-  );
-}
-
 const listUsers = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    return await prisma.user.findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-  } catch (error) {
-    if (isBootstrapQueryError(error)) {
-      return undefined;
-    }
-
-    throw error;
-  }
+  return listStarterUsers(10)
+    .then((rows) =>
+      rows.map((user) => ({
+        ...user,
+        createdAt: user.createdAt?.toISOString() ?? null,
+      }))
+    )
+    .catch(() => undefined);
 });
 {{/if}}
 
@@ -52,11 +37,11 @@ function Home() {
   return (
     <main className="shell">
       <div className="hero">
-        <p className="eyebrow">TanStack Start + Prisma 7</p>
+        <p className="eyebrow">TanStack Start + Prisma Next</p>
 {{#if (eq schemaPreset "basic")}}
         <h1>Users from your database, loaded through a server function.</h1>
         <p className="lede">
-          This route uses TanStack Start&apos;s server function API and the Prisma client in{" "}
+          This route uses TanStack Start&apos;s server function API and the Prisma Next helper in{" "}
           <code>src/lib/prisma.server.ts</code>.
         </p>
       </div>
@@ -69,11 +54,11 @@ function Home() {
 
         {!users ? (
           <p className="empty">
-            Could not query users yet. Run <code>db:migrate</code>, then <code>db:seed</code>,
-            then refresh.
+            Could not query users yet. Run <code>contract:emit</code> and <code>db:init</code>,
+            then refresh after applying your schema.
           </p>
         ) : users.length === 0 ? (
-          <p className="empty">No users yet. Run <code>db:seed</code> after your first migration.</p>
+          <p className="empty">No users yet. Add rows after applying your first migration.</p>
         ) : (
           <ul className="users">
             {users.map((user) => (
@@ -82,9 +67,13 @@ function Home() {
                   <strong>{user.name ?? "Unnamed user"}</strong>
                   <p>{user.email}</p>
                 </div>
-                <time dateTime={user.createdAt.toISOString()}>
-                  {formatter.format(user.createdAt)}
-                </time>
+                {user.createdAt ? (
+                  <time dateTime={user.createdAt}>
+                    {formatter.format(new Date(user.createdAt))}
+                  </time>
+                ) : (
+                  <span className="empty">No timestamp</span>
+                )}
               </li>
             ))}
           </ul>
@@ -93,8 +82,8 @@ function Home() {
 {{else}}
         <h1>Your TanStack Start app is ready.</h1>
         <p className="lede">
-          Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then query your
-          database from server functions or route loaders.
+          Edit your Prisma Next contract, run <code>contract:emit</code>, then query your database
+          from server functions or route loaders.
         </p>
       </div>
 
@@ -113,14 +102,14 @@ function Home() {
           </li>
           <li>
             <div>
-              <strong>Prisma client</strong>
-              <p>Use the shared instance from <code>src/lib/prisma.server.ts</code>.</p>
+              <strong>Prisma Next runtime</strong>
+              <p>Use the shared helper from <code>src/lib/prisma.server.ts</code>.</p>
             </div>
           </li>
           <li>
             <div>
-              <strong>Seed script</strong>
-              <p>Run <code>db:seed</code> after your first migration.</p>
+              <strong>Manual database setup</strong>
+              <p>Run <code>db:init</code> and migrations when you are ready.</p>
             </div>
           </li>
         </ul>
@@ -133,7 +122,7 @@ function Home() {
         </div>
 
         <ul className="steps">
-          <li>Run <code>db:generate</code> after schema changes.</li>
+          <li>Run <code>contract:emit</code> after contract changes.</li>
           <li>Use TanStack Start server functions for server-only logic.</li>
           <li>Preview production output with <code>preview</code>.</li>
         </ul>

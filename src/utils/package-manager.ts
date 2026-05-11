@@ -134,14 +134,14 @@ export function getPackageManagerManifestValue(
 }
 
 export function getDenoPrismaSpecifier(): string {
-  return `npm:prisma@${dependencyVersionMap.prisma}`;
+  return `npm:prisma-next@${dependencyVersionMap["prisma-next"]}`;
 }
 
 function getDenoAllowedScriptSpecifiers(): string {
   return [
-    `npm:prisma@${dependencyVersionMap.prisma}`,
-    `npm:@prisma/client@${dependencyVersionMap["@prisma/client"]}`,
-    `npm:@prisma/engines@${dependencyVersionMap.prisma}`,
+    `npm:prisma-next@${dependencyVersionMap["prisma-next"]}`,
+    `npm:@prisma-next/postgres@${dependencyVersionMap["@prisma-next/postgres"]}`,
+    `npm:@prisma-next/mongo@${dependencyVersionMap["@prisma-next/mongo"]}`,
   ].join(",");
 }
 

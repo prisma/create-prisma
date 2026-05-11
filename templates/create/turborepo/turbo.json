@@ -12,16 +12,19 @@
     "typecheck": {
       "dependsOn": ["^typecheck"]
     },
-    "db:generate": {
+    "contract:emit": {
       "cache": false
     },
-    "db:push": {
+    "db:init": {
       "cache": false
     },
-    "db:migrate": {
+    "db:update": {
       "cache": false
     },
-    "db:seed": {
+    "migration:plan": {
+      "cache": false
+    },
+    "migration:apply": {
       "cache": false
     }
   }

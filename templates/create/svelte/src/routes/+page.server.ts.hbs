@@ -1,19 +1,13 @@
 import type { PageServerLoad } from "./$types";
 {{#if (eq schemaPreset "basic")}}
-import prisma from "$lib/server/prisma";
+import { listUsers } from "$lib/server/prisma";
 
 export const load: PageServerLoad = async () => {
-  const users = await prisma.user
-    .findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
+  const users = await listUsers(10)
     .then((rows) =>
       rows.map((user) => ({
         ...user,
-        createdAt: user.createdAt.toISOString(),
+        createdAt: user.createdAt?.toISOString() ?? null,
       }))
     )
     .catch(() => undefined);

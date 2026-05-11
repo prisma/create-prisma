@@ -8,7 +8,7 @@ type User = {
   id: string;
   email: string;
   name: string | null;
-  createdAt: string;
+  createdAt: string | null;
 };
 
 type UsersPayload = {
@@ -32,12 +32,12 @@ function formatCreatedAt(value: string): string {
 <template>
   <main class="shell">
     <div class="hero">
-      <p class="eyebrow">Nuxt + Prisma 7</p>
+      <p class="eyebrow">Nuxt + Prisma Next</p>
 {{#if (eq schemaPreset "basic")}}
       <h1>Users from your database, loaded through Nitro.</h1>
       <p class="lede">
         This page fetches <code>/api/users</code> from <code>server/api/users.get.ts</code> using
-        the Prisma instance in <code>server/utils/prisma.ts</code>.
+        the Prisma Next helper in <code>server/utils/prisma.ts</code>.
       </p>
     </div>
 
@@ -48,10 +48,10 @@ function formatCreatedAt(value: string): string {
       </div>
 
       <p v-if="data?.error" class="empty">
-        \{{ data.error }} Run <code>db:migrate</code>, then <code>db:seed</code>, then refresh.
+        \{{ data.error }} Run <code>contract:emit</code> and <code>db:init</code>, then refresh after applying your schema.
       </p>
       <p v-else-if="!data?.users?.length" class="empty">
-        No users yet. Run <code>db:seed</code> after your first migration.
+        No users yet. Add rows after applying your first migration.
       </p>
       <ul v-else class="users">
         <li v-for="user in data.users" :key="user.id">
@@ -59,15 +59,16 @@ function formatCreatedAt(value: string): string {
             <strong>\{{ user.name ?? "Unnamed user" }}</strong>
             <p>\{{ user.email }}</p>
           </div>
-          <time :datetime="user.createdAt">\{{ formatCreatedAt(user.createdAt) }}</time>
+          <time v-if="user.createdAt" :datetime="user.createdAt">\{{ formatCreatedAt(user.createdAt) }}</time>
+          <span v-else class="muted">No timestamp</span>
         </li>
       </ul>
     </section>
 {{else}}
       <h1>Your Nuxt app is ready.</h1>
       <p class="lede">
-        Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then query data in
-        Nitro routes or server utilities with the Prisma instance in <code>server/utils/prisma.ts</code>.
+        Edit your Prisma Next contract, run <code>contract:emit</code>, then query data in
+        Nitro routes or server utilities with the helper in <code>server/utils/prisma.ts</code>.
       </p>
     </div>
 
@@ -80,8 +81,8 @@ function formatCreatedAt(value: string): string {
       <ul class="users">
         <li>
           <div>
-            <strong>Prisma client</strong>
-            <p>Use the shared server instance from <code>server/utils/prisma.ts</code>.</p>
+            <strong>Prisma Next runtime</strong>
+            <p>Use the shared server helper from <code>server/utils/prisma.ts</code>.</p>
           </div>
         </li>
         <li>
@@ -92,8 +93,8 @@ function formatCreatedAt(value: string): string {
         </li>
         <li>
           <div>
-            <strong>Generated client output</strong>
-            <p>Prisma Client is generated into <code>server/generated/prisma</code>.</p>
+            <strong>Contract output</strong>
+            <p>Prisma Next emits contract artifacts next to your contract file.</p>
           </div>
         </li>
       </ul>
@@ -165,6 +166,7 @@ h2 {
 
 .panel-header span,
 .empty,
+.muted,
 time {
   color: #888;
   font-size: 0.8rem;

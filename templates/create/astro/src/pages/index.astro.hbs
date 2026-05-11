@@ -1,20 +1,13 @@
 ---
 {{#if (eq schemaPreset "basic")}}
-import prisma from "../lib/prisma";
+import { listUsers } from "../lib/prisma";
 
 const formatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
   timeStyle: "short",
 });
 
-const users = await prisma.user
-  .findMany({
-    take: 10,
-    orderBy: {
-      createdAt: "desc",
-    },
-  })
-  .catch(() => undefined);
+const users = await listUsers(10).catch(() => undefined);
 {{/if}}
 ---
 
@@ -29,11 +22,11 @@ const users = await prisma.user
   <body>
     <main class="shell">
       <div class="hero">
-        <p class="eyebrow">Astro + Prisma 7</p>
+        <p class="eyebrow">Astro + Prisma Next</p>
 {{#if (eq schemaPreset "basic")}}
         <h1>Users from your database, loaded on the server.</h1>
         <p class="lede">
-          This page reads from <code>src/pages/index.astro</code> using the Prisma instance in
+          This page reads from <code>src/pages/index.astro</code> using the Prisma Next helper in
           <code>src/lib/prisma.ts</code>. An Astro API route is also scaffolded in
           <code>src/pages/api/users.ts</code>.
         </p>
@@ -47,11 +40,11 @@ const users = await prisma.user
 
         {!users ? (
           <p class="empty">
-            Could not query users yet. Run <code>db:migrate</code>, then <code>db:seed</code>,
-            then refresh.
+            Could not query users yet. Run <code>contract:emit</code> and <code>db:init</code>,
+            then refresh after applying your schema.
           </p>
         ) : users.length === 0 ? (
-          <p class="empty">No users yet. Run <code>db:seed</code> after your first migration.</p>
+          <p class="empty">No users yet. Add rows after applying your first migration.</p>
         ) : (
           <ul class="users">
             {users.map((user) => (
@@ -60,9 +53,13 @@ const users = await prisma.user
                   <strong>{user.name ?? "Unnamed user"}</strong>
                   <p>{user.email}</p>
                 </div>
-                <time datetime={user.createdAt.toISOString()}>
-                  {formatter.format(user.createdAt)}
-                </time>
+                {user.createdAt ? (
+                  <time datetime={user.createdAt.toISOString()}>
+                    {formatter.format(user.createdAt)}
+                  </time>
+                ) : (
+                  <span class="muted">No timestamp</span>
+                )}
               </li>
             ))}
           </ul>
@@ -71,8 +68,8 @@ const users = await prisma.user
 {{else}}
         <h1>Your Astro app is ready.</h1>
         <p class="lede">
-          Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then load your data
-          in Astro pages or API routes with the Prisma instance in <code>src/lib/prisma.ts</code>.
+          Edit your Prisma Next contract, run <code>contract:emit</code>, then load your data
+          in Astro pages or API routes with the helper in <code>src/lib/prisma.ts</code>.
         </p>
       </div>
 
@@ -86,7 +83,7 @@ const users = await prisma.user
           <li>
             <div>
               <strong>Prisma client</strong>
-              <p>Use the shared instance from <code>src/lib/prisma.ts</code>.</p>
+              <p>Use the shared Prisma Next runtime from <code>src/lib/prisma.ts</code>.</p>
             </div>
           </li>
           <li>
@@ -97,8 +94,8 @@ const users = await prisma.user
           </li>
           <li>
             <div>
-              <strong>Seed script</strong>
-              <p>Run <code>db:seed</code> after your first migration.</p>
+              <strong>Manual database setup</strong>
+              <p>Run <code>db:init</code> and migrations when you are ready.</p>
             </div>
           </li>
         </ul>
@@ -171,6 +168,7 @@ const users = await prisma.user
 
   .panel-header span,
   .empty,
+  .muted,
   time {
     color: #888;
     font-size: 0.8rem;

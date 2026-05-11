@@ -33,6 +33,7 @@ export async function create(input: CreateCommandInput = {}): Promise<void> {
 
 export type { CreateCommandInput };
 export {
+  AuthoringStyleSchema,
   CreateCommandInputSchema,
   CreateTemplateSchema,
   DatabaseProviderSchema,

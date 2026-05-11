@@ -5,18 +5,13 @@ export function getDbPackages(
   _packageManager?: PackageManager,
 ): string {
   switch (provider) {
-    case "postgresql":
-    case "cockroachdb":
-      return "@prisma/adapter-pg";
-    case "mysql":
-      return "@prisma/adapter-mariadb";
-    case "sqlite":
-      return "@prisma/adapter-libsql";
-    case "sqlserver":
-      return "@prisma/adapter-mssql";
+    case "postgres":
+      return "@prisma-next/postgres";
+    case "mongo":
+      return "@prisma-next/mongo";
     default: {
       const exhaustiveCheck: never = provider;
-      throw new Error(`Unsupported database provider: ${String(exhaustiveCheck)}`);
+      throw new Error(`Unsupported Prisma Next target: ${String(exhaustiveCheck)}`);
     }
   }
 }

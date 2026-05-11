@@ -103,7 +103,6 @@ const SHARED_PRISMA_SKILLS: PrismaSkillName[] = [
   "prisma-cli",
   "prisma-client-api",
   "prisma-database-setup",
-  "prisma-upgrade-v7",
 ];
 
 type SkillOption = {
@@ -113,7 +112,7 @@ type SkillOption = {
 };
 
 function getAvailablePrismaSkills(provider: DatabaseProvider): PrismaSkillName[] {
-  if (provider === "postgresql") {
+  if (provider === "postgres") {
     return [...SHARED_PRISMA_SKILLS, "prisma-postgres"];
   }
 
@@ -137,11 +136,6 @@ function getSkillOptions(provider: DatabaseProvider): SkillOption[] {
       value: "prisma-database-setup",
       label: "prisma-database-setup",
       hint: "Database provider setup guides",
-    },
-    "prisma-upgrade-v7": {
-      value: "prisma-upgrade-v7",
-      label: "prisma-upgrade-v7",
-      hint: "v6 to v7 migration guide",
     },
     "prisma-postgres": {
       value: "prisma-postgres",

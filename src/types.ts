@@ -1,15 +1,11 @@
 import { z } from "zod";
 
-export const databaseProviders = [
-  "postgresql",
-  "mysql",
-  "sqlite",
-  "sqlserver",
-  "cockroachdb",
-] as const;
+export const databaseProviders = ["postgres", "mongo"] as const;
+export const databaseProviderInputs = ["postgres", "postgresql", "mongo", "mongodb"] as const;
 
 export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
 export const schemaPresets = ["empty", "basic"] as const;
+export const authoringStyles = ["psl", "typescript"] as const;
 export const createTemplates = [
   "hono",
   "elysia",
@@ -28,16 +24,33 @@ export const prismaSkillNames = [
   "prisma-cli",
   "prisma-client-api",
   "prisma-database-setup",
-  "prisma-upgrade-v7",
   "prisma-postgres",
 ] as const;
 
-export const DatabaseProviderSchema = z.enum(databaseProviders);
+type NormalizedDatabaseProvider = (typeof databaseProviders)[number];
+type DatabaseProviderInput = (typeof databaseProviderInputs)[number];
+
+function normalizeDatabaseProvider(value: DatabaseProviderInput): NormalizedDatabaseProvider {
+  if (value === "postgresql") {
+    return "postgres";
+  }
+  if (value === "mongodb") {
+    return "mongo";
+  }
+
+  return value;
+}
+
+export const DatabaseProviderSchema = z
+  .enum(databaseProviderInputs)
+  .transform(normalizeDatabaseProvider);
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
 export const PackageManagerSchema = z.enum(packageManagers);
 export type PackageManager = z.infer<typeof PackageManagerSchema>;
 export const SchemaPresetSchema = z.enum(schemaPresets);
 export type SchemaPreset = z.infer<typeof SchemaPresetSchema>;
+export const AuthoringStyleSchema = z.enum(authoringStyles);
+export type AuthoringStyle = z.infer<typeof AuthoringStyleSchema>;
 export const CreateTemplateSchema = z.enum(createTemplates);
 export type CreateTemplate = z.infer<typeof CreateTemplateSchema>;
 export const CreateAddonSchema = z.enum(createAddons);
@@ -57,23 +70,22 @@ export const CommonCommandOptionsSchema = z.object({
 });
 
 export const PrismaSetupOptionsSchema = z.object({
-  provider: DatabaseProviderSchema.optional().describe("Database provider"),
+  provider: DatabaseProviderSchema.optional().describe(
+    "Prisma Next target: postgres/postgresql or mongo/mongodb",
+  ),
+  authoring: AuthoringStyleSchema.optional().describe("Contract authoring style"),
   packageManager: PackageManagerSchema.optional().describe(
     "Package manager used for dependency installation",
   ),
   prismaPostgres: z
     .boolean()
     .optional()
-    .describe("Provision Prisma Postgres with create-db when provider is postgresql"),
+    .describe("Provision Prisma Postgres with create-db when target is postgres"),
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
-  generate: z.boolean().optional().describe("Generate Prisma Client after scaffolding"),
-  migrateAndSeed: z
-    .boolean()
-    .optional()
-    .describe("Run an initial migration and seed after Prisma Client generation"),
+  emit: z.boolean().optional().describe("Emit Prisma Next contract artifacts after scaffolding"),
   schemaPreset: SchemaPresetSchema.optional().describe(
-    "Schema preset to scaffold in prisma/schema.prisma",
+    "Schema preset to scaffold in prisma/contract.prisma or prisma/contract.ts",
   ),
 });
 

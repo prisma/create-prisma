@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "strict": true,
     "esModuleInterop": true,
@@ -11,5 +12,5 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "prisma/**/*.ts", "prisma.config.ts"]
+  "include": ["src/**/*.ts", "prisma/**/*.ts", "prisma-next.config.ts"]
 }

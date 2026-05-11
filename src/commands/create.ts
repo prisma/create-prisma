@@ -328,6 +328,7 @@ async function executeCreateContext(
       template: context.template,
       schemaPreset: context.prismaSetupContext.schemaPreset,
       provider: context.prismaSetupContext.databaseProvider,
+      authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
     });
     scaffoldSpinner.stop("Project files scaffolded.");

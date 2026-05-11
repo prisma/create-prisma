@@ -2,62 +2,69 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
+{{else}}
+import "dotenv/config";
 {{/unless}}
-import { PrismaClient } from "./generated/prisma/client{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{#if (eq provider "postgresql")}}
-import { PrismaPg } from "@prisma/adapter-pg";
+{{#if (eq provider "mongo")}}
+import mongo from "@prisma-next/mongo/runtime";
+{{else}}
+import postgres from "@prisma-next/postgres/runtime";
 {{/if}}
-{{#if (eq provider "cockroachdb")}}
-import { PrismaPg } from "@prisma/adapter-pg";
-{{/if}}
-{{#if (eq provider "mysql")}}
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
-{{/if}}
-{{#if (eq provider "sqlite")}}
-import { {{sqliteAdapterClass packageManager}} } from "{{sqliteAdapterPackage packageManager}}";
-{{/if}}
-{{#if (eq provider "sqlserver")}}
-import { PrismaMssql } from "@prisma/adapter-mssql";
-{{/if}}
+import type { Contract } from "../prisma/contract.d";
+import contractJson from "../prisma/contract.json" with { type: "json" };
 
 {{#unless (eq packageManager "deno")}}
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(moduleDir, "../.env"), quiet: true });
 {{/unless}}
 
-const rawDatabaseUrl = process.env.DATABASE_URL;
-{{#if (eq provider "sqlite")}}
-const databaseUrl = (rawDatabaseUrl ?? "").trim() || "file:./dev.db";
+{{#if (eq provider "mongo")}}
+export const db = mongo<Contract>({
+  contractJson,
+  url: process.env["DATABASE_URL"],
+});
 {{else}}
-const databaseUrl = (rawDatabaseUrl ?? "").trim();
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required");
+export const db = postgres<Contract>({
+  contractJson,
+  url: process.env["DATABASE_URL"],
+});
+{{/if}}
+
+export type StarterUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: Date | null;
+};
+
+export async function listUsers(limit = 10): Promise<StarterUser[]> {
+{{#if (eq schemaPreset "basic")}}
+{{#if (eq provider "mongo")}}
+  const users: StarterUser[] = [];
+
+  for await (const user of db.orm.users.select("_id", "email", "name").take(limit).all()) {
+    users.push({
+      id: String(user._id),
+      email: user.email,
+      name: user.name ?? null,
+      createdAt: null,
+    });
+  }
+
+  return users;
+{{else}}
+  const users = await db.orm.User.select("id", "email", "name", "createdAt").take(limit).all();
+
+  return users.map((user) => ({
+    id: String(user.id),
+    email: user.email,
+    name: user.name ?? null,
+    createdAt: user.createdAt,
+  }));
+{{/if}}
+{{else}}
+  return [];
+{{/if}}
 }
-{{/if}}
 
-{{#if (eq provider "postgresql")}}
-const adapter = new PrismaPg({
-  connectionString: databaseUrl,
-});
-{{/if}}
-{{#if (eq provider "cockroachdb")}}
-const adapter = new PrismaPg({
-  connectionString: databaseUrl,
-});
-{{/if}}
-{{#if (eq provider "mysql")}}
-const adapter = new PrismaMariaDb(databaseUrl);
-{{/if}}
-{{#if (eq provider "sqlite")}}
-const adapter = new {{sqliteAdapterClass packageManager}}({
-  url: databaseUrl,
-});
-{{/if}}
-{{#if (eq provider "sqlserver")}}
-const adapter = new PrismaMssql(databaseUrl);
-{{/if}}
-
-const prisma = new PrismaClient({ adapter });
-
-export { prisma };
-export default prisma;
+export default db;
