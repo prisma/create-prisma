@@ -16,8 +16,8 @@ export const dependencyVersionMap = {
   "@prisma-next/sql-contract-ts": "0.4.4",
   "@prisma-next/target-mongo": "0.4.4",
   "@prisma-next/target-postgres": "0.4.4",
-  "@types/node": "^24.10.4",
-  dotenv: "^17.2.3",
+  "@types/node": "^25.6.2",
+  dotenv: "^17.4.2",
   "prisma-next": "0.4.4",
   tsx: "^4.21.0",
 } as const;

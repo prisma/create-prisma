@@ -12,12 +12,13 @@ Scaffold a new app with Prisma Next already wired up.
 - scaffolds `prisma-next.config.ts`
 - writes a template-specific Prisma Next runtime helper
 - adds `contract:emit`, `db:init`, `db:update`, `migration:plan`, and `migration:apply` scripts
+- adds `db:up` / `db:down` and `docker-compose.yml` for default MongoDB projects
 - creates or updates `.env` with `DATABASE_URL`
 - can install dependencies and run `prisma-next contract emit`
 
 `db:init`, migrations, and seeding are never run automatically. PostgreSQL projects show
-`db:init` as a manual follow-up command; MongoDB projects show the migration plan/apply path
-for initial schema setup.
+`db:init` as a manual follow-up command; MongoDB projects show `db:up` plus the migration
+plan/apply path for initial schema setup.
 
 ## Quick Start
 
@@ -122,10 +123,10 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 
 - `--name` project name or relative path
 - `--template` choose the template
-- `--provider postgres|postgresql|mongo|mongodb`
-- `--authoring psl|typescript`
+- `--provider postgres|postgresql|mongo|mongodb` (default: `postgres`)
+- `--authoring psl|typescript` (default: `psl`)
 - `--package-manager` choose the package manager/runtime
-- `--schema-preset empty|basic`
+- `--schema-preset empty|basic` (default: `basic`)
 - `--database-url` set `DATABASE_URL`
 - `--yes` accept defaults and skip prompts
 - `--no-install` scaffold only

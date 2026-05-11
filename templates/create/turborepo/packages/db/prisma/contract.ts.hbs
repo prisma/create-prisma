@@ -6,7 +6,7 @@ import mongoTarget from "@prisma-next/target-mongo/pack";
 
 export const contract = defineContract(
   { family: mongoFamily, target: mongoTarget },
-  ({ field, model, rel }) => ({
+  ({ field, index, model, rel }) => ({
     models: {
 {{#if (eq schemaPreset "basic")}}
       User: model("User", {
@@ -16,6 +16,9 @@ export const contract = defineContract(
           email: field.string(),
           name: field.string().optional(),
         },
+        indexes: [
+          index({ email: 1 }, { unique: true }),
+        ],
         relations: {
           posts: rel.hasMany("Post", { from: "_id", to: "authorId" }),
         },
@@ -29,6 +32,9 @@ export const contract = defineContract(
           content: field.string().optional(),
           authorId: field.objectId(),
         },
+        indexes: [
+          index({ authorId: 1 }),
+        ],
         relations: {
           author: rel.belongsTo("User", { from: "authorId", to: "_id" }),
         },

@@ -69,9 +69,36 @@ type FinalizePrismaOptions = {
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgres";
 const DEFAULT_AUTHORING: AuthoringStyle = "psl";
-const DEFAULT_SCHEMA_PRESET: SchemaPreset = "empty";
+const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
 const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
+const MONGO_DOCKER_COMPOSE = `services:
+  mongodb:
+    image: mongo:8
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --eval 'try { rs.status().members.some((member) => member.stateStr === \\"PRIMARY\\") } catch (error) { rs.initiate({_id: \\"rs0\\", members: [{ _id: 0, host: \\"localhost:27017\\" }] }); false }' | grep true",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  mongodb-data:
+`;
+
+const mongoDockerScripts = {
+  "db:up": "docker compose up -d --wait",
+  "db:down": "docker compose down",
+} as const;
 
 const requiredPrismaFileGroups = [
   [
@@ -299,7 +326,7 @@ function getDefaultDatabaseUrl(provider: DatabaseProvider): string {
     case "postgres":
       return "postgresql://user:password@localhost:5432/mydb";
     case "mongo":
-      return "mongodb://localhost:27017/mydb";
+      return "mongodb://localhost:27017/mydb?replicaSet=rs0&directConnection=true";
     default: {
       const exhaustiveCheck: never = provider;
       throw new Error(`Unsupported Prisma Next target: ${String(exhaustiveCheck)}`);
@@ -414,6 +441,65 @@ async function ensureGitignoreEntry(projectDir: string, entry: string): Promise<
 
   const separator = existingContent.endsWith("\n") ? "" : "\n";
   await fs.appendFile(gitignorePath, `${separator}${entry}\n`, "utf8");
+}
+
+async function ensurePackageScripts(
+  projectDir: string,
+  scripts: Record<string, string>,
+): Promise<void> {
+  const packageJsonPath = path.join(projectDir, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) {
+    return;
+  }
+
+  const packageJson = await fs.readJson(packageJsonPath);
+  if (!packageJson.scripts) {
+    packageJson.scripts = {};
+  }
+
+  let didChange = false;
+  for (const [scriptName, command] of Object.entries(scripts)) {
+    if (
+      typeof packageJson.scripts[scriptName] !== "string" ||
+      packageJson.scripts[scriptName].trim().length === 0
+    ) {
+      packageJson.scripts[scriptName] = command;
+      didChange = true;
+    }
+  }
+
+  if (didChange) {
+    await fs.writeJson(packageJsonPath, packageJson, {
+      spaces: 2,
+    });
+  }
+}
+
+async function ensureMongoDockerCompose(projectDir: string): Promise<void> {
+  const composePath = path.join(projectDir, "docker-compose.yml");
+  if (await fs.pathExists(composePath)) {
+    return;
+  }
+
+  await fs.writeFile(composePath, MONGO_DOCKER_COMPOSE, "utf8");
+}
+
+async function writeMongoDockerHelpersForContext(
+  context: PrismaSetupContext,
+  projectDir: string,
+): Promise<boolean> {
+  if (context.databaseProvider !== "mongo" || context.databaseUrl) {
+    return true;
+  }
+
+  try {
+    await ensureMongoDockerCompose(projectDir);
+    await ensurePackageScripts(projectDir, mongoDockerScripts);
+    return true;
+  } catch (error) {
+    cancel(getCommandErrorMessage(error));
+    return false;
+  }
 }
 
 async function ensureRequiredPrismaFiles(projectDir: string): Promise<void> {
@@ -681,6 +767,9 @@ function buildNextStepsForContext(opts: {
   if (context.databaseProvider === "postgres") {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:init")}`);
   }
+  if (context.databaseProvider === "mongo" && !context.databaseUrl) {
+    nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:up")}`);
+  }
   nextSteps.push(
     `- ${getRunScriptCommand(context.packageManager, "migration:plan")} -- --name describe-change`,
   );
@@ -718,6 +807,11 @@ export async function executePrismaSetupContext(
     provisionResult,
   );
   if (!didFinalizePrismaFiles) {
+    return false;
+  }
+
+  const didWriteMongoDockerHelpers = await writeMongoDockerHelpersForContext(context, projectDir);
+  if (!didWriteMongoDockerHelpers) {
     return false;
   }
 
