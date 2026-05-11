@@ -75,7 +75,7 @@ const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const MONGO_DOCKER_COMPOSE = `services:
   mongodb:
-    image: mongo:8
+    image: mongo:latest
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
