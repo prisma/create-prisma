@@ -169,15 +169,6 @@ export function getRunScriptCommand(packageManager: PackageManager, scriptName: 
   }
 }
 
-export function getRunScriptCommandWithArgs(
-  packageManager: PackageManager,
-  scriptName: string,
-  args: string[],
-): string {
-  const separator = packageManager === "npm" ? " --" : "";
-  return `${getRunScriptCommand(packageManager, scriptName)}${separator} ${args.join(" ")}`;
-}
-
 export function getRunScriptInDirectoryCommand(
   packageManager: PackageManager,
   directory: string,
