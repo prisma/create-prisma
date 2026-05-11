@@ -8,7 +8,12 @@ import {
   type AvailableDependency,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
-import type { CreateTemplate, DatabaseProvider, PackageManager } from "../types";
+import type {
+  AuthoringStyle,
+  CreateTemplate,
+  DatabaseProvider,
+  PackageManager,
+} from "../types";
 import { getInstallArgs } from "../utils/package-manager";
 
 function getPrismaNextScriptMap(packageManager: PackageManager) {
@@ -55,6 +60,26 @@ function unique(items: string[]): string[] {
 
 function sortRecord(record: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function getTypeScriptContractPackages(provider: DatabaseProvider): AvailableDependency[] {
+  if (provider === "mongo") {
+    return [
+      "@prisma-next/adapter-mongo",
+      "@prisma-next/family-mongo",
+      "@prisma-next/mongo-contract",
+      "@prisma-next/mongo-contract-ts",
+      "@prisma-next/target-mongo",
+    ];
+  }
+
+  return [
+    "@prisma-next/adapter-postgres",
+    "@prisma-next/family-sql",
+    "@prisma-next/sql-contract",
+    "@prisma-next/sql-contract-ts",
+    "@prisma-next/target-postgres",
+  ];
 }
 
 export async function addPackageDependency(opts: {
@@ -134,10 +159,14 @@ export async function addPackageDependency(opts: {
 export async function writePrismaDependencies(
   provider: DatabaseProvider,
   packageManager: PackageManager,
+  authoring: AuthoringStyle,
   projectDir = process.cwd(),
 ): Promise<void> {
   const dependencies: string[] = [getDbPackages(provider, packageManager), "dotenv"];
   const devDependencies: string[] = ["prisma-next", "@types/node"];
+  if (authoring === "typescript") {
+    devDependencies.push(...getTypeScriptContractPackages(provider));
+  }
   const prismaScriptMap = getPrismaNextScriptMap(packageManager);
 
   await addPackageDependency({

@@ -505,6 +505,7 @@ async function writeDependenciesForContext(
     await writePrismaDependencies(
       context.databaseProvider,
       context.packageManager,
+      context.authoring,
       prismaProjectDir,
     );
     return true;

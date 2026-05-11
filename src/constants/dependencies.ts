@@ -3,8 +3,18 @@ import { usesNodeStyleRuntime } from "../utils/runtime";
 
 export const dependencyVersionMap = {
   "@elysiajs/node": "^1.4.5",
+  "@prisma-next/adapter-mongo": "0.4.4",
+  "@prisma-next/adapter-postgres": "0.4.4",
+  "@prisma-next/family-mongo": "0.4.4",
+  "@prisma-next/family-sql": "0.4.4",
   "@prisma-next/mongo": "0.4.4",
+  "@prisma-next/mongo-contract": "0.4.4",
+  "@prisma-next/mongo-contract-ts": "0.4.4",
   "@prisma-next/postgres": "0.4.4",
+  "@prisma-next/sql-contract": "0.4.4",
+  "@prisma-next/sql-contract-ts": "0.4.4",
+  "@prisma-next/target-mongo": "0.4.4",
+  "@prisma-next/target-postgres": "0.4.4",
   "@types/node": "^24.10.4",
   dotenv: "^17.2.3",
   "prisma-next": "0.4.4",
