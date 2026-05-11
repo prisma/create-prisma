@@ -26,6 +26,7 @@ import {
   getPackageExecutionArgs,
   getPackageExecutionCommand,
   getRunScriptCommand,
+  getRunScriptCommandWithArgs,
 } from "../utils/package-manager";
 
 type EnvWriteMode = "keep-existing" | "upsert";
@@ -771,7 +772,10 @@ function buildNextStepsForContext(opts: {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:up")}`);
   }
   nextSteps.push(
-    `- ${getRunScriptCommand(context.packageManager, "migration:plan")} -- --name describe-change`,
+    `- ${getRunScriptCommandWithArgs(context.packageManager, "migration:plan", [
+      "--name",
+      "describe-change",
+    ])}`,
   );
   nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "migration:apply")}`);
   if (options.includeDevNextStep) {

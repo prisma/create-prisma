@@ -87,6 +87,14 @@ function getTypeScriptContractPackages(provider: DatabaseProvider): AvailableDep
   ];
 }
 
+function getMigrationPackages(provider: DatabaseProvider): AvailableDependency[] {
+  if (provider === "mongo") {
+    return ["@prisma-next/family-mongo", "@prisma-next/target-mongo"];
+  }
+
+  return ["@prisma-next/target-postgres"];
+}
+
 export async function addPackageDependency(opts: {
   dependencies?: string[];
   devDependencies?: string[];
@@ -168,7 +176,8 @@ export async function writePrismaDependencies(
   projectDir = process.cwd(),
 ): Promise<void> {
   const dependencies: string[] = [getDbPackages(provider, packageManager), "dotenv"];
-  const devDependencies: string[] = ["prisma-next", "@types/node"];
+  const devDependencies: string[] = ["prisma-next", "@prisma-next/cli", "@types/node"];
+  devDependencies.push(...getMigrationPackages(provider));
   if (authoring === "typescript") {
     devDependencies.push(...getTypeScriptContractPackages(provider));
   } else if (packageManager === "deno") {

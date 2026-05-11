@@ -169,6 +169,15 @@ export function getRunScriptCommand(packageManager: PackageManager, scriptName: 
   }
 }
 
+export function getRunScriptCommandWithArgs(
+  packageManager: PackageManager,
+  scriptName: string,
+  args: string[],
+): string {
+  const separator = packageManager === "npm" ? " --" : "";
+  return `${getRunScriptCommand(packageManager, scriptName)}${separator} ${args.join(" ")}`;
+}
+
 export function getRunScriptInDirectoryCommand(
   packageManager: PackageManager,
   directory: string,
@@ -187,6 +196,15 @@ export function getRunScriptInDirectoryCommand(
     default:
       return `npm --prefix ${directory} run ${scriptName}`;
   }
+}
+
+export function getRunScriptInDirectoryCommandWithArgsPassthrough(
+  packageManager: PackageManager,
+  directory: string,
+  scriptName: string,
+): string {
+  const command = getRunScriptInDirectoryCommand(packageManager, directory, scriptName);
+  return packageManager === "npm" ? `${command} --` : command;
 }
 
 function joinCommandParts(parts: Array<string | undefined>): string {

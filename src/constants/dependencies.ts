@@ -5,6 +5,7 @@ export const dependencyVersionMap = {
   "@elysiajs/node": "^1.4.5",
   "@prisma-next/adapter-mongo": "0.4.4",
   "@prisma-next/adapter-postgres": "0.4.4",
+  "@prisma-next/cli": "0.4.4",
   "@prisma-next/contract": "0.4.4",
   "@prisma-next/family-mongo": "0.4.4",
   "@prisma-next/family-sql": "0.4.4",

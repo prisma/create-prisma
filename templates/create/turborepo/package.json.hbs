@@ -22,7 +22,7 @@
     "contract:emit": "{{runScriptInDirectoryCommand packageManager "packages/db" "contract:emit"}}",
     "db:init": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:init"}}",
     "db:update": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:update"}}",
-    "migration:plan": "{{runScriptInDirectoryCommand packageManager "packages/db" "migration:plan"}}",
+    "migration:plan": "{{runScriptInDirectoryCommandWithArgsPassthrough packageManager "packages/db" "migration:plan"}}",
     "migration:apply": "{{runScriptInDirectoryCommand packageManager "packages/db" "migration:apply"}}"
   },
   "devDependencies": {
