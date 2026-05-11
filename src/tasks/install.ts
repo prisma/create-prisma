@@ -26,13 +26,13 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
   }
 
   if (packageManager === "bun") {
-    const prismaNextCli = "bun --env-file=.env ./node_modules/.bin/prisma-next";
+    const prismaNextCli = "bun ./node_modules/.bin/prisma-next";
 
     return {
       "contract:emit": `${prismaNextCli} contract emit`,
       "db:init": `${prismaNextCli} db init`,
       "db:update": `${prismaNextCli} db update`,
-      "db:seed": "bun --env-file=.env prisma/seed.ts",
+      "db:seed": "bun prisma/seed.ts",
       "migration:plan": `${prismaNextCli} migration plan`,
       "migration:apply": `${prismaNextCli} migration apply`,
     } as const;
