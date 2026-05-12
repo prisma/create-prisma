@@ -1146,7 +1146,7 @@ async function finalizePrismaFilesForContext(
   provisionResult: PrismaPostgresProvisionResult,
 ): Promise<boolean> {
   const initSpinner = spinner();
-  initSpinner.start("Preparing Prisma Next files...");
+  initSpinner.start("Writing Prisma Next project files...");
 
   try {
     await finalizePrismaFiles({
@@ -1156,10 +1156,10 @@ async function finalizePrismaFilesForContext(
       projectDir,
     });
 
-    initSpinner.stop("Prisma Next files ready.");
+    initSpinner.stop("Prisma Next project files ready.");
     return true;
   } catch (error) {
-    initSpinner.stop("Could not prepare Prisma Next files.");
+    initSpinner.stop("Could not write Prisma Next project files.");
     cancel(getCommandErrorMessage(error));
     return false;
   }
@@ -1235,7 +1235,7 @@ async function emitPrismaNextContractForContext(
   }
 
   const emitSpinner = context.verbose ? undefined : spinner();
-  emitSpinner?.start("Emitting Prisma Next contract...");
+  emitSpinner?.start("Emitting Prisma Next contract artifacts...");
   try {
     const emitArgs = getPrismaNextCliArgs(context.packageManager, ["contract", "emit"]);
     await execa(emitArgs.command, emitArgs.args, {
@@ -1243,9 +1243,9 @@ async function emitPrismaNextContractForContext(
       stdio: context.verbose ? "inherit" : "pipe",
     });
     if (context.verbose) {
-      log.success("Prisma Next contract emitted.");
+      log.success("Prisma Next contract artifacts emitted.");
     } else {
-      emitSpinner?.stop("Prisma Next contract emitted.");
+      emitSpinner?.stop("Prisma Next contract artifacts emitted.");
     }
 
     return {
@@ -1393,8 +1393,8 @@ export async function executePrismaSetupContext(
     note(warningLines.map((line) => line.replace(/^- /, "")).join("\n"), "Heads up");
   }
 
-  note(formatNextSteps(nextSteps), "Next steps");
-  outro("Setup complete.");
+  note(formatNextSteps(nextSteps), "Next steps for Prisma Next");
+  outro("Prisma Next setup complete.");
 
   return true;
 }

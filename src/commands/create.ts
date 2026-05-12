@@ -304,7 +304,7 @@ async function executeCreateContext(
   context: CreatePromptContext,
 ): Promise<ExecuteCreateContextResult> {
   const scaffoldSpinner = spinner();
-  scaffoldSpinner.start(`Scaffolding ${context.template} project...`);
+  scaffoldSpinner.start(`Scaffolding ${context.template} starter...`);
   try {
     await scaffoldCreateTemplate({
       projectDir: context.targetDirectory,
@@ -315,9 +315,9 @@ async function executeCreateContext(
       authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
     });
-    scaffoldSpinner.stop("Project files scaffolded.");
+    scaffoldSpinner.stop("Starter files scaffolded.");
   } catch (error) {
-    scaffoldSpinner.stop("Could not scaffold project files.");
+    scaffoldSpinner.stop("Could not scaffold starter files.");
     return {
       ok: false,
       stage: "scaffold_template",
