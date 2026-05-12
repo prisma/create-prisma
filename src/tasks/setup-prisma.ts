@@ -411,6 +411,10 @@ function getPrismaNextAgentSkillContent(options: {
   } = options;
   const label = getDatabaseLabel(provider);
   const runtimePackage = provider === "mongo" ? "@prisma-next/mongo" : "@prisma-next/postgres";
+  const descriptionDetails =
+    provider === "mongo"
+      ? "MongoDB queries, DATABASE_URL, db init/update/verify, migrations, seeding, local MongoDB Docker setup, replica sets, typed aggregations, or mongoClient escape hatches."
+      : "PostgreSQL queries, DATABASE_URL, db init/update/verify, migrations, seeding, PostgreSQL setup, or raw SQL escape hatches.";
   const hasWorkspaceRootDbUp =
     typeof scripts["db:up"] !== "string" && typeof rootScripts["db:up"] === "string";
   const hasDbUp = typeof scripts["db:up"] === "string" || hasWorkspaceRootDbUp;
@@ -499,6 +503,12 @@ function getPrismaNextAgentSkillContent(options: {
         ];
 
   return [
+    "---",
+    "name: prisma-next",
+    "description: >-",
+    `  Prisma Next project workflow for this generated ${label} app. Use whenever working in this repository on Prisma Next contracts, generated contract artifacts, database helpers, ${descriptionDetails}`,
+    "---",
+    "",
     "# Prisma Next - Project Skill",
     "",
     `This project uses **Prisma Next** with **${label}** via \`${runtimePackage}\`. The contract is \`${schemaPath}\` using ${authoring === "typescript" ? "TypeScript" : "PSL"} authoring.`,
