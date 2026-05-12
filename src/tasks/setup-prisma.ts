@@ -47,6 +47,14 @@ type PrismaNextEmitResult = {
   warning?: string;
 };
 
+type PrismaNextProjectDocsOptions = {
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  schemaPreset: SchemaPreset;
+  packageManager: PackageManager;
+  projectDir: string;
+};
+
 type NextStep = {
   command: string;
   description: string;
@@ -107,6 +115,11 @@ const mongoDockerScripts = {
   "db:down": "docker compose down",
 } as const;
 
+const minimumServerVersion = {
+  postgres: "14",
+  mongo: "6.0",
+} satisfies Record<DatabaseProvider, string>;
+
 const requiredPrismaFileGroups = [
   [
     "prisma/contract.prisma",
@@ -134,6 +147,373 @@ async function resolvePrismaProjectDir(projectDir: string): Promise<string> {
   }
 
   return projectDir;
+}
+
+function getDatabaseLabel(provider: DatabaseProvider): string {
+  return provider === "mongo" ? "MongoDB" : "PostgreSQL";
+}
+
+function getContractPath(authoring: AuthoringStyle): string {
+  return `prisma/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
+}
+
+function stripTypeScriptExtension(filePath: string): string {
+  return filePath.endsWith(".ts") ? filePath.slice(0, -3) : filePath;
+}
+
+async function findFirstExistingRelativePath(
+  projectDir: string,
+  candidates: readonly string[],
+): Promise<string | undefined> {
+  for (const candidate of candidates) {
+    if (await fs.pathExists(path.join(projectDir, candidate))) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+async function readPackageScripts(projectDir: string): Promise<Record<string, string>> {
+  const packageJsonPath = path.join(projectDir, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) {
+    return {};
+  }
+
+  const packageJson = await fs.readJson(packageJsonPath);
+  return typeof packageJson.scripts === "object" && packageJson.scripts !== null
+    ? (packageJson.scripts as Record<string, string>)
+    : {};
+}
+
+async function writeFileIfMissing(filePath: string, content: string): Promise<void> {
+  if (await fs.pathExists(filePath)) {
+    return;
+  }
+
+  await fs.outputFile(filePath, content.endsWith("\n") ? content : `${content}\n`, "utf8");
+}
+
+function getEnvExampleContent(provider: DatabaseProvider): string {
+  const label = getDatabaseLabel(provider);
+  const minVersion = minimumServerVersion[provider];
+  const databaseUrl =
+    provider === "mongo"
+      ? "mongodb://localhost:27017/mydb?replicaSet=rs0&directConnection=true"
+      : "postgresql://user:password@localhost:5432/mydb";
+
+  return [
+    "# Copy this file to .env and replace the placeholder with your connection string.",
+    `# Requires ${label} >= ${minVersion}.`,
+    `DATABASE_URL="${databaseUrl}"`,
+    "",
+  ].join("\n");
+}
+
+function formatCommandListItem(
+  packageManager: PackageManager,
+  scriptName: string,
+  description: string,
+): string {
+  return `- \`${getRunScriptCommand(packageManager, scriptName)}\` - ${description}`;
+}
+
+function getPrismaNextQuickReferenceContent(options: {
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  schemaPreset: SchemaPreset;
+  packageManager: PackageManager;
+  schemaPath: string;
+  dbImportPath: string;
+  scripts: Record<string, string>;
+  rootScripts: Record<string, string>;
+}): string {
+  const {
+    provider,
+    authoring,
+    schemaPreset,
+    packageManager,
+    schemaPath,
+    dbImportPath,
+    scripts,
+    rootScripts,
+  } = options;
+  const label = getDatabaseLabel(provider);
+  const minVersion = minimumServerVersion[provider];
+  const hasWorkspaceRootDbUp =
+    typeof scripts["db:up"] !== "string" && typeof rootScripts["db:up"] === "string";
+  const hasDbUp = typeof scripts["db:up"] === "string" || hasWorkspaceRootDbUp;
+  const commandLines = [
+    formatCommandListItem(
+      packageManager,
+      "contract:emit",
+      "emit contract.json and contract.d.ts after contract changes",
+    ),
+    ...(hasDbUp
+      ? [
+          formatCommandListItem(
+            packageManager,
+            "db:up",
+            hasWorkspaceRootDbUp
+              ? "start the local MongoDB replica set with Docker from the workspace root"
+              : "start the local MongoDB replica set with Docker",
+          ),
+        ]
+      : []),
+    formatCommandListItem(packageManager, "db:init", "bootstrap a new database from the contract"),
+    formatCommandListItem(
+      packageManager,
+      "db:update",
+      "apply contract changes directly after confirmation",
+    ),
+    formatCommandListItem(
+      packageManager,
+      "db:verify",
+      "compare the live database state against the contract",
+    ),
+    formatCommandListItem(
+      packageManager,
+      "migration:plan",
+      "write an offline migration plan from contract changes",
+    ),
+    formatCommandListItem(packageManager, "migration:apply", "apply pending migrations"),
+    formatCommandListItem(
+      packageManager,
+      "migration:status",
+      "show applied and pending migrations",
+    ),
+    formatCommandListItem(packageManager, "migration:show", "inspect a planned migration"),
+    ...(schemaPreset === "basic"
+      ? [formatCommandListItem(packageManager, "db:seed", "insert starter sample data")]
+      : []),
+  ];
+
+  const workflowLines =
+    provider === "mongo"
+      ? [
+          "1. Start MongoDB with Docker if you are using the generated local database.",
+          "2. Run `contract:emit` after editing the contract.",
+          "3. Run `migration:plan` and review the generated migration.",
+          "4. Run `migration:apply` to apply pending migrations.",
+          "5. Run `db:seed` if you want the starter sample data.",
+        ]
+      : [
+          "1. Run `contract:emit` after editing the contract.",
+          "2. For first-time setup, run `db:init` to create and sign the database state.",
+          "3. For later contract changes, run `migration:plan` and `migration:apply`.",
+          "4. Run `db:seed` if you want the starter sample data.",
+        ];
+
+  const queryExample =
+    provider === "mongo"
+      ? [
+          "```ts",
+          `import { db } from "${dbImportPath}";`,
+          "",
+          'for await (const user of db.orm.users.select("_id", "email").take(10).all()) {',
+          "  console.log(user.email);",
+          "}",
+          "```",
+          "",
+          "MongoDB accessors use the emitted collection names, so the starter `User` model is queried through `db.orm.users`. The Mongo facade connects lazily on the first query; call `db.close()` when a script is done. Use `db.query` for typed aggregation pipelines when the ORM cannot express a query.",
+        ]
+      : [
+          "```ts",
+          `import { db } from "${dbImportPath}";`,
+          "",
+          'const users = await db.orm.User.select("id", "email").take(10).all();',
+          "```",
+          "",
+          "PostgreSQL models use their contract model names, so the starter `User` model is queried through `db.orm.User`. Prefer `db.orm` for application queries and use raw SQL only when the ORM does not cover the operation.",
+        ];
+
+  return [
+    "# Prisma Next",
+    "",
+    `This project uses Prisma Next with ${label}. The contract is authored in ${authoring === "typescript" ? "TypeScript" : "PSL"} at \`${schemaPath}\`.`,
+    "",
+    "## Requirements",
+    "",
+    `- ${label} ${minVersion} or newer.`,
+    "- The generated `.env.example` shows the expected `DATABASE_URL` shape.",
+    ...(provider === "mongo"
+      ? [
+          "- The generated Docker Compose setup starts MongoDB as a replica set for local migration workflows.",
+        ]
+      : []),
+    "",
+    "## Contract Artifacts",
+    "",
+    "Prisma Next emits two generated files next to the contract:",
+    "",
+    "- `prisma/contract.json` - runtime contract metadata",
+    "- `prisma/contract.d.ts` - TypeScript types for the contract",
+    "",
+    "Commit both generated files. Do not edit either one by hand.",
+    "",
+    "## Query Example",
+    "",
+    ...queryExample,
+    "",
+    "## Commands",
+    "",
+    ...commandLines,
+    "",
+    "## Workflow",
+    "",
+    ...workflowLines,
+    "",
+  ].join("\n");
+}
+
+function getPrismaNextAgentSkillContent(options: {
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  schemaPreset: SchemaPreset;
+  packageManager: PackageManager;
+  schemaPath: string;
+  dbImportPath: string;
+  scripts: Record<string, string>;
+  rootScripts: Record<string, string>;
+}): string {
+  const {
+    provider,
+    authoring,
+    schemaPreset,
+    packageManager,
+    schemaPath,
+    dbImportPath,
+    scripts,
+    rootScripts,
+  } = options;
+  const label = getDatabaseLabel(provider);
+  const hasWorkspaceRootDbUp =
+    typeof scripts["db:up"] !== "string" && typeof rootScripts["db:up"] === "string";
+  const hasDbUp = typeof scripts["db:up"] === "string" || hasWorkspaceRootDbUp;
+  const commands = [
+    formatCommandListItem(packageManager, "contract:emit", "regenerate contract artifacts"),
+    ...(hasDbUp
+      ? [
+          formatCommandListItem(
+            packageManager,
+            "db:up",
+            hasWorkspaceRootDbUp
+              ? "start local MongoDB with Docker from the workspace root"
+              : "start local MongoDB with Docker",
+          ),
+        ]
+      : []),
+    formatCommandListItem(packageManager, "db:init", "bootstrap a new database"),
+    formatCommandListItem(packageManager, "db:update", "apply contract changes directly"),
+    formatCommandListItem(
+      packageManager,
+      "db:verify",
+      "verify database state against the contract",
+    ),
+    formatCommandListItem(packageManager, "migration:plan", "create an offline migration plan"),
+    formatCommandListItem(packageManager, "migration:apply", "apply pending migrations"),
+    formatCommandListItem(packageManager, "migration:status", "show migration status"),
+    formatCommandListItem(packageManager, "migration:show", "inspect a migration"),
+    ...(schemaPreset === "basic"
+      ? [formatCommandListItem(packageManager, "db:seed", "insert starter sample data")]
+      : []),
+  ];
+
+  const queryGuidance =
+    provider === "mongo"
+      ? [
+          "- Use `db.orm.users` / `db.orm.posts`; Mongo accessors follow emitted collection names.",
+          "- `.all()` returns an async iterable result, so `for await` is always safe.",
+          "- Use `db.query` for typed aggregation pipelines.",
+          "- The Mongo client connects lazily; scripts should call `await db.close()` in `finally`.",
+          "- Local MongoDB should run as a replica set for migration workflows.",
+        ]
+      : [
+          "- Use `db.orm.User` / `db.orm.Post`; PostgreSQL accessors follow contract model names.",
+          "- Prefer `db.orm` for application queries.",
+          "- Use raw SQL only when the ORM cannot express the operation.",
+          "- Close script runtimes with `await db.runtime().close()` when needed.",
+        ];
+
+  return [
+    "# Prisma Next Project Skill",
+    "",
+    `This project uses Prisma Next with ${label}. The contract is \`${schemaPath}\` using ${authoring === "typescript" ? "TypeScript" : "PSL"} authoring.`,
+    "",
+    "## Files",
+    "",
+    `- Contract: \`${schemaPath}\``,
+    "- Config: `prisma-next.config.ts`",
+    `- Database helper: import \`db\` from \`${dbImportPath}\``,
+    "- Generated files: `prisma/contract.json` and `prisma/contract.d.ts`",
+    "",
+    "## Rules",
+    "",
+    "- Never edit generated contract artifacts by hand.",
+    "- Run `contract:emit` after contract edits before relying on new types.",
+    "- Do not auto-run `db:init`, migrations, or seed commands.",
+    ...queryGuidance,
+    "",
+    "## Commands",
+    "",
+    ...commands,
+    "",
+    "## Common Workflow",
+    "",
+    "- Edit the contract.",
+    "- Run `contract:emit`.",
+    "- For a new database, run `db:init`.",
+    "- For existing databases, run `migration:plan`, review it, then run `migration:apply`.",
+    "- Run `db:verify` or `migration:status` when checking state.",
+    "",
+  ].join("\n");
+}
+
+async function writePrismaNextProjectDocs(options: PrismaNextProjectDocsOptions): Promise<void> {
+  const prismaProjectDir = await resolvePrismaProjectDir(options.projectDir);
+  const schemaPath = getContractPath(options.authoring);
+  const dbHelperPath =
+    (await findFirstExistingRelativePath(prismaProjectDir, [
+      "src/lib/prisma.ts",
+      "src/lib/prisma.server.ts",
+      "src/lib/server/prisma.ts",
+      "server/utils/prisma.ts",
+      "src/client.ts",
+    ])) ?? "src/lib/prisma.ts";
+  const dbImportPath = `./${stripTypeScriptExtension(dbHelperPath)}`;
+  const scripts = await readPackageScripts(prismaProjectDir);
+  const rootScripts = await readPackageScripts(options.projectDir);
+
+  await writeFileIfMissing(
+    path.join(prismaProjectDir, ".env.example"),
+    getEnvExampleContent(options.provider),
+  );
+  await writeFileIfMissing(
+    path.join(prismaProjectDir, "prisma-next.md"),
+    getPrismaNextQuickReferenceContent({
+      provider: options.provider,
+      authoring: options.authoring,
+      schemaPreset: options.schemaPreset,
+      packageManager: options.packageManager,
+      schemaPath,
+      dbImportPath,
+      scripts,
+      rootScripts,
+    }),
+  );
+  await writeFileIfMissing(
+    path.join(prismaProjectDir, ".agents/skills/prisma-next/SKILL.md"),
+    getPrismaNextAgentSkillContent({
+      provider: options.provider,
+      authoring: options.authoring,
+      schemaPreset: options.schemaPreset,
+      packageManager: options.packageManager,
+      schemaPath,
+      dbImportPath,
+      scripts,
+      rootScripts,
+    }),
+  );
 }
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
@@ -706,6 +1086,25 @@ async function finalizePrismaFilesForContext(
   }
 }
 
+async function writePrismaNextProjectDocsForContext(
+  context: PrismaSetupContext,
+  projectDir: string,
+): Promise<boolean> {
+  try {
+    await writePrismaNextProjectDocs({
+      provider: context.databaseProvider,
+      authoring: context.authoring,
+      schemaPreset: context.schemaPreset,
+      packageManager: context.packageManager,
+      projectDir,
+    });
+    return true;
+  } catch (error) {
+    cancel(getCommandErrorMessage(error));
+    return false;
+  }
+}
+
 function getPrismaNextCliCommand(packageManager: PackageManager, prismaNextArgs: string[]): string {
   if (packageManager === "deno") {
     return `deno run -A --env-file=.env npm:prisma-next@${dependencyVersionMap["prisma-next"]} ${prismaNextArgs.join(" ")}`;
@@ -894,6 +1293,11 @@ export async function executePrismaSetupContext(
 
   const didWriteMongoDockerHelpers = await writeMongoDockerHelpersForContext(context, projectDir);
   if (!didWriteMongoDockerHelpers) {
+    return false;
+  }
+
+  const didWriteProjectDocs = await writePrismaNextProjectDocsForContext(context, projectDir);
+  if (!didWriteProjectDocs) {
     return false;
   }
 

@@ -21,6 +21,9 @@
     "db:update": {
       "cache": false
     },
+    "db:verify": {
+      "cache": false
+    },
     "db:seed": {
       "cache": false
     },
@@ -28,6 +31,12 @@
       "cache": false
     },
     "migration:apply": {
+      "cache": false
+    },
+    "migration:status": {
+      "cache": false
+    },
+    "migration:show": {
       "cache": false
     }
   }

@@ -19,9 +19,12 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
       "contract:emit": `${prismaNextCli} contract emit`,
       "db:init": `${prismaNextCli} db init`,
       "db:update": `${prismaNextCli} db update`,
+      "db:verify": `${prismaNextCli} db verify`,
       "db:seed": "deno run -A --env-file=.env prisma/seed.ts",
       "migration:plan": `${prismaNextCli} migration plan`,
       "migration:apply": `${prismaNextCli} migration apply`,
+      "migration:status": `${prismaNextCli} migration status`,
+      "migration:show": `${prismaNextCli} migration show`,
     } as const;
   }
 
@@ -32,9 +35,12 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
       "contract:emit": `${prismaNextCli} contract emit`,
       "db:init": `${prismaNextCli} db init`,
       "db:update": `${prismaNextCli} db update`,
+      "db:verify": `${prismaNextCli} db verify`,
       "db:seed": "bun prisma/seed.ts",
       "migration:plan": `${prismaNextCli} migration plan`,
       "migration:apply": `${prismaNextCli} migration apply`,
+      "migration:status": `${prismaNextCli} migration status`,
+      "migration:show": `${prismaNextCli} migration show`,
     } as const;
   }
 
@@ -42,9 +48,12 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
     "contract:emit": "prisma-next contract emit",
     "db:init": "prisma-next db init",
     "db:update": "prisma-next db update",
+    "db:verify": "prisma-next db verify",
     "db:seed": "tsx prisma/seed.ts",
     "migration:plan": "prisma-next migration plan",
     "migration:apply": "prisma-next migration apply",
+    "migration:status": "prisma-next migration status",
+    "migration:show": "prisma-next migration show",
   } as const;
 }
 
@@ -96,6 +105,14 @@ function getMigrationPackages(provider: DatabaseProvider): AvailableDependency[]
   }
 
   return ["@prisma-next/target-postgres"];
+}
+
+function getOrmTypePackages(provider: DatabaseProvider): AvailableDependency[] {
+  if (provider === "mongo") {
+    return ["@prisma-next/mongo-orm"];
+  }
+
+  return ["@prisma-next/sql-orm-client"];
 }
 
 export async function addPackageDependency(opts: {
@@ -180,11 +197,11 @@ export async function writePrismaDependencies(
 ): Promise<void> {
   const dependencies: string[] = [getDbPackages(provider, packageManager), "dotenv"];
   const devDependencies: string[] = ["prisma-next", "@prisma-next/cli", "@types/node"];
+  devDependencies.push(...getGeneratedContractTypePackages(provider));
   devDependencies.push(...getMigrationPackages(provider));
+  devDependencies.push(...getOrmTypePackages(provider));
   if (authoring === "typescript") {
     devDependencies.push(...getTypeScriptContractPackages(provider));
-  } else if (packageManager === "deno") {
-    devDependencies.push(...getGeneratedContractTypePackages(provider));
   }
   const prismaScriptMap = getPrismaNextScriptMap(packageManager);
 

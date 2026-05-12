@@ -10,6 +10,13 @@ import mongo from "@prisma-next/mongo/runtime";
 {{else}}
 import postgres from "@prisma-next/postgres/runtime";
 {{/if}}
+{{#if (eq schemaPreset "basic")}}
+{{#if (eq provider "mongo")}}
+import type { DefaultModelRow } from "@prisma-next/mongo-orm";
+{{else}}
+import type { DefaultModelRow } from "@prisma-next/sql-orm-client";
+{{/if}}
+{{/if}}
 import type { Contract } from "../prisma/contract.d";
 import contractJson from "../prisma/contract.json" with { type: "json" };
 
@@ -30,41 +37,50 @@ export const db = postgres<Contract>({
 });
 {{/if}}
 
-export type StarterUser = {
-  id: string;
-  email: string;
-  name: string | null;
-  createdAt: Date | null;
-};
+{{#if (eq schemaPreset "basic")}}
+type UserRow = DefaultModelRow<Contract, "User">;
 
-export async function listUsers(limit = 10): Promise<StarterUser[]> {
+{{#if (eq provider "mongo")}}
+function toStarterUser(user: Pick<UserRow, "_id" | "email" | "name">) {
+  return {
+    id: String(user._id),
+    email: user.email,
+    name: user.name ?? null,
+    createdAt: null,
+  };
+}
+{{else}}
+function toStarterUser(user: Pick<UserRow, "id" | "email" | "name" | "createdAt">) {
+  return {
+    id: String(user.id),
+    email: user.email,
+    name: user.name ?? null,
+    createdAt: user.createdAt,
+  };
+}
+{{/if}}
+{{/if}}
+
+export async function listUsers(limit = 10) {
 {{#if (eq schemaPreset "basic")}}
 {{#if (eq provider "mongo")}}
-  const users: StarterUser[] = [];
+  const users: ReturnType<typeof toStarterUser>[] = [];
 
   for await (const user of db.orm.users.select("_id", "email", "name").take(limit).all()) {
-    users.push({
-      id: String(user._id),
-      email: user.email,
-      name: user.name ?? null,
-      createdAt: null,
-    });
+    users.push(toStarterUser(user));
   }
 
   return users;
 {{else}}
   const users = await db.orm.User.select("id", "email", "name", "createdAt").take(limit).all();
 
-  return users.map((user) => ({
-    id: String(user.id),
-    email: user.email,
-    name: user.name ?? null,
-    createdAt: user.createdAt,
-  }));
+  return users.map(toStarterUser);
 {{/if}}
 {{else}}
   return [];
 {{/if}}
 }
+
+export type StarterUser = Awaited<ReturnType<typeof listUsers>>[number];
 
 export default db;
