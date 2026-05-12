@@ -119,6 +119,7 @@ const minimumServerVersion = {
   postgres: "14",
   mongo: "6.0",
 } satisfies Record<DatabaseProvider, string>;
+const readmeSectionMarker = "<!-- prisma-next-reference -->";
 
 const requiredPrismaFileGroups = [
   [
@@ -194,6 +195,24 @@ async function writeFileIfMissing(filePath: string, content: string): Promise<vo
   await fs.outputFile(filePath, content.endsWith("\n") ? content : `${content}\n`, "utf8");
 }
 
+async function appendReadmeSectionIfMissing(projectDir: string, content: string): Promise<void> {
+  const readmePath = path.join(projectDir, "README.md");
+  const section = `${readmeSectionMarker}\n${content.trim()}\n`;
+
+  if (!(await fs.pathExists(readmePath))) {
+    await fs.outputFile(readmePath, `# Prisma Next\n\n${section}`, "utf8");
+    return;
+  }
+
+  const existingContent = await fs.readFile(readmePath, "utf8");
+  if (existingContent.includes(readmeSectionMarker)) {
+    return;
+  }
+
+  const separator = existingContent.endsWith("\n") ? "\n" : "\n\n";
+  await fs.writeFile(readmePath, `${existingContent}${separator}${section}`, "utf8");
+}
+
 function getEnvExampleContent(provider: DatabaseProvider): string {
   const label = getDatabaseLabel(provider);
   const minVersion = minimumServerVersion[provider];
@@ -218,7 +237,7 @@ function formatCommandListItem(
   return `- \`${getRunScriptCommand(packageManager, scriptName)}\` - ${description}`;
 }
 
-function getPrismaNextQuickReferenceContent(options: {
+function getPrismaNextReadmeSectionContent(options: {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   schemaPreset: SchemaPreset;
@@ -295,13 +314,17 @@ function getPrismaNextQuickReferenceContent(options: {
           "2. Run `contract:emit` after editing the contract.",
           "3. Run `migration:plan` and review the generated migration.",
           "4. Run `migration:apply` to apply pending migrations.",
-          "5. Run `db:seed` if you want the starter sample data.",
+          ...(schemaPreset === "basic"
+            ? ["5. Run `db:seed` if you want the starter sample data."]
+            : []),
         ]
       : [
           "1. Run `contract:emit` after editing the contract.",
           "2. For first-time setup, run `db:init` to create and sign the database state.",
           "3. For later contract changes, run `migration:plan` and `migration:apply`.",
-          "4. Run `db:seed` if you want the starter sample data.",
+          ...(schemaPreset === "basic"
+            ? ["4. Run `db:seed` if you want the starter sample data."]
+            : []),
         ];
 
   const queryExample =
@@ -328,7 +351,7 @@ function getPrismaNextQuickReferenceContent(options: {
         ];
 
   return [
-    "# Prisma Next",
+    "## Prisma Next Reference",
     "",
     `This project uses Prisma Next with ${label}. The contract is authored in ${authoring === "typescript" ? "TypeScript" : "PSL"} at \`${schemaPath}\`.`,
     "",
@@ -387,6 +410,7 @@ function getPrismaNextAgentSkillContent(options: {
     rootScripts,
   } = options;
   const label = getDatabaseLabel(provider);
+  const runtimePackage = provider === "mongo" ? "@prisma-next/mongo" : "@prisma-next/postgres";
   const hasWorkspaceRootDbUp =
     typeof scripts["db:up"] !== "string" && typeof rootScripts["db:up"] === "string";
   const hasDbUp = typeof scripts["db:up"] === "string" || hasWorkspaceRootDbUp;
@@ -422,41 +446,86 @@ function getPrismaNextAgentSkillContent(options: {
   const queryGuidance =
     provider === "mongo"
       ? [
-          "- Use `db.orm.users` / `db.orm.posts`; Mongo accessors follow emitted collection names.",
-          "- `.all()` returns an async iterable result, so `for await` is always safe.",
-          "- Use `db.query` for typed aggregation pipelines.",
-          "- The Mongo client connects lazily; scripts should call `await db.close()` in `finally`.",
-          "- Local MongoDB should run as a replica set for migration workflows.",
+          "- Use `db.orm`. Mongo root accessors are lowercased plural collection names emitted by `contract:emit`, for example `db.orm.users` and `db.orm.posts`.",
+          "- `.all()` returns an async iterable result. Consume it with `for await` or await it to materialize an array.",
+          "- Use `db.query` for typed aggregation pipelines when the ORM cannot express a query.",
+          "- For direct MongoDB driver control, construct your own `MongoClient` and pass it through the `mongoClient` binding; keep that raw client reference for sessions, transactions, and change streams.",
+          "- Do not use `db.runtime()` as a raw driver escape hatch. It returns Prisma Next's internal executor, not a `mongodb` `MongoClient` or `Db`.",
+          "- The Mongo client connects lazily on the first query. Short-lived scripts should call `await db.close()` in `finally`.",
+          "- Multi-document transactions and change streams require MongoDB to run as a replica set. The generated local Docker setup does this.",
         ]
       : [
-          "- Use `db.orm.User` / `db.orm.Post`; PostgreSQL accessors follow contract model names.",
-          "- Prefer `db.orm` for application queries.",
-          "- Use raw SQL only when the ORM cannot express the operation.",
-          "- Close script runtimes with `await db.runtime().close()` when needed.",
+          "- Use `db.orm`. PostgreSQL root accessors follow contract model names, for example `db.orm.User` and `db.orm.Post`.",
+          "- Prefer `db.orm` for application queries. Use raw SQL only when the ORM cannot express the operation or the user explicitly asks for it.",
+          "- `.where(...)`, `.select(...)`, `.orderBy(...)`, `.take(...)`, `.all()`, `.first()`, and `.include(...)` are the primary ORM query methods.",
+          "- Short-lived scripts should close the runtime with `await db.runtime().close()` when needed.",
+        ];
+
+  const queryExamples =
+    provider === "mongo"
+      ? [
+          "```ts",
+          `import { db } from "${dbImportPath}";`,
+          "",
+          'const user = await db.orm.users.where({ email: "alice@example.com" }).first();',
+          "",
+          'for await (const user of db.orm.users.select("_id", "email").take(10).all()) {',
+          "  console.log(user.email);",
+          "}",
+          "",
+          "const usersWithPosts = await db.orm.users",
+          '  .select("_id", "email")',
+          '  .include("posts")',
+          "  .take(10)",
+          "  .all();",
+          "```",
+        ]
+      : [
+          "```ts",
+          `import { db } from "${dbImportPath}";`,
+          "",
+          "const user = await db.orm.User",
+          '  .where((user) => user.email.eq("alice@example.com"))',
+          "  .first();",
+          "",
+          'const users = await db.orm.User.select("id", "email").take(10).all();',
+          "",
+          "const usersWithPosts = await db.orm.User",
+          '  .select("id", "email")',
+          '  .include("posts", (post) => post.select("id", "title").take(5))',
+          "  .take(10)",
+          "  .all();",
+          "```",
         ];
 
   return [
-    "# Prisma Next Project Skill",
+    "# Prisma Next - Project Skill",
     "",
-    `This project uses Prisma Next with ${label}. The contract is \`${schemaPath}\` using ${authoring === "typescript" ? "TypeScript" : "PSL"} authoring.`,
+    `This project uses **Prisma Next** with **${label}** via \`${runtimePackage}\`. The contract is \`${schemaPath}\` using ${authoring === "typescript" ? "TypeScript" : "PSL"} authoring.`,
     "",
     "## Files",
     "",
-    `- Contract: \`${schemaPath}\``,
-    "- Config: `prisma-next.config.ts`",
-    `- Database helper: import \`db\` from \`${dbImportPath}\``,
-    "- Generated files: `prisma/contract.json` and `prisma/contract.d.ts`",
-    "",
-    "## Rules",
-    "",
-    "- Never edit generated contract artifacts by hand.",
-    "- Run `contract:emit` after contract edits before relying on new types.",
-    "- Do not auto-run `db:init`, migrations, or seed commands.",
-    ...queryGuidance,
+    `- **Contract**: \`${schemaPath}\` - edit this to add or change models.`,
+    "- **Config**: `prisma-next.config.ts` - tells the CLI where the contract is and how to connect to the database.",
+    `- **Database helper**: import \`db\` from \`${dbImportPath}\`. This is the entry point for queries.`,
+    "- **Generated files**: `prisma/contract.json` and `prisma/contract.d.ts`. Do not edit these by hand.",
     "",
     "## Commands",
     "",
     ...commands,
+    "",
+    "## How To Write Queries",
+    "",
+    ...queryExamples,
+    "",
+    "## Rules",
+    "",
+    "- Never hand-edit `contract.json` or `contract.d.ts`. Regenerate them with `contract:emit`.",
+    "- Always run `contract:emit` after changing the contract before writing code that depends on the changed models.",
+    "- Do not auto-run `db:init`, migrations, or seed commands. These are manual project-owner actions.",
+    "- Do not restructure the generated database helper unless the user explicitly asks.",
+    "- `DATABASE_URL` lives in `.env`; `.env.example` documents the expected shape and minimum server version.",
+    ...queryGuidance,
     "",
     "## Common Workflow",
     "",
@@ -488,9 +557,9 @@ async function writePrismaNextProjectDocs(options: PrismaNextProjectDocsOptions)
     path.join(prismaProjectDir, ".env.example"),
     getEnvExampleContent(options.provider),
   );
-  await writeFileIfMissing(
-    path.join(prismaProjectDir, "prisma-next.md"),
-    getPrismaNextQuickReferenceContent({
+  await appendReadmeSectionIfMissing(
+    prismaProjectDir,
+    getPrismaNextReadmeSectionContent({
       provider: options.provider,
       authoring: options.authoring,
       schemaPreset: options.schemaPreset,
