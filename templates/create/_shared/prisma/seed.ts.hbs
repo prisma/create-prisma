@@ -1,5 +1,7 @@
-{{#unless (eq template "turborepo")}}
 {{#if (eq schemaPreset "basic")}}
+{{#if (requiresDotenvConfigImport packageManager)}}
+import "dotenv/config";
+{{/if}}
 {{#if (eq template "nuxt")}}
 import { db } from "../server/utils/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
 {{else}}
@@ -52,4 +54,3 @@ try {
 {{else}}
 console.log("No seed data for the empty schema preset.");
 {{/if}}
-{{/unless}}

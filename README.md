@@ -8,13 +8,11 @@ Scaffold a new app with Prisma Next already wired up.
 
 - creates a new app from a supported template
 - adds Prisma Next dependencies for PostgreSQL or MongoDB
-- scaffolds `prisma/contract.prisma` or `prisma/contract.ts`
-- scaffolds `prisma-next.config.ts`
+- runs `prisma-next init --no-install` to scaffold `prisma/contract.*`, `prisma-next.config.ts`, `prisma/db.ts`, `prisma-next.md`, `.env.example`, and the Prisma Next agent skill
 - writes a template-specific Prisma Next runtime helper
 - adds `contract:emit`, `db:init`, `db:update`, `db:verify`, `db:seed`, `migration:plan`, `migration:apply`, `migration:status`, and `migration:show` scripts
 - adds `db:up` / `db:down` and `docker-compose.yml` for default MongoDB projects
 - creates or updates `.env` with `DATABASE_URL`
-- writes `.env.example`, appends a Prisma Next reference to `README.md`, and scaffolds `.agents/skills/prisma-next/SKILL.md`
 - can install dependencies and run `prisma-next contract emit`
 
 `db:init`, migrations, and seeding are never run automatically. PostgreSQL projects show
@@ -77,12 +75,6 @@ Scaffold into the current directory:
 create-prisma --name . --template hono --provider postgres
 ```
 
-Create a monorepo with a shared Prisma Next package:
-
-```bash
-create-prisma --name my-monorepo --template turborepo --provider postgres
-```
-
 Use TypeScript contract authoring:
 
 ```bash
@@ -105,7 +97,6 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 - `astro`
 - `nuxt`
 - `tanstack-start`
-- `turborepo`
 
 ## Supported Databases
 

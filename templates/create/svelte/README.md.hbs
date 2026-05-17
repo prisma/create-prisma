@@ -35,7 +35,8 @@ Database helper scripts are added to `package.json`:
 - `{{runScriptCommand packageManager "db:seed"}}` - insert sample users manually
 {{/if}}
 
-This README includes provider-specific Prisma Next reference notes below. Agent-specific project guidance is scaffolded in `.agents/skills/prisma-next/SKILL.md`.
+For provider-specific Prisma Next reference docs, see `prisma-next.md`. Agent-specific project guidance is scaffolded in `.agents/skills/prisma-next/SKILL.md`.
+The SvelteKit Vite dev server also auto-emits Prisma Next contract artifacts when the contract changes.
 
 Node-based Prisma Next projects expect Node.js 24 LTS or newer.
 {{#if (eq schemaPreset "basic")}}

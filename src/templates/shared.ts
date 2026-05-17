@@ -7,8 +7,6 @@ import { fileURLToPath } from "node:url";
 import type { PackageManager } from "../types";
 import {
   getPackageManagerManifestValue,
-  getRunScriptInDirectoryCommand,
-  getRunScriptInDirectoryCommandWithArgsPassthrough,
   getRuntimeScriptCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
@@ -31,18 +29,6 @@ Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>
     packageManager ? getRunScriptCommand(packageManager, scriptName) : "",
-);
-Handlebars.registerHelper(
-  "runScriptInDirectoryCommand",
-  (packageManager: PackageManager | undefined, directory: string, scriptName: string) =>
-    packageManager ? getRunScriptInDirectoryCommand(packageManager, directory, scriptName) : "",
-);
-Handlebars.registerHelper(
-  "runScriptInDirectoryCommandWithArgsPassthrough",
-  (packageManager: PackageManager | undefined, directory: string, scriptName: string) =>
-    packageManager
-      ? getRunScriptInDirectoryCommandWithArgsPassthrough(packageManager, directory, scriptName)
-      : "",
 );
 Handlebars.registerHelper(
   "packageManagerManifestValue",

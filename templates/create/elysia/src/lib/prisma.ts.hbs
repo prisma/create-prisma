@@ -35,7 +35,7 @@ function toStarterUser(user: Pick<UserRow, "_id" | "email" | "name">) {
     id: String(user._id),
     email: user.email,
     name: user.name ?? null,
-    createdAt: null,
+    createdAt: null as Date | null,
   };
 }
 {{else}}

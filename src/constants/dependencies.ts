@@ -3,25 +3,28 @@ import { usesNodeStyleRuntime } from "../utils/runtime";
 
 export const dependencyVersionMap = {
   "@elysiajs/node": "^1.4.5",
-  "@prisma-next/adapter-mongo": "0.7.0",
-  "@prisma-next/adapter-postgres": "0.7.0",
-  "@prisma-next/cli": "0.7.0",
-  "@prisma-next/contract": "0.7.0",
-  "@prisma-next/family-mongo": "0.7.0",
-  "@prisma-next/family-sql": "0.7.0",
-  "@prisma-next/mongo": "0.7.0",
-  "@prisma-next/mongo-contract": "0.7.0",
-  "@prisma-next/mongo-contract-ts": "0.7.0",
-  "@prisma-next/mongo-orm": "0.7.0",
-  "@prisma-next/postgres": "0.7.0",
-  "@prisma-next/sql-contract": "0.7.0",
-  "@prisma-next/sql-contract-ts": "0.7.0",
-  "@prisma-next/sql-orm-client": "0.7.0",
-  "@prisma-next/target-mongo": "0.7.0",
-  "@prisma-next/target-postgres": "0.7.0",
+  "@prisma-next/agent-skill": "0.0.1",
+  "@prisma-next/adapter-mongo": "0.8.0",
+  "@prisma-next/adapter-postgres": "0.8.0",
+  "@prisma-next/cli": "0.8.0",
+  "@prisma-next/contract": "0.8.0",
+  "@prisma-next/family-mongo": "0.8.0",
+  "@prisma-next/family-sql": "0.8.0",
+  "@prisma-next/mongo": "0.8.0",
+  "@prisma-next/mongo-contract": "0.8.0",
+  "@prisma-next/mongo-contract-ts": "0.8.0",
+  "@prisma-next/mongo-orm": "0.8.0",
+  "@prisma-next/postgres": "0.8.0",
+  "@prisma-next/sql-contract": "0.8.0",
+  "@prisma-next/sql-contract-ts": "0.8.0",
+  "@prisma-next/sql-orm-client": "0.8.0",
+  "@prisma-next/target-mongo": "0.8.0",
+  "@prisma-next/target-postgres": "0.8.0",
+  "@prisma-next/vite-plugin-contract-emit": "0.8.0",
   "@types/node": "^25.6.2",
   dotenv: "^17.4.2",
-  "prisma-next": "0.7.0",
+  "prisma-next": "0.8.0",
+  skills: "1.5.7",
   tsx: "^4.21.0",
 } as const;
 
@@ -34,8 +37,13 @@ export type CreateTemplateDependencyTarget = {
   customDependencies?: Record<string, string>;
 };
 
-function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
-  return packageManager === "npm" ? "*" : "workspace:*";
+function usesViteDevServer(template: CreateTemplate): boolean {
+  return (
+    template === "astro" ||
+    template === "nuxt" ||
+    template === "svelte" ||
+    template === "tanstack-start"
+  );
 }
 
 export function getCreateTemplateDependencies(
@@ -43,6 +51,14 @@ export function getCreateTemplateDependencies(
   packageManager: PackageManager,
 ): CreateTemplateDependencyTarget[] {
   const targets: CreateTemplateDependencyTarget[] = [];
+
+  if (usesViteDevServer(template)) {
+    targets.push({
+      packageJsonPath: "package.json",
+      dependencies: [],
+      devDependencies: ["@prisma-next/vite-plugin-contract-emit"],
+    });
+  }
 
   if (template === "hono" || template === "elysia" || template === "nest") {
     const runtimeDevDependencies: AvailableDependency[] = usesNodeStyleRuntime(packageManager)
@@ -62,17 +78,6 @@ export function getCreateTemplateDependencies(
         devDependencies: runtimeDevDependencies,
       });
     }
-  }
-
-  if (template === "turborepo") {
-    targets.push({
-      packageJsonPath: "apps/api/package.json",
-      dependencies: [],
-      devDependencies: ["tsx"],
-      customDependencies: {
-        "@repo/db": getWorkspaceDependencyVersion(packageManager),
-      },
-    });
   }
 
   return targets;

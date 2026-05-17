@@ -139,11 +139,6 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         label: "TanStack Start",
         hint: "TanStack Start React app with file routes and server functions",
       },
-      {
-        value: "turborepo",
-        label: "Turborepo",
-        hint: "Monorepo starter with apps + packages/db Prisma package",
-      },
     ],
   });
 
@@ -303,8 +298,9 @@ async function collectCreateContext(
 async function executeCreateContext(
   context: CreatePromptContext,
 ): Promise<ExecuteCreateContextResult> {
-  const scaffoldSpinner = spinner();
-  scaffoldSpinner.start(`Scaffolding ${context.template} starter...`);
+  const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner();
+  createSpinner?.start("Creating Prisma Next project...");
+
   try {
     await scaffoldCreateTemplate({
       projectDir: context.targetDirectory,
@@ -315,9 +311,8 @@ async function executeCreateContext(
       authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
     });
-    scaffoldSpinner.stop("Starter files scaffolded.");
   } catch (error) {
-    scaffoldSpinner.stop("Could not scaffold starter files.");
+    createSpinner?.stop("Could not create Prisma Next project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -332,6 +327,7 @@ async function executeCreateContext(
       projectDir: context.targetDirectory,
     });
   } catch (error) {
+    createSpinner?.stop("Could not create Prisma Next project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -364,6 +360,7 @@ async function executeCreateContext(
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       includeDevNextStep: true,
+      progressSpinner: createSpinner,
     });
 
     if (!didSetupPrisma) {
@@ -373,6 +370,7 @@ async function executeCreateContext(
       };
     }
   } catch (error) {
+    createSpinner?.stop("Could not create Prisma Next project.");
     return {
       ok: false,
       stage: "prisma_setup",

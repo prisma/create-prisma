@@ -15,7 +15,6 @@ export const createTemplates = [
   "astro",
   "nuxt",
   "tanstack-start",
-  "turborepo",
 ] as const;
 
 type NormalizedDatabaseProvider = (typeof databaseProviders)[number];

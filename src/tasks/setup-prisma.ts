@@ -23,6 +23,7 @@ import {
 import {
   detectPackageManager,
   getInstallCommand,
+  getPackageExecutionArgs,
   getLocalPackageBinaryArgs,
   getLocalPackageBinaryCommand,
   getRunScriptCommand,
@@ -34,6 +35,7 @@ type PrismaSetupRunOptions = {
   prependNextSteps?: NextStep[];
   projectDir?: string;
   includeDevNextStep?: boolean;
+  progressSpinner?: ReturnType<typeof spinner>;
 };
 
 type PrismaPostgresProvisionResult = {
@@ -47,12 +49,9 @@ type PrismaNextEmitResult = {
   warning?: string;
 };
 
-type PrismaNextProjectDocsOptions = {
-  provider: DatabaseProvider;
-  authoring: AuthoringStyle;
-  schemaPreset: SchemaPreset;
-  packageManager: PackageManager;
-  projectDir: string;
+type PrismaNextSkillSyncResult = {
+  didSyncAgentSkills: boolean;
+  warning?: string;
 };
 
 type NextStep = {
@@ -115,484 +114,51 @@ const mongoDockerScripts = {
   "db:down": "docker compose down",
 } as const;
 
-const minimumServerVersion = {
-  postgres: "14",
-  mongo: "6.0",
-} satisfies Record<DatabaseProvider, string>;
-const readmeSectionMarker = "<!-- prisma-next-reference -->";
-
 const requiredPrismaFileGroups = [
-  [
-    "prisma/contract.prisma",
-    "prisma/contract.ts",
-    "packages/db/prisma/contract.prisma",
-    "packages/db/prisma/contract.ts",
-  ],
-  ["prisma-next.config.ts", "packages/db/prisma-next.config.ts"],
+  ["prisma/contract.prisma", "prisma/contract.ts"],
+  ["prisma-next.config.ts"],
   [
     "src/lib/prisma.ts",
     "src/lib/prisma.server.ts",
     "src/lib/server/prisma.ts",
     "server/utils/prisma.ts",
-    "packages/db/src/client.ts",
   ],
 ] as const;
-
-async function resolvePrismaProjectDir(projectDir: string): Promise<string> {
-  const monorepoDbDir = path.join(projectDir, "packages/db");
-  if (
-    (await fs.pathExists(path.join(monorepoDbDir, "prisma/contract.prisma"))) ||
-    (await fs.pathExists(path.join(monorepoDbDir, "prisma/contract.ts")))
-  ) {
-    return monorepoDbDir;
-  }
-
-  return projectDir;
-}
-
-function getDatabaseLabel(provider: DatabaseProvider): string {
-  return provider === "mongo" ? "MongoDB" : "PostgreSQL";
-}
 
 function getContractPath(authoring: AuthoringStyle): string {
   return `prisma/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
 }
 
-function stripTypeScriptExtension(filePath: string): string {
-  return filePath.endsWith(".ts") ? filePath.slice(0, -3) : filePath;
-}
-
-async function findFirstExistingRelativePath(
-  projectDir: string,
-  candidates: readonly string[],
-): Promise<string | undefined> {
-  for (const candidate of candidates) {
-    if (await fs.pathExists(path.join(projectDir, candidate))) {
-      return candidate;
-    }
+function getEmptyContractContent(provider: DatabaseProvider, authoring: AuthoringStyle): string {
+  if (authoring === "psl") {
+    return "// use prisma-next\n";
   }
 
-  return undefined;
-}
+  if (provider === "mongo") {
+    return `import { defineContract } from "@prisma-next/mongo/contract-builder";
+import mongoFamily from "@prisma-next/mongo/family";
+import mongoTarget from "@prisma-next/mongo/target";
 
-async function readPackageScripts(projectDir: string): Promise<Record<string, string>> {
-  const packageJsonPath = path.join(projectDir, "package.json");
-  if (!(await fs.pathExists(packageJsonPath))) {
-    return {};
+export const contract = defineContract(
+  { family: mongoFamily, target: mongoTarget },
+  () => ({
+    models: {},
+  }),
+);
+`;
   }
 
-  const packageJson = await fs.readJson(packageJsonPath);
-  return typeof packageJson.scripts === "object" && packageJson.scripts !== null
-    ? (packageJson.scripts as Record<string, string>)
-    : {};
-}
+  return `import { defineContract } from "@prisma-next/postgres/contract-builder";
+import sqlFamily from "@prisma-next/postgres/family";
+import postgresTarget from "@prisma-next/postgres/target";
 
-async function writeFileIfMissing(filePath: string, content: string): Promise<void> {
-  if (await fs.pathExists(filePath)) {
-    return;
-  }
-
-  await fs.outputFile(filePath, content.endsWith("\n") ? content : `${content}\n`, "utf8");
-}
-
-async function appendReadmeSectionIfMissing(projectDir: string, content: string): Promise<void> {
-  const readmePath = path.join(projectDir, "README.md");
-  const section = `${readmeSectionMarker}\n${content.trim()}\n`;
-
-  if (!(await fs.pathExists(readmePath))) {
-    await fs.outputFile(readmePath, `# Prisma Next\n\n${section}`, "utf8");
-    return;
-  }
-
-  const existingContent = await fs.readFile(readmePath, "utf8");
-  if (existingContent.includes(readmeSectionMarker)) {
-    return;
-  }
-
-  const separator = existingContent.endsWith("\n") ? "\n" : "\n\n";
-  await fs.writeFile(readmePath, `${existingContent}${separator}${section}`, "utf8");
-}
-
-function getEnvExampleContent(provider: DatabaseProvider): string {
-  const label = getDatabaseLabel(provider);
-  const minVersion = minimumServerVersion[provider];
-  const databaseUrl =
-    provider === "mongo"
-      ? "mongodb://localhost:27017/mydb?replicaSet=rs0&directConnection=true"
-      : "postgresql://user:password@localhost:5432/mydb";
-
-  return [
-    "# Copy this file to .env and replace the placeholder with your connection string.",
-    `# Requires ${label} >= ${minVersion}.`,
-    `DATABASE_URL="${databaseUrl}"`,
-    "",
-  ].join("\n");
-}
-
-function formatCommandListItem(
-  packageManager: PackageManager,
-  scriptName: string,
-  description: string,
-): string {
-  return `- \`${getRunScriptCommand(packageManager, scriptName)}\` - ${description}`;
-}
-
-function getPrismaNextReadmeSectionContent(options: {
-  provider: DatabaseProvider;
-  authoring: AuthoringStyle;
-  schemaPreset: SchemaPreset;
-  packageManager: PackageManager;
-  schemaPath: string;
-  dbImportPath: string;
-  scripts: Record<string, string>;
-  rootScripts: Record<string, string>;
-}): string {
-  const {
-    provider,
-    authoring,
-    schemaPreset,
-    packageManager,
-    schemaPath,
-    dbImportPath,
-    scripts,
-    rootScripts,
-  } = options;
-  const label = getDatabaseLabel(provider);
-  const minVersion = minimumServerVersion[provider];
-  const hasWorkspaceRootDbUp =
-    typeof scripts["db:up"] !== "string" && typeof rootScripts["db:up"] === "string";
-  const hasDbUp = typeof scripts["db:up"] === "string" || hasWorkspaceRootDbUp;
-  const commandLines = [
-    formatCommandListItem(
-      packageManager,
-      "contract:emit",
-      "emit contract.json and contract.d.ts after contract changes",
-    ),
-    ...(hasDbUp
-      ? [
-          formatCommandListItem(
-            packageManager,
-            "db:up",
-            hasWorkspaceRootDbUp
-              ? "start the local MongoDB replica set with Docker from the workspace root"
-              : "start the local MongoDB replica set with Docker",
-          ),
-        ]
-      : []),
-    formatCommandListItem(packageManager, "db:init", "bootstrap a new database from the contract"),
-    formatCommandListItem(
-      packageManager,
-      "db:update",
-      "apply contract changes directly after confirmation",
-    ),
-    formatCommandListItem(
-      packageManager,
-      "db:verify",
-      "compare the live database state against the contract",
-    ),
-    formatCommandListItem(
-      packageManager,
-      "migration:plan",
-      "write an offline migration plan from contract changes",
-    ),
-    formatCommandListItem(packageManager, "migration:apply", "apply pending migrations"),
-    formatCommandListItem(
-      packageManager,
-      "migration:status",
-      "show applied and pending migrations",
-    ),
-    formatCommandListItem(packageManager, "migration:show", "inspect a planned migration"),
-    ...(schemaPreset === "basic"
-      ? [formatCommandListItem(packageManager, "db:seed", "insert starter sample data")]
-      : []),
-  ];
-
-  const workflowLines =
-    provider === "mongo"
-      ? [
-          "1. Start MongoDB with Docker if you are using the generated local database.",
-          "2. Run `contract:emit` after editing the contract.",
-          "3. Run `migration:plan` and review the generated migration.",
-          "4. Run `migration:apply` to apply pending migrations.",
-          ...(schemaPreset === "basic"
-            ? ["5. Run `db:seed` if you want the starter sample data."]
-            : []),
-        ]
-      : [
-          "1. Run `contract:emit` after editing the contract.",
-          "2. For first-time setup, run `db:init` to create and sign the database state.",
-          "3. For later contract changes, run `migration:plan` and `migration:apply`.",
-          ...(schemaPreset === "basic"
-            ? ["4. Run `db:seed` if you want the starter sample data."]
-            : []),
-        ];
-
-  const queryExample =
-    provider === "mongo"
-      ? [
-          "```ts",
-          `import { db } from "${dbImportPath}";`,
-          "",
-          'for await (const user of db.orm.users.select("_id", "email").take(10).all()) {',
-          "  console.log(user.email);",
-          "}",
-          "```",
-          "",
-          "MongoDB accessors use the emitted collection names, so the starter `User` model is queried through `db.orm.users`. The Mongo facade connects lazily on the first query; call `db.close()` when a script is done. Use `db.query` for typed aggregation pipelines when the ORM cannot express a query.",
-        ]
-      : [
-          "```ts",
-          `import { db } from "${dbImportPath}";`,
-          "",
-          'const users = await db.orm.User.select("id", "email").take(10).all();',
-          "```",
-          "",
-          "PostgreSQL models use their contract model names, so the starter `User` model is queried through `db.orm.User`. Prefer `db.orm` for application queries and use raw SQL only when the ORM does not cover the operation.",
-        ];
-
-  return [
-    "## Prisma Next Reference",
-    "",
-    `This project uses Prisma Next with ${label}. The contract is authored in ${authoring === "typescript" ? "TypeScript" : "PSL"} at \`${schemaPath}\`.`,
-    "",
-    "## Requirements",
-    "",
-    `- ${label} ${minVersion} or newer.`,
-    "- The generated `.env.example` shows the expected `DATABASE_URL` shape.",
-    ...(provider === "mongo"
-      ? [
-          "- The generated Docker Compose setup starts MongoDB as a replica set for local migration workflows.",
-        ]
-      : []),
-    "",
-    "## Contract Artifacts",
-    "",
-    "Prisma Next emits two generated files next to the contract:",
-    "",
-    "- `prisma/contract.json` - runtime contract metadata",
-    "- `prisma/contract.d.ts` - TypeScript types for the contract",
-    "",
-    "Commit both generated files. Do not edit either one by hand.",
-    "",
-    "## Query Example",
-    "",
-    ...queryExample,
-    "",
-    "## Commands",
-    "",
-    ...commandLines,
-    "",
-    "## Workflow",
-    "",
-    ...workflowLines,
-    "",
-  ].join("\n");
-}
-
-function getPrismaNextAgentSkillContent(options: {
-  provider: DatabaseProvider;
-  authoring: AuthoringStyle;
-  schemaPreset: SchemaPreset;
-  packageManager: PackageManager;
-  schemaPath: string;
-  dbImportPath: string;
-  scripts: Record<string, string>;
-  rootScripts: Record<string, string>;
-}): string {
-  const {
-    provider,
-    authoring,
-    schemaPreset,
-    packageManager,
-    schemaPath,
-    dbImportPath,
-    scripts,
-    rootScripts,
-  } = options;
-  const label = getDatabaseLabel(provider);
-  const runtimePackage = provider === "mongo" ? "@prisma-next/mongo" : "@prisma-next/postgres";
-  const descriptionDetails =
-    provider === "mongo"
-      ? "MongoDB queries, DATABASE_URL, db init/update/verify, migrations, seeding, local MongoDB Docker setup, replica sets, typed aggregations, or mongoClient escape hatches."
-      : "PostgreSQL queries, DATABASE_URL, db init/update/verify, migrations, seeding, PostgreSQL setup, or raw SQL escape hatches.";
-  const hasWorkspaceRootDbUp =
-    typeof scripts["db:up"] !== "string" && typeof rootScripts["db:up"] === "string";
-  const hasDbUp = typeof scripts["db:up"] === "string" || hasWorkspaceRootDbUp;
-  const commands = [
-    formatCommandListItem(packageManager, "contract:emit", "regenerate contract artifacts"),
-    ...(hasDbUp
-      ? [
-          formatCommandListItem(
-            packageManager,
-            "db:up",
-            hasWorkspaceRootDbUp
-              ? "start local MongoDB with Docker from the workspace root"
-              : "start local MongoDB with Docker",
-          ),
-        ]
-      : []),
-    formatCommandListItem(packageManager, "db:init", "bootstrap a new database"),
-    formatCommandListItem(packageManager, "db:update", "apply contract changes directly"),
-    formatCommandListItem(
-      packageManager,
-      "db:verify",
-      "verify database state against the contract",
-    ),
-    formatCommandListItem(packageManager, "migration:plan", "create an offline migration plan"),
-    formatCommandListItem(packageManager, "migration:apply", "apply pending migrations"),
-    formatCommandListItem(packageManager, "migration:status", "show migration status"),
-    formatCommandListItem(packageManager, "migration:show", "inspect a migration"),
-    ...(schemaPreset === "basic"
-      ? [formatCommandListItem(packageManager, "db:seed", "insert starter sample data")]
-      : []),
-  ];
-
-  const queryGuidance =
-    provider === "mongo"
-      ? [
-          "- Use `db.orm`. Mongo root accessors are lowercased plural collection names emitted by `contract:emit`, for example `db.orm.users` and `db.orm.posts`.",
-          "- `.all()` returns an async iterable result. Consume it with `for await` or await it to materialize an array.",
-          "- Use `db.query` for typed aggregation pipelines when the ORM cannot express a query.",
-          "- For direct MongoDB driver control, construct your own `MongoClient` and pass it through the `mongoClient` binding; keep that raw client reference for sessions, transactions, and change streams.",
-          "- Do not use `db.runtime()` as a raw driver escape hatch. It returns Prisma Next's internal executor, not a `mongodb` `MongoClient` or `Db`.",
-          "- The Mongo client connects lazily on the first query. Short-lived scripts should call `await db.close()` in `finally`.",
-          "- Multi-document transactions and change streams require MongoDB to run as a replica set. The generated local Docker setup does this.",
-        ]
-      : [
-          "- Use `db.orm`. PostgreSQL root accessors follow contract model names, for example `db.orm.User` and `db.orm.Post`.",
-          "- Prefer `db.orm` for application queries. Use raw SQL only when the ORM cannot express the operation or the user explicitly asks for it.",
-          "- `.where(...)`, `.select(...)`, `.orderBy(...)`, `.take(...)`, `.all()`, `.first()`, and `.include(...)` are the primary ORM query methods.",
-          "- Short-lived scripts should close the runtime with `await db.runtime().close()` when needed.",
-        ];
-
-  const queryExamples =
-    provider === "mongo"
-      ? [
-          "```ts",
-          `import { db } from "${dbImportPath}";`,
-          "",
-          'const user = await db.orm.users.where({ email: "alice@example.com" }).first();',
-          "",
-          'for await (const user of db.orm.users.select("_id", "email").take(10).all()) {',
-          "  console.log(user.email);",
-          "}",
-          "",
-          "const usersWithPosts = await db.orm.users",
-          '  .select("_id", "email")',
-          '  .include("posts")',
-          "  .take(10)",
-          "  .all();",
-          "```",
-        ]
-      : [
-          "```ts",
-          `import { db } from "${dbImportPath}";`,
-          "",
-          "const user = await db.orm.User",
-          '  .where((user) => user.email.eq("alice@example.com"))',
-          "  .first();",
-          "",
-          'const users = await db.orm.User.select("id", "email").take(10).all();',
-          "",
-          "const usersWithPosts = await db.orm.User",
-          '  .select("id", "email")',
-          '  .include("posts", (post) => post.select("id", "title").take(5))',
-          "  .take(10)",
-          "  .all();",
-          "```",
-        ];
-
-  return [
-    "---",
-    "name: prisma-next",
-    "description: >-",
-    `  Prisma Next project workflow for this generated ${label} app. Use whenever working in this repository on Prisma Next contracts, generated contract artifacts, database helpers, ${descriptionDetails}`,
-    "---",
-    "",
-    "# Prisma Next - Project Skill",
-    "",
-    `This project uses **Prisma Next** with **${label}** via \`${runtimePackage}\`. The contract is \`${schemaPath}\` using ${authoring === "typescript" ? "TypeScript" : "PSL"} authoring.`,
-    "",
-    "## Files",
-    "",
-    `- **Contract**: \`${schemaPath}\` - edit this to add or change models.`,
-    "- **Config**: `prisma-next.config.ts` - tells the CLI where the contract is and how to connect to the database.",
-    `- **Database helper**: import \`db\` from \`${dbImportPath}\`. This is the entry point for queries.`,
-    "- **Generated files**: `prisma/contract.json` and `prisma/contract.d.ts`. Do not edit these by hand.",
-    "",
-    "## Commands",
-    "",
-    ...commands,
-    "",
-    "## How To Write Queries",
-    "",
-    ...queryExamples,
-    "",
-    "## Rules",
-    "",
-    "- Never hand-edit `contract.json` or `contract.d.ts`. Regenerate them with `contract:emit`.",
-    "- Always run `contract:emit` after changing the contract before writing code that depends on the changed models.",
-    "- Do not auto-run `db:init`, migrations, or seed commands. These are manual project-owner actions.",
-    "- Do not restructure the generated database helper unless the user explicitly asks.",
-    "- `DATABASE_URL` lives in `.env`; `.env.example` documents the expected shape and minimum server version.",
-    ...queryGuidance,
-    "",
-    "## Common Workflow",
-    "",
-    "- Edit the contract.",
-    "- Run `contract:emit`.",
-    "- For a new database, run `db:init`.",
-    "- For existing databases, run `migration:plan`, review it, then run `migration:apply`.",
-    "- Run `db:verify` or `migration:status` when checking state.",
-    "",
-  ].join("\n");
-}
-
-async function writePrismaNextProjectDocs(options: PrismaNextProjectDocsOptions): Promise<void> {
-  const prismaProjectDir = await resolvePrismaProjectDir(options.projectDir);
-  const schemaPath = getContractPath(options.authoring);
-  const dbHelperPath =
-    (await findFirstExistingRelativePath(prismaProjectDir, [
-      "src/lib/prisma.ts",
-      "src/lib/prisma.server.ts",
-      "src/lib/server/prisma.ts",
-      "server/utils/prisma.ts",
-      "src/client.ts",
-    ])) ?? "src/lib/prisma.ts";
-  const dbImportPath = `./${stripTypeScriptExtension(dbHelperPath)}`;
-  const scripts = await readPackageScripts(prismaProjectDir);
-  const rootScripts = await readPackageScripts(options.projectDir);
-
-  await writeFileIfMissing(
-    path.join(prismaProjectDir, ".env.example"),
-    getEnvExampleContent(options.provider),
-  );
-  await appendReadmeSectionIfMissing(
-    prismaProjectDir,
-    getPrismaNextReadmeSectionContent({
-      provider: options.provider,
-      authoring: options.authoring,
-      schemaPreset: options.schemaPreset,
-      packageManager: options.packageManager,
-      schemaPath,
-      dbImportPath,
-      scripts,
-      rootScripts,
-    }),
-  );
-  await writeFileIfMissing(
-    path.join(prismaProjectDir, ".agents/skills/prisma-next/SKILL.md"),
-    getPrismaNextAgentSkillContent({
-      provider: options.provider,
-      authoring: options.authoring,
-      schemaPreset: options.schemaPreset,
-      packageManager: options.packageManager,
-      schemaPath,
-      dbImportPath,
-      scripts,
-      rootScripts,
-    }),
-  );
+export const contract = defineContract(
+  { family: sqlFamily, target: postgresTarget },
+  () => ({
+    models: {},
+  }),
+);
+`;
 }
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
@@ -1029,25 +595,24 @@ async function ensureRequiredPrismaFiles(projectDir: string): Promise<void> {
 
 async function finalizePrismaFiles(options: FinalizePrismaOptions): Promise<void> {
   const projectDir = options.projectDir ?? process.cwd();
-  const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
 
   await ensureRequiredPrismaFiles(projectDir);
 
   const databaseUrl = options.databaseUrl ?? getDefaultDatabaseUrl(options.provider);
-  await ensureEnvVarInEnv(prismaProjectDir, "DATABASE_URL", databaseUrl, {
+  await ensureEnvVarInEnv(projectDir, "DATABASE_URL", databaseUrl, {
     mode: options.databaseUrl ? "upsert" : "keep-existing",
     comment: "Added by create-prisma",
   });
 
   if (options.claimUrl) {
-    await ensureEnvVarInEnv(prismaProjectDir, "CLAIM_URL", options.claimUrl, {
+    await ensureEnvVarInEnv(projectDir, "CLAIM_URL", options.claimUrl, {
       mode: "upsert",
       comment: PRISMA_POSTGRES_TEMPORARY_NOTICE,
     });
-    await ensureEnvComment(prismaProjectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
+    await ensureEnvComment(projectDir, PRISMA_POSTGRES_TEMPORARY_NOTICE);
   }
 
-  await ensureGitignoreEntry(prismaProjectDir, ".env");
+  await ensureGitignoreEntry(projectDir, ".env");
 }
 
 async function provisionPrismaPostgresIfNeeded(
@@ -1061,20 +626,22 @@ async function provisionPrismaPostgresIfNeeded(
   }
 
   const createDbCommand = getCreateDbCommand(context.packageManager);
-  const prismaPostgresSpinner = spinner();
-  prismaPostgresSpinner.start(`Provisioning Prisma Postgres with ${createDbCommand}...`);
+  if (context.verbose) {
+    log.step(`Running ${createDbCommand}`);
+  }
 
   try {
     const prismaPostgresResult = await provisionPrismaPostgres(context.packageManager, projectDir);
 
-    prismaPostgresSpinner.stop("Prisma Postgres database provisioned.");
+    if (context.verbose) {
+      log.success("Prisma Postgres database provisioned.");
+    }
     return {
       databaseUrl: prismaPostgresResult.databaseUrl,
       claimUrl: prismaPostgresResult.claimUrl,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    prismaPostgresSpinner.stop("Could not provision Prisma Postgres.");
 
     return {
       databaseUrl: context.databaseUrl,
@@ -1087,17 +654,103 @@ async function writeDependenciesForContext(
   context: PrismaSetupContext,
   projectDir: string,
 ): Promise<boolean> {
-  const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
   try {
     await writePrismaDependencies(
       context.databaseProvider,
       context.packageManager,
       context.authoring,
-      prismaProjectDir,
+      projectDir,
     );
     return true;
   } catch (error) {
     cancel(getCommandErrorMessage(error));
+    return false;
+  }
+}
+
+function getPrismaNextPackageSpecifier(): string {
+  return `prisma-next@${dependencyVersionMap["prisma-next"]}`;
+}
+
+function getPrismaNextInitTarget(provider: DatabaseProvider): "mongodb" | "postgres" {
+  return provider === "mongo" ? "mongodb" : "postgres";
+}
+
+function getPrismaNextInitCliArgs(
+  packageManager: PackageManager,
+  prismaNextArgs: string[],
+): { command: string; args: string[] } {
+  if (packageManager === "npm") {
+    return {
+      command: "npx",
+      args: ["--yes", getPrismaNextPackageSpecifier(), "init", ...prismaNextArgs],
+    };
+  }
+
+  return getPackageExecutionArgs(packageManager, [
+    getPrismaNextPackageSpecifier(),
+    "init",
+    ...prismaNextArgs,
+  ]);
+}
+
+function getPrismaNextInitCliCommand(
+  packageManager: PackageManager,
+  prismaNextArgs: string[],
+): string {
+  const execution = getPrismaNextInitCliArgs(packageManager, prismaNextArgs);
+  return [execution.command, ...execution.args].join(" ");
+}
+
+async function runPrismaNextInitForContext(
+  context: PrismaSetupContext,
+  projectDir: string,
+): Promise<boolean> {
+  const initArgs = [
+    "--yes",
+    "--force",
+    "--target",
+    getPrismaNextInitTarget(context.databaseProvider),
+    "--authoring",
+    context.authoring,
+    "--schema-path",
+    getContractPath(context.authoring),
+    "--no-install",
+  ];
+  const initCommand = getPrismaNextInitCliCommand(context.packageManager, initArgs);
+
+  if (context.verbose) {
+    log.step(`Running ${initCommand}`);
+  }
+
+  try {
+    const initExecution = getPrismaNextInitCliArgs(context.packageManager, initArgs);
+    await execa(initExecution.command, initExecution.args, {
+      cwd: projectDir,
+      stdio: context.verbose ? "inherit" : "pipe",
+      env: {
+        ...process.env,
+        CI: "1",
+      },
+    });
+
+    if (context.schemaPreset === "empty") {
+      await fs.writeFile(
+        path.join(projectDir, getContractPath(context.authoring)),
+        getEmptyContractContent(context.databaseProvider, context.authoring),
+        "utf8",
+      );
+    }
+
+    if (context.verbose) {
+      log.success("Prisma Next project files ready.");
+    }
+    return true;
+  } catch (error) {
+    if (context.verbose) {
+      log.warn("Could not run Prisma Next init.");
+    }
+    cancel(`Failed to run ${initCommand}: ${getCommandErrorMessage(error)}`);
     return false;
   }
 }
@@ -1113,30 +766,101 @@ async function installDependenciesForContext(
   const installCommand = getInstallCommand(context.packageManager);
   if (context.verbose) {
     log.step(`Running ${installCommand}`);
-    try {
-      await installProjectDependencies(context.packageManager, projectDir, {
-        verbose: context.verbose,
-      });
-      log.success("Dependencies installed.");
-      return true;
-    } catch (error) {
-      cancel(`Failed to run ${installCommand}: ${getCommandErrorMessage(error)}`);
-      return false;
-    }
   }
 
-  const installSpinner = spinner();
-  installSpinner.start(`Running ${installCommand}...`);
   try {
     await installProjectDependencies(context.packageManager, projectDir, {
       verbose: context.verbose,
     });
-    installSpinner.stop("Dependencies installed.");
+    if (context.verbose) {
+      log.success("Dependencies installed.");
+    }
     return true;
   } catch (error) {
-    installSpinner.stop("Could not install dependencies.");
     cancel(`Failed to run ${installCommand}: ${getCommandErrorMessage(error)}`);
     return false;
+  }
+}
+
+function getSkillsSyncCliCommand(packageManager: PackageManager): string {
+  if (packageManager === "deno") {
+    return `deno run -A npm:skills@${dependencyVersionMap.skills} experimental_sync --agent "*" -y`;
+  }
+
+  return getLocalPackageBinaryCommand(packageManager, "skills", [
+    "experimental_sync",
+    "--agent",
+    "*",
+    "-y",
+  ]);
+}
+
+function getSkillsSyncCliArgs(packageManager: PackageManager): { command: string; args: string[] } {
+  if (packageManager === "deno") {
+    return {
+      command: "deno",
+      args: [
+        "run",
+        "-A",
+        `npm:skills@${dependencyVersionMap.skills}`,
+        "experimental_sync",
+        "--agent",
+        "*",
+        "-y",
+      ],
+    };
+  }
+
+  return getLocalPackageBinaryArgs(packageManager, "skills", [
+    "experimental_sync",
+    "--agent",
+    "*",
+    "-y",
+  ]);
+}
+
+async function syncAgentSkillsForContext(
+  context: PrismaSetupContext,
+  projectDir: string,
+): Promise<PrismaNextSkillSyncResult> {
+  if (!context.shouldInstall) {
+    return {
+      didSyncAgentSkills: false,
+    };
+  }
+
+  const syncCommand = getSkillsSyncCliCommand(context.packageManager);
+  if (context.verbose) {
+    log.step(`Running ${syncCommand}`);
+  }
+
+  try {
+    const syncArgs = getSkillsSyncCliArgs(context.packageManager);
+    await execa(syncArgs.command, syncArgs.args, {
+      cwd: projectDir,
+      stdio: context.verbose ? "inherit" : "pipe",
+      env: {
+        ...process.env,
+        CI: "1",
+      },
+    });
+
+    if (context.verbose) {
+      log.success("Prisma Next agent skills synced.");
+    }
+
+    return {
+      didSyncAgentSkills: true,
+    };
+  } catch (error) {
+    if (context.verbose) {
+      log.warn("Could not sync Prisma Next agent skills.");
+    }
+
+    return {
+      didSyncAgentSkills: false,
+      warning: `Agent skill sync failed: ${getCommandErrorMessage(error)}`,
+    };
   }
 }
 
@@ -1145,9 +869,6 @@ async function finalizePrismaFilesForContext(
   projectDir: string,
   provisionResult: PrismaPostgresProvisionResult,
 ): Promise<boolean> {
-  const initSpinner = spinner();
-  initSpinner.start("Writing Prisma Next project files...");
-
   try {
     await finalizePrismaFiles({
       provider: context.databaseProvider,
@@ -1156,27 +877,9 @@ async function finalizePrismaFilesForContext(
       projectDir,
     });
 
-    initSpinner.stop("Prisma Next project files ready.");
-    return true;
-  } catch (error) {
-    initSpinner.stop("Could not write Prisma Next project files.");
-    cancel(getCommandErrorMessage(error));
-    return false;
-  }
-}
-
-async function writePrismaNextProjectDocsForContext(
-  context: PrismaSetupContext,
-  projectDir: string,
-): Promise<boolean> {
-  try {
-    await writePrismaNextProjectDocs({
-      provider: context.databaseProvider,
-      authoring: context.authoring,
-      schemaPreset: context.schemaPreset,
-      packageManager: context.packageManager,
-      projectDir,
-    });
+    if (context.verbose) {
+      log.success("Prisma Next environment configured.");
+    }
     return true;
   } catch (error) {
     cancel(getCommandErrorMessage(error));
@@ -1216,7 +919,6 @@ async function emitPrismaNextContractForContext(
   context: PrismaSetupContext,
   projectDir: string,
 ): Promise<PrismaNextEmitResult> {
-  const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
   if (!context.shouldEmit) {
     return {
       didEmitContract: false,
@@ -1234,18 +936,14 @@ async function emitPrismaNextContractForContext(
     log.step(`Running ${emitCommand}`);
   }
 
-  const emitSpinner = context.verbose ? undefined : spinner();
-  emitSpinner?.start("Emitting Prisma Next contract artifacts...");
   try {
     const emitArgs = getPrismaNextCliArgs(context.packageManager, ["contract", "emit"]);
     await execa(emitArgs.command, emitArgs.args, {
-      cwd: prismaProjectDir,
+      cwd: projectDir,
       stdio: context.verbose ? "inherit" : "pipe",
     });
     if (context.verbose) {
       log.success("Prisma Next contract artifacts emitted.");
-    } else {
-      emitSpinner?.stop("Prisma Next contract artifacts emitted.");
     }
 
     return {
@@ -1254,8 +952,6 @@ async function emitPrismaNextContractForContext(
   } catch (error) {
     if (context.verbose) {
       log.warn("Could not emit Prisma Next contract.");
-    } else {
-      emitSpinner?.stop("Could not emit Prisma Next contract.");
     }
 
     return {
@@ -1268,11 +964,15 @@ async function emitPrismaNextContractForContext(
 function buildWarningLines(
   provisionWarning: string | undefined,
   emitWarning: string | undefined,
+  skillSyncWarning: string | undefined,
 ): string[] {
   const warningLines: string[] = [];
 
   if (provisionWarning) {
     warningLines.push(`- ${provisionWarning}`);
+  }
+  if (skillSyncWarning) {
+    warningLines.push(`- ${skillSyncWarning}`);
   }
   if (emitWarning) {
     warningLines.push(`- ${emitWarning}`);
@@ -1285,14 +985,21 @@ function buildNextStepsForContext(opts: {
   context: PrismaSetupContext;
   options: PrismaSetupRunOptions;
   didEmitContract: boolean;
+  didSyncAgentSkills: boolean;
 }): NextStep[] {
-  const { context, options, didEmitContract } = opts;
+  const { context, options, didEmitContract, didSyncAgentSkills } = opts;
   const nextSteps: NextStep[] = [...(options.prependNextSteps ?? [])];
 
   if (!context.shouldInstall) {
     nextSteps.push({
       command: getInstallCommand(context.packageManager),
       description: "Install the project dependencies.",
+    });
+  }
+  if (!didSyncAgentSkills) {
+    nextSteps.push({
+      command: getRunScriptCommand(context.packageManager, "skills:sync"),
+      description: "Sync the Prisma Next agent skills into .agents/skills.",
     });
   }
   if (!didEmitContract || !context.shouldEmit) {
@@ -1341,58 +1048,109 @@ function formatNextSteps(nextSteps: NextStep[]): string {
   return nextSteps.map((step) => `${step.command}\n  ${step.description}`).join("\n\n");
 }
 
+function formatAgentPrompt(didSyncAgentSkills: boolean): string {
+  const prompt = "What can I do with Prisma Next?";
+
+  if (didSyncAgentSkills) {
+    return `Ask your agent:\n${prompt}`;
+  }
+
+  return `After syncing the Prisma Next skills, ask your agent:\n${prompt}`;
+}
+
 export async function executePrismaSetupContext(
   context: PrismaSetupContext,
   options: PrismaSetupRunOptions = {},
 ): Promise<boolean> {
   const projectDir = path.resolve(options.projectDir ?? context.projectDir);
+  const progressSpinner = context.verbose ? undefined : (options.progressSpinner ?? spinner());
+  const ownsProgressSpinner = progressSpinner !== undefined && !options.progressSpinner;
+
+  if (ownsProgressSpinner) {
+    progressSpinner.start("Creating Prisma Next project...");
+  }
+
+  const stopProgressOnFailure = () => {
+    progressSpinner?.stop("Could not create Prisma Next project.");
+  };
+
+  if (context.shouldUsePrismaPostgres) {
+    progressSpinner?.message("Provisioning Prisma Postgres...");
+  }
   const provisionResult = await provisionPrismaPostgresIfNeeded(context, projectDir);
   if (!provisionResult) {
+    stopProgressOnFailure();
+    return false;
+  }
+
+  progressSpinner?.message("Preparing Prisma Next project files...");
+  const didRunPrismaNextInit = await runPrismaNextInitForContext(context, projectDir);
+  if (!didRunPrismaNextInit) {
+    stopProgressOnFailure();
     return false;
   }
 
   const didWriteDependencies = await writeDependenciesForContext(context, projectDir);
   if (!didWriteDependencies) {
+    stopProgressOnFailure();
     return false;
   }
 
+  if (context.shouldInstall) {
+    progressSpinner?.message("Installing dependencies...");
+  }
   const dependenciesInstalled = await installDependenciesForContext(context, projectDir);
   if (!dependenciesInstalled) {
+    stopProgressOnFailure();
     return false;
   }
 
+  if (context.shouldInstall) {
+    progressSpinner?.message("Syncing Prisma Next agent skills...");
+  }
+  const skillSyncResult = await syncAgentSkillsForContext(context, projectDir);
+
+  progressSpinner?.message("Configuring Prisma Next...");
   const didFinalizePrismaFiles = await finalizePrismaFilesForContext(
     context,
     projectDir,
     provisionResult,
   );
   if (!didFinalizePrismaFiles) {
+    stopProgressOnFailure();
     return false;
   }
 
   const didWriteMongoDockerHelpers = await writeMongoDockerHelpersForContext(context, projectDir);
   if (!didWriteMongoDockerHelpers) {
+    stopProgressOnFailure();
     return false;
   }
 
-  const didWriteProjectDocs = await writePrismaNextProjectDocsForContext(context, projectDir);
-  if (!didWriteProjectDocs) {
-    return false;
+  if (context.shouldEmit && context.shouldInstall) {
+    progressSpinner?.message("Emitting Prisma Next contract artifacts...");
   }
-
   const emitResult = await emitPrismaNextContractForContext(context, projectDir);
 
-  const warningLines = buildWarningLines(provisionResult.warning, emitResult.warning);
+  const warningLines = buildWarningLines(
+    provisionResult.warning,
+    emitResult.warning,
+    skillSyncResult.warning,
+  );
   const nextSteps = buildNextStepsForContext({
     context,
     options,
     didEmitContract: emitResult.didEmitContract,
+    didSyncAgentSkills: skillSyncResult.didSyncAgentSkills,
   });
+
+  progressSpinner?.stop("Prisma Next project ready.");
 
   if (warningLines.length > 0) {
     note(warningLines.map((line) => line.replace(/^- /, "")).join("\n"), "Heads up");
   }
 
+  note(formatAgentPrompt(skillSyncResult.didSyncAgentSkills), "Agent prompt");
   note(formatNextSteps(nextSteps), "Next steps for Prisma Next");
   outro("Prisma Next setup complete.");
 

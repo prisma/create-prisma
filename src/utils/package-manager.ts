@@ -169,35 +169,6 @@ export function getRunScriptCommand(packageManager: PackageManager, scriptName: 
   }
 }
 
-export function getRunScriptInDirectoryCommand(
-  packageManager: PackageManager,
-  directory: string,
-  scriptName: string,
-): string {
-  switch (packageManager) {
-    case "deno":
-      return `deno task --cwd ${directory} ${scriptName}`;
-    case "bun":
-      return `bun run --cwd ${directory} ${scriptName}`;
-    case "pnpm":
-      return `pnpm --dir ${directory} run ${scriptName}`;
-    case "yarn":
-      return `yarn --cwd ${directory} run ${scriptName}`;
-    case "npm":
-    default:
-      return `npm --prefix ${directory} run ${scriptName}`;
-  }
-}
-
-export function getRunScriptInDirectoryCommandWithArgsPassthrough(
-  packageManager: PackageManager,
-  directory: string,
-  scriptName: string,
-): string {
-  const command = getRunScriptInDirectoryCommand(packageManager, directory, scriptName);
-  return packageManager === "npm" ? `${command} --` : command;
-}
-
 function joinCommandParts(parts: Array<string | undefined>): string {
   return parts.filter((part) => typeof part === "string" && part.length > 0).join(" ");
 }

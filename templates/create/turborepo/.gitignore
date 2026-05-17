@@ -1,6 +1,0 @@
-node_modules
-.turbo
-.env
-.env.production
-.DS_Store
-.idea
