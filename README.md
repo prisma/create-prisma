@@ -118,7 +118,6 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 - `--provider postgres|postgresql|mongo|mongodb` (default: `postgres`)
 - `--authoring psl|typescript` (default: `psl`)
 - `--package-manager` choose the package manager/runtime
-- `--schema-preset empty|basic` (default: `basic`)
 - `--database-url` set `DATABASE_URL`
 - `--yes` accept defaults and skip prompts
 - `--no-install` scaffold only

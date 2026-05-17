@@ -1,10 +1,4 @@
-import type {
-  AuthoringStyle,
-  CreateTemplate,
-  DatabaseProvider,
-  PackageManager,
-  SchemaPreset,
-} from "../types";
+import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { renderTemplateTree, resolveTemplatesDir } from "./shared";
 
 type CreateTemplateContext = {
@@ -12,7 +6,6 @@ type CreateTemplateContext = {
   template: CreateTemplate;
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
-  schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
 };
 
@@ -29,7 +22,6 @@ function createTemplateContext(
   template: CreateTemplate,
   provider: DatabaseProvider,
   authoring: AuthoringStyle,
-  schemaPreset: SchemaPreset,
   packageManager?: PackageManager,
 ): CreateTemplateContext {
   return {
@@ -37,7 +29,6 @@ function createTemplateContext(
     template,
     provider,
     authoring,
-    schemaPreset,
     packageManager,
   };
 }
@@ -48,21 +39,12 @@ export async function scaffoldCreateTemplate(opts: {
   template: CreateTemplate;
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
-  schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
 }): Promise<void> {
-  const { projectDir, projectName, template, provider, authoring, schemaPreset, packageManager } =
-    opts;
+  const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
   const templateRoot = getCreateTemplateDir(template);
   const sharedTemplateRoot = getCreateSharedTemplateDir();
-  const context = createTemplateContext(
-    projectName,
-    template,
-    provider,
-    authoring,
-    schemaPreset,
-    packageManager,
-  );
+  const context = createTemplateContext(projectName, template, provider, authoring, packageManager);
   await renderTemplateTree<CreateTemplateContext>({
     templateRoot: sharedTemplateRoot,
     outputDir: projectDir,

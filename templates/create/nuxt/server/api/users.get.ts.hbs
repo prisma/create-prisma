@@ -1,4 +1,3 @@
-{{#if (eq schemaPreset "basic")}}
 import { listUsers } from "../utils/prisma";
 
 export default defineEventHandler(async () => {
@@ -23,8 +22,4 @@ export default defineEventHandler(async () => {
 
   return { users };
 });
-{{else}}
-export default defineEventHandler(async () => {
-  return { users: [] };
-});
-{{/if}}
+

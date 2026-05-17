@@ -3,9 +3,8 @@ import "dotenv/config";
 {{/if}}
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-{{#if (eq schemaPreset "basic")}}
+
 import { listUsers } from "./lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{/if}}
 
 const app = new Hono();
 
@@ -14,7 +13,6 @@ app.get("/", (c) => {
     message: "hello from create-prisma + hono",
   });
 });
-{{#if (eq schemaPreset "basic")}}
 
 app.get("/users", async (c) => {
   const users = await listUsers(10).catch((error) => {
@@ -28,7 +26,6 @@ app.get("/users", async (c) => {
 
   return c.json(users);
 });
-{{/if}}
 
 const rawPort = ({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? "").trim();
 const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;

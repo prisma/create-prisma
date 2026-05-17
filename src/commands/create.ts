@@ -16,13 +16,11 @@ import {
   CreateTemplateSchema,
   type CreateCommandInput,
   type CreateTemplate,
-  type SchemaPreset,
 } from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "hono";
-const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
 
 export type CreateTargetPathState = {
   exists: boolean;
@@ -279,7 +277,6 @@ async function collectCreateContext(
 
   const prismaSetupContext = await collectPrismaSetupContext(input, {
     projectDir: targetDirectory,
-    defaultSchemaPreset: DEFAULT_SCHEMA_PRESET,
   });
   if (!prismaSetupContext) {
     return;
@@ -302,15 +299,22 @@ async function executeCreateContext(
   createSpinner?.start("Creating Prisma Next project...");
 
   try {
+    if (context.prismaSetupContext.verbose) {
+      log.step(`Scaffolding ${context.template} starter.`);
+    }
+
     await scaffoldCreateTemplate({
       projectDir: context.targetDirectory,
       projectName: context.projectPackageName,
       template: context.template,
-      schemaPreset: context.prismaSetupContext.schemaPreset,
       provider: context.prismaSetupContext.databaseProvider,
       authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
     });
+
+    if (context.prismaSetupContext.verbose) {
+      log.success("Starter files scaffolded.");
+    }
   } catch (error) {
     createSpinner?.stop("Could not create Prisma Next project.");
     return {

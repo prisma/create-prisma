@@ -18,7 +18,6 @@ import {
   type DatabaseProvider,
   type PackageManager,
   type PrismaSetupCommandInput,
-  type SchemaPreset,
 } from "../types";
 import {
   detectPackageManager,
@@ -65,7 +64,6 @@ export type PrismaSetupContext = {
   shouldEmit: boolean;
   databaseProvider: DatabaseProvider;
   authoring: AuthoringStyle;
-  schemaPreset: SchemaPreset;
   databaseUrl?: string;
   shouldUsePrismaPostgres: boolean;
   packageManager: PackageManager;
@@ -81,7 +79,6 @@ type FinalizePrismaOptions = {
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgres";
 const DEFAULT_AUTHORING: AuthoringStyle = "psl";
-const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
 const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
@@ -127,38 +124,6 @@ const requiredPrismaFileGroups = [
 
 function getContractPath(authoring: AuthoringStyle): string {
   return `prisma/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
-}
-
-function getEmptyContractContent(provider: DatabaseProvider, authoring: AuthoringStyle): string {
-  if (authoring === "psl") {
-    return "// use prisma-next\n";
-  }
-
-  if (provider === "mongo") {
-    return `import { defineContract } from "@prisma-next/mongo/contract-builder";
-import mongoFamily from "@prisma-next/mongo/family";
-import mongoTarget from "@prisma-next/mongo/target";
-
-export const contract = defineContract(
-  { family: mongoFamily, target: mongoTarget },
-  () => ({
-    models: {},
-  }),
-);
-`;
-  }
-
-  return `import { defineContract } from "@prisma-next/postgres/contract-builder";
-import sqlFamily from "@prisma-next/postgres/family";
-import postgresTarget from "@prisma-next/postgres/target";
-
-export const contract = defineContract(
-  { family: sqlFamily, target: postgresTarget },
-  () => ({
-    models: {},
-  }),
-);
-`;
 }
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
@@ -318,7 +283,6 @@ export async function collectPrismaSetupContext(
   input: PrismaSetupCommandInput,
   options: {
     projectDir?: string;
-    defaultSchemaPreset?: SchemaPreset;
   } = {},
 ): Promise<PrismaSetupContext | undefined> {
   const projectDir = path.resolve(options.projectDir ?? process.cwd());
@@ -357,8 +321,6 @@ export async function collectPrismaSetupContext(
     return;
   }
 
-  const schemaPreset = input.schemaPreset ?? options.defaultSchemaPreset ?? DEFAULT_SCHEMA_PRESET;
-
   const detectedPackageManager = await detectPackageManager(projectDir);
   const packageManager =
     input.packageManager ??
@@ -380,7 +342,6 @@ export async function collectPrismaSetupContext(
     shouldEmit,
     databaseProvider,
     authoring,
-    schemaPreset,
     databaseUrl,
     shouldUsePrismaPostgres,
     packageManager,
@@ -734,14 +695,6 @@ async function runPrismaNextInitForContext(
       },
     });
 
-    if (context.schemaPreset === "empty") {
-      await fs.writeFile(
-        path.join(projectDir, getContractPath(context.authoring)),
-        getEmptyContractContent(context.databaseProvider, context.authoring),
-        "utf8",
-      );
-    }
-
     if (context.verbose) {
       log.success("Prisma Next project files ready.");
     }
@@ -1028,12 +981,10 @@ function buildNextStepsForContext(opts: {
     command: getRunScriptCommand(context.packageManager, "migration:apply"),
     description: "Apply the planned migration to the database.",
   });
-  if (context.schemaPreset === "basic") {
-    nextSteps.push({
-      command: getRunScriptCommand(context.packageManager, "db:seed"),
-      description: "Insert the sample user and post data from prisma/seed.ts.",
-    });
-  }
+  nextSteps.push({
+    command: getRunScriptCommand(context.packageManager, "db:seed"),
+    description: "Insert the sample user and post data from prisma/seed.ts.",
+  });
   if (options.includeDevNextStep) {
     nextSteps.push({
       command: getRunScriptCommand(context.packageManager, "dev"),
@@ -1049,13 +1000,18 @@ function formatNextSteps(nextSteps: NextStep[]): string {
 }
 
 function formatAgentPrompt(didSyncAgentSkills: boolean): string {
-  const prompt = "What can I do with Prisma Next?";
+  const skillPath = didSyncAgentSkills
+    ? ".agents/skills/prisma-next/SKILL.md"
+    : ".agents/skills/prisma-next/SKILL.md (after skills sync)";
 
-  if (didSyncAgentSkills) {
-    return `Ask your agent:\n${prompt}`;
-  }
-
-  return `After syncing the Prisma Next skills, ask your agent:\n${prompt}`;
+  return [
+    "Ask your agent:",
+    "What can I do with Prisma Next?",
+    "",
+    "Learn more:",
+    `Docs: prisma-next.md`,
+    `Skill: ${skillPath}`,
+  ].join("\n");
 }
 
 export async function executePrismaSetupContext(
@@ -1151,7 +1107,9 @@ export async function executePrismaSetupContext(
   }
 
   note(formatAgentPrompt(skillSyncResult.didSyncAgentSkills), "Agent prompt");
-  note(formatNextSteps(nextSteps), "Next steps for Prisma Next");
+  if (context.verbose) {
+    note(formatNextSteps(nextSteps), "Next steps for Prisma Next");
+  }
   outro("Prisma Next setup complete.");
 
   return true;

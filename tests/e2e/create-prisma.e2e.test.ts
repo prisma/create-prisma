@@ -113,7 +113,6 @@ async function scaffoldProject(
       provider,
       authoring: "psl",
       packageManager: "bun",
-      schemaPreset: "basic",
       databaseUrl,
       prismaPostgres: false,
       install: false,

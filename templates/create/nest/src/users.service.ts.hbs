@@ -1,4 +1,3 @@
-{{#if (eq schemaPreset "basic")}}
 import { Injectable } from "@nestjs/common";
 
 import { PrismaService } from "./prisma.service{{#if (eq packageManager "deno")}}.ts{{/if}}";
@@ -11,4 +10,4 @@ export class UsersService {
     return this.prisma.listUsers(10);
   }
 }
-{{/if}}
+

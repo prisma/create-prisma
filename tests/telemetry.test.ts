@@ -37,7 +37,6 @@ const createContext = {
     shouldEmit: true,
     databaseProvider: "mongo",
     authoring: "psl",
-    schemaPreset: "basic",
     shouldUsePrismaPostgres: false,
     packageManager: "bun",
     shouldInstall: true,

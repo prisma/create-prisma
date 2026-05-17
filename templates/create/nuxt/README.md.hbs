@@ -32,15 +32,13 @@ Database helper scripts are added to `package.json`:
 - `{{runScriptCommand packageManager "migration:plan"}}` - create a migration plan
 - `{{runScriptCommand packageManager "migration:apply"}}` - apply a planned migration
 {{/if}}
-{{#if (eq schemaPreset "basic")}}
+
 - `{{runScriptCommand packageManager "db:seed"}}` - insert sample users manually
-{{/if}}
 
 For provider-specific Prisma Next reference docs, see `prisma-next.md`. Agent-specific project guidance is scaffolded in `.agents/skills/prisma-next/SKILL.md`.
 The Nuxt Vite dev server also auto-emits Prisma Next contract artifacts when the contract changes.
 
 Node-based Prisma Next projects expect Node.js 24 LTS or newer.
-{{#if (eq schemaPreset "basic")}}
 
 The starter page in `app/pages/index.vue` fetches users from `server/api/users.get.ts` after you initialize and apply your schema.
-{{/if}}
+

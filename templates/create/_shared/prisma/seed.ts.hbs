@@ -1,4 +1,3 @@
-{{#if (eq schemaPreset "basic")}}
 {{#if (requiresDotenvConfigImport packageManager)}}
 import "dotenv/config";
 {{/if}}
@@ -51,6 +50,4 @@ try {
   await db.runtime().close();
 }
 {{/if}}
-{{else}}
-console.log("No seed data for the empty schema preset.");
-{{/if}}
+

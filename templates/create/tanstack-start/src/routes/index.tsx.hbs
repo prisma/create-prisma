@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-{{#if (eq schemaPreset "basic")}}
-import { listUsers as listStarterUsers } from "../lib/prisma.server";
-{{/if}}
 
-{{#if (eq schemaPreset "basic")}}
+import { listUsers as listStarterUsers } from "../lib/prisma.server";
+
 const listUsers = createServerFn({ method: "GET" }).handler(async () => {
   return listStarterUsers(10)
     .then((rows) =>
@@ -15,30 +13,28 @@ const listUsers = createServerFn({ method: "GET" }).handler(async () => {
     )
     .catch(() => undefined);
 });
-{{/if}}
 
 export const Route = createFileRoute("/")({
-{{#if (eq schemaPreset "basic")}}
+
   loader: async () => listUsers(),
-{{/if}}
+
   component: Home,
 });
 
 function Home() {
-{{#if (eq schemaPreset "basic")}}
+
   const formatter = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "UTC",
   });
   const users = Route.useLoaderData();
-{{/if}}
 
   return (
     <main className="shell">
       <div className="hero">
         <p className="eyebrow">TanStack Start + Prisma Next</p>
-{{#if (eq schemaPreset "basic")}}
+
         <h1>Users from your database, loaded through a server function.</h1>
         <p className="lede">
           This route uses TanStack Start&apos;s server function API and the Prisma Next helper in{" "}
@@ -79,42 +75,6 @@ function Home() {
           </ul>
         )}
       </section>
-{{else}}
-        <h1>Your TanStack Start app is ready.</h1>
-        <p className="lede">
-          Edit your Prisma Next contract, run <code>contract:emit</code>, then query your database
-          from server functions or route loaders.
-        </p>
-      </div>
-
-      <section className="panel">
-        <div className="panelHeader">
-          <h2>What&apos;s included</h2>
-          <span>Starter kit</span>
-        </div>
-
-        <ul className="users">
-          <li>
-            <div>
-              <strong>File-based routing</strong>
-              <p>Add new routes in <code>src/routes</code>.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Prisma Next runtime</strong>
-              <p>Use the shared helper from <code>src/lib/prisma.server.ts</code>.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Manual database setup</strong>
-              <p>Run the schema setup commands when you are ready.</p>
-            </div>
-          </li>
-        </ul>
-      </section>
-{{/if}}
 
       <section className="panel">
         <div className="panelHeader">

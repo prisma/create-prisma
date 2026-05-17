@@ -1,5 +1,5 @@
 import type { PageServerLoad } from "./$types";
-{{#if (eq schemaPreset "basic")}}
+
 import { listUsers } from "$lib/server/prisma";
 
 export const load: PageServerLoad = async () => {
@@ -14,9 +14,4 @@ export const load: PageServerLoad = async () => {
 
   return { users };
 };
-{{else}}
 
-export const load: PageServerLoad = async () => {
-  return {};
-};
-{{/if}}

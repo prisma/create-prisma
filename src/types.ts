@@ -4,7 +4,6 @@ export const databaseProviders = ["postgres", "mongo"] as const;
 export const databaseProviderInputs = ["postgres", "postgresql", "mongo", "mongodb"] as const;
 
 export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
-export const schemaPresets = ["empty", "basic"] as const;
 export const authoringStyles = ["psl", "typescript"] as const;
 export const createTemplates = [
   "hono",
@@ -37,8 +36,6 @@ export const DatabaseProviderSchema = z
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
 export const PackageManagerSchema = z.enum(packageManagers);
 export type PackageManager = z.infer<typeof PackageManagerSchema>;
-export const SchemaPresetSchema = z.enum(schemaPresets);
-export type SchemaPreset = z.infer<typeof SchemaPresetSchema>;
 export const AuthoringStyleSchema = z.enum(authoringStyles);
 export type AuthoringStyle = z.infer<typeof AuthoringStyleSchema>;
 export const CreateTemplateSchema = z.enum(createTemplates);
@@ -66,9 +63,6 @@ export const PrismaSetupOptionsSchema = z.object({
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
   emit: z.boolean().optional().describe("Emit Prisma Next contract artifacts after scaffolding"),
-  schemaPreset: SchemaPresetSchema.optional().describe(
-    "Schema preset to scaffold in prisma/contract.prisma or prisma/contract.ts",
-  ),
 });
 
 export const PrismaSetupCommandInputSchema = CommonCommandOptionsSchema.extend(

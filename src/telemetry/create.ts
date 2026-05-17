@@ -38,7 +38,6 @@ function getBaseCreateProperties(
     "database-provider": context?.prismaSetupContext.databaseProvider ?? input.provider ?? null,
     "authoring-style": context?.prismaSetupContext.authoring ?? input.authoring ?? null,
     "package-manager": context?.prismaSetupContext.packageManager ?? input.packageManager ?? null,
-    "schema-preset": context?.prismaSetupContext.schemaPreset ?? input.schemaPreset ?? null,
     "should-install": context?.prismaSetupContext.shouldInstall ?? input.install ?? null,
     "should-emit": context?.prismaSetupContext.shouldEmit ?? input.emit ?? null,
     "uses-prisma-postgres":

@@ -167,7 +167,6 @@ describe("scaffoldCreateTemplate", () => {
         template: "hono",
         provider: "postgres",
         authoring: "psl",
-        schemaPreset: "basic",
         packageManager: "npm",
       });
 
@@ -189,7 +188,6 @@ describe("scaffoldCreateTemplate", () => {
           template: "hono",
           provider: "postgres",
           authoring: "psl",
-          schemaPreset: "basic",
           packageManager,
         });
 
