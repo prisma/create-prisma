@@ -3,6 +3,9 @@ import type { CreateCommandInput } from "../types";
 
 import { trackCliTelemetry } from "./client";
 
+export const CREATE_PRISMA_NEXT_COMPLETED_EVENT = "cli:create_prisma_next_command_completed";
+export const CREATE_PRISMA_NEXT_FAILED_EVENT = "cli:create_prisma_next_command_failed";
+
 export type CreateTelemetryFailureStage =
   | "validate_input"
   | "collect_context"
@@ -71,7 +74,7 @@ export async function trackCreateCompleted(params: {
   context: CreatePromptContext;
   durationMs: number;
 }): Promise<void> {
-  await trackCliTelemetry("cli:create_command_completed", {
+  await trackCliTelemetry(CREATE_PRISMA_NEXT_COMPLETED_EVENT, {
     ...getBaseCreateProperties(params.input, params.context),
     "duration-ms": params.durationMs,
   });
@@ -84,7 +87,7 @@ export async function trackCreateFailed(params: {
   error?: unknown;
   stage: CreateTelemetryFailureStage;
 }): Promise<void> {
-  await trackCliTelemetry("cli:create_command_failed", {
+  await trackCliTelemetry(CREATE_PRISMA_NEXT_FAILED_EVENT, {
     ...getBaseCreateProperties(params.input, params.context),
     "duration-ms": params.durationMs,
     "failure-stage": params.stage,
