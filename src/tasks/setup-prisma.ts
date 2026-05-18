@@ -50,12 +50,10 @@ type PrismaNextEmitResult = {
 
 type PrismaNextSkillSyncResult = {
   didSyncAgentSkills: boolean;
-  didSyncClaudeSkills: boolean;
   warning?: string;
 };
 
 type ClaudeSkillsDirectoryPreparation = {
-  warning?: string;
   didCreateClaudeRoot: boolean;
 };
 
@@ -786,7 +784,6 @@ async function syncAgentSkillsForContext(
   if (!context.shouldInstall) {
     return {
       didSyncAgentSkills: false,
-      didSyncClaudeSkills: false,
     };
   }
 
@@ -813,8 +810,6 @@ async function syncAgentSkillsForContext(
 
     return {
       didSyncAgentSkills: true,
-      didSyncClaudeSkills: claudeDirectory.warning === undefined,
-      warning: claudeDirectory.warning,
     };
   } catch (error) {
     if (context.verbose) {
@@ -827,13 +822,7 @@ async function syncAgentSkillsForContext(
 
     return {
       didSyncAgentSkills: false,
-      didSyncClaudeSkills: false,
-      warning: [
-        claudeDirectory.warning,
-        `Agent skill sync failed: ${getCommandErrorMessage(error)}`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      warning: `Agent skill sync failed: ${getCommandErrorMessage(error)}`,
     };
   }
 }
@@ -849,10 +838,9 @@ async function prepareClaudeSkillsDirectory(
     return {
       didCreateClaudeRoot,
     };
-  } catch (error) {
+  } catch {
     return {
       didCreateClaudeRoot: false,
-      warning: `Could not prepare ${CLAUDE_SKILLS_DIR}: ${getCommandErrorMessage(error)}`,
     };
   }
 }
@@ -1051,25 +1039,19 @@ function formatNextSteps(nextSteps: NextStep[]): string {
   return nextSteps.map((step) => `${step.command}\n  ${step.description}`).join("\n\n");
 }
 
-function formatAgentPrompt(didSyncAgentSkills: boolean, didSyncClaudeSkills: boolean): string {
+function formatAgentPrompt(didSyncAgentSkills: boolean): string {
   const agentsSkillPath = didSyncAgentSkills
     ? ".agents/skills/prisma-next/SKILL.md"
     : ".agents/skills/prisma-next/SKILL.md (after skills sync)";
 
-  const promptLines = [
+  return [
     "Ask your agent:",
     "What can I do with Prisma Next?",
     "",
     "Learn more:",
     `Docs: prisma-next.md`,
     `Skill: ${agentsSkillPath}`,
-  ];
-
-  if (didSyncClaudeSkills) {
-    promptLines.push(`Claude: .claude/skills/prisma-next/SKILL.md`);
-  }
-
-  return promptLines.join("\n");
+  ].join("\n");
 }
 
 export async function executePrismaSetupContext(
@@ -1164,10 +1146,7 @@ export async function executePrismaSetupContext(
     note(warningLines.map((line) => line.replace(/^- /, "")).join("\n"), "Heads up");
   }
 
-  note(
-    formatAgentPrompt(skillSyncResult.didSyncAgentSkills, skillSyncResult.didSyncClaudeSkills),
-    "Agent prompt",
-  );
+  note(formatAgentPrompt(skillSyncResult.didSyncAgentSkills), "Agent prompt");
   if (context.verbose) {
     note(formatNextSteps(nextSteps), "Next steps for Prisma Next");
   }
