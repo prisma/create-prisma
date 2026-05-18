@@ -50,7 +50,13 @@ type PrismaNextEmitResult = {
 
 type PrismaNextSkillSyncResult = {
   didSyncAgentSkills: boolean;
+  didSyncClaudeSkills: boolean;
   warning?: string;
+};
+
+type ClaudeSkillsDirectoryPreparation = {
+  warning?: string;
+  didCreateClaudeRoot: boolean;
 };
 
 type NextStep = {
@@ -83,6 +89,7 @@ const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
 const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
+const CLAUDE_SKILLS_DIR = ".claude/skills";
 const MONGO_DOCKER_COMPOSE = `services:
   mongodb:
     image: mongo:latest
@@ -779,9 +786,11 @@ async function syncAgentSkillsForContext(
   if (!context.shouldInstall) {
     return {
       didSyncAgentSkills: false,
+      didSyncClaudeSkills: false,
     };
   }
 
+  const claudeDirectory = await prepareClaudeSkillsDirectory(projectDir);
   const syncCommand = getSkillsSyncCliCommand(context.packageManager);
   if (context.verbose) {
     log.step(`Running ${syncCommand}`);
@@ -804,16 +813,59 @@ async function syncAgentSkillsForContext(
 
     return {
       didSyncAgentSkills: true,
+      didSyncClaudeSkills: claudeDirectory.warning === undefined,
+      warning: claudeDirectory.warning,
     };
   } catch (error) {
     if (context.verbose) {
       log.warn("Could not sync Prisma Next agent skills.");
     }
 
+    if (claudeDirectory.didCreateClaudeRoot) {
+      await removeEmptyClaudeSkillsDirectory(projectDir);
+    }
+
     return {
       didSyncAgentSkills: false,
-      warning: `Agent skill sync failed: ${getCommandErrorMessage(error)}`,
+      didSyncClaudeSkills: false,
+      warning: [
+        claudeDirectory.warning,
+        `Agent skill sync failed: ${getCommandErrorMessage(error)}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
     };
+  }
+}
+
+async function prepareClaudeSkillsDirectory(
+  projectDir: string,
+): Promise<ClaudeSkillsDirectoryPreparation> {
+  const claudeRoot = path.join(projectDir, ".claude");
+  const didCreateClaudeRoot = !(await fs.pathExists(claudeRoot));
+
+  try {
+    await fs.ensureDir(path.join(projectDir, CLAUDE_SKILLS_DIR));
+    return {
+      didCreateClaudeRoot,
+    };
+  } catch (error) {
+    return {
+      didCreateClaudeRoot: false,
+      warning: `Could not prepare ${CLAUDE_SKILLS_DIR}: ${getCommandErrorMessage(error)}`,
+    };
+  }
+}
+
+async function removeEmptyClaudeSkillsDirectory(projectDir: string): Promise<void> {
+  const claudeSkillsDir = path.join(projectDir, CLAUDE_SKILLS_DIR);
+  const claudeRoot = path.dirname(claudeSkillsDir);
+
+  if ((await fs.pathExists(claudeSkillsDir)) && (await fs.readdir(claudeSkillsDir)).length === 0) {
+    await fs.remove(claudeSkillsDir);
+  }
+  if ((await fs.pathExists(claudeRoot)) && (await fs.readdir(claudeRoot)).length === 0) {
+    await fs.remove(claudeRoot);
   }
 }
 
@@ -952,7 +1004,7 @@ function buildNextStepsForContext(opts: {
   if (!didSyncAgentSkills) {
     nextSteps.push({
       command: getRunScriptCommand(context.packageManager, "skills:sync"),
-      description: "Sync the Prisma Next agent skills into .agents/skills.",
+      description: "Sync the Prisma Next agent skills from installed packages.",
     });
   }
   if (!didEmitContract || !context.shouldEmit) {
@@ -999,19 +1051,25 @@ function formatNextSteps(nextSteps: NextStep[]): string {
   return nextSteps.map((step) => `${step.command}\n  ${step.description}`).join("\n\n");
 }
 
-function formatAgentPrompt(didSyncAgentSkills: boolean): string {
-  const skillPath = didSyncAgentSkills
+function formatAgentPrompt(didSyncAgentSkills: boolean, didSyncClaudeSkills: boolean): string {
+  const agentsSkillPath = didSyncAgentSkills
     ? ".agents/skills/prisma-next/SKILL.md"
     : ".agents/skills/prisma-next/SKILL.md (after skills sync)";
 
-  return [
+  const promptLines = [
     "Ask your agent:",
     "What can I do with Prisma Next?",
     "",
     "Learn more:",
     `Docs: prisma-next.md`,
-    `Skill: ${skillPath}`,
-  ].join("\n");
+    `Skill: ${agentsSkillPath}`,
+  ];
+
+  if (didSyncClaudeSkills) {
+    promptLines.push(`Claude: .claude/skills/prisma-next/SKILL.md`);
+  }
+
+  return promptLines.join("\n");
 }
 
 export async function executePrismaSetupContext(
@@ -1106,7 +1164,10 @@ export async function executePrismaSetupContext(
     note(warningLines.map((line) => line.replace(/^- /, "")).join("\n"), "Heads up");
   }
 
-  note(formatAgentPrompt(skillSyncResult.didSyncAgentSkills), "Agent prompt");
+  note(
+    formatAgentPrompt(skillSyncResult.didSyncAgentSkills, skillSyncResult.didSyncClaudeSkills),
+    "Agent prompt",
+  );
   if (context.verbose) {
     note(formatNextSteps(nextSteps), "Next steps for Prisma Next");
   }
