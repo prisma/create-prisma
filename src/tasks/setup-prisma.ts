@@ -81,43 +81,178 @@ const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
 
 const MONGO_MEMORY_SERVER_VERSION = "^11.1.0";
 
-const MONGO_MEMORY_SERVER_SCRIPT = `import { mkdirSync } from "node:fs";
+const MONGO_MEMORY_SERVER_SCRIPT = `import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { MongoMemoryReplSet } from "mongodb-memory-server";
 
+const dbPath = path.resolve(process.env.MONGO_DB_PATH ?? ".mongo-data");
+const pidFile = path.join(dbPath, "mongo.pid");
+const logFile = path.join(dbPath, "mongo.log");
 const port = Number(process.env.MONGO_PORT ?? 27017);
 const replSetName = process.env.MONGO_REPLSET ?? "rs0";
-const dbPath = path.resolve(process.env.MONGO_DB_PATH ?? ".mongo-data");
+const readyTimeoutMs = Number(process.env.MONGO_READY_TIMEOUT_MS ?? 60_000);
 
-// Persist data across restarts. Delete the directory for a clean slate.
-mkdirSync(dbPath, { recursive: true });
+function readPid(): number | null {
+  if (!existsSync(pidFile)) return null;
+  const raw = readFileSync(pidFile, "utf8").trim();
+  const pid = Number(raw);
+  return Number.isFinite(pid) && pid > 0 ? pid : null;
+}
 
-const replSet = await MongoMemoryReplSet.create({
-  replSet: { name: replSetName, count: 1, storageEngine: "wiredTiger" },
-  instanceOpts: [{ port, storageEngine: "wiredTiger", dbPath }],
-});
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-console.log(\`MongoDB memory server ready at \${replSet.getUri()}\`);
-console.log(\`Data directory: \${dbPath}\`);
-console.log("Press Ctrl+C to stop.");
+function getChildCommand(): { command: string; args: string[] } {
+  const scriptPath = path.resolve(process.argv[1] ?? "");
+  const versions = process.versions as Record<string, string | undefined>;
+  if (versions.bun) return { command: process.execPath, args: [scriptPath, "_run"] };
+  if (versions.deno) return { command: process.execPath, args: ["run", "-A", scriptPath, "_run"] };
+  return { command: "tsx", args: [scriptPath, "_run"] };
+}
 
-const shutdown = async () => {
-  await replSet.stop();
-  process.exit(0);
-};
+async function runServer(): Promise<void> {
+  mkdirSync(dbPath, { recursive: true });
+  const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+  const replSet = await MongoMemoryReplSet.create({
+    replSet: { name: replSetName, count: 1, storageEngine: "wiredTiger" },
+    instanceOpts: [{ port, storageEngine: "wiredTiger", dbPath }],
+  });
+  console.log(\`MongoDB memory server ready at \${replSet.getUri()}\`);
+  console.log(\`Data directory: \${dbPath}\`);
+  const shutdown = async () => {
+    await replSet.stop();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+async function up(): Promise<void> {
+  mkdirSync(dbPath, { recursive: true });
+  const existing = readPid();
+  if (existing !== null && isAlive(existing)) {
+    console.log(\`MongoDB is already running (PID \${existing}). Use \\\`db:down\\\` to stop.\`);
+    return;
+  }
+  if (existing !== null) rmSync(pidFile, { force: true });
+
+  writeFileSync(logFile, "");
+  const logFd = openSync(logFile, "a");
+  const { command, args } = getChildCommand();
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: ["ignore", logFd, logFd],
+    env: process.env,
+  });
+  if (typeof child.pid !== "number") throw new Error("Failed to spawn MongoDB child process.");
+  writeFileSync(pidFile, String(child.pid));
+  child.unref();
+
+  const start = Date.now();
+  while (Date.now() - start < readyTimeoutMs) {
+    if (!isAlive(child.pid)) {
+      console.error("MongoDB failed to start:");
+      console.error(readFileSync(logFile, "utf8"));
+      rmSync(pidFile, { force: true });
+      process.exit(1);
+    }
+    const log = readFileSync(logFile, "utf8");
+    if (log.includes("MongoDB memory server ready")) {
+      for (const line of log.split("\\n")) {
+        if (line.trim().length > 0) console.log(line);
+      }
+      console.log(\`Detached (PID \${child.pid}). Logs: \${logFile}\`);
+      console.log("Stop with \`db:down\` or wipe with \`db:reset\`.");
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  console.error(\`Timed out waiting for MongoDB after \${readyTimeoutMs}ms.\`);
+  console.error(readFileSync(logFile, "utf8"));
+  try {
+    process.kill(child.pid, "SIGTERM");
+  } catch {
+    // ignore
+  }
+  rmSync(pidFile, { force: true });
+  process.exit(1);
+}
+
+async function down(wipe: boolean): Promise<void> {
+  const pid = readPid();
+  if (pid !== null && isAlive(pid)) {
+    process.kill(pid, "SIGTERM");
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline && isAlive(pid)) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (isAlive(pid)) {
+      console.warn(\`MongoDB (PID \${pid}) did not exit within 10s; sending SIGKILL.\`);
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // ignore
+      }
+    }
+    console.log(\`Stopped MongoDB (PID \${pid}).\`);
+  } else if (pid !== null) {
+    console.log("MongoDB was not running (stale PID file).");
+  } else {
+    console.log("MongoDB is not running.");
+  }
+  rmSync(pidFile, { force: true });
+  if (wipe) {
+    rmSync(dbPath, { recursive: true, force: true });
+    console.log(\`Removed \${dbPath}.\`);
+  }
+}
+
+const cmd = process.argv[2] ?? "up";
+switch (cmd) {
+  case "up":
+    await up();
+    break;
+  case "down":
+    await down(false);
+    break;
+  case "reset":
+    await down(true);
+    break;
+  case "_run":
+    await runServer();
+    break;
+  default:
+    console.error(\`Unknown command: \${cmd}. Use: up | down | reset\`);
+    process.exit(2);
+}
 `;
 
 function getMongoMemoryScripts(packageManager: PackageManager): Record<string, string> {
   switch (packageManager) {
     case "bun":
-      return { "db:up": "bun scripts/start-mongo.ts" };
+      return {
+        "db:up": "bun scripts/mongo.ts up",
+        "db:down": "bun scripts/mongo.ts down",
+        "db:reset": "bun scripts/mongo.ts reset",
+      };
     case "deno":
-      return { "db:up": "deno run -A scripts/start-mongo.ts" };
+      return {
+        "db:up": "deno run -A scripts/mongo.ts up",
+        "db:down": "deno run -A scripts/mongo.ts down",
+        "db:reset": "deno run -A scripts/mongo.ts reset",
+      };
     default:
-      return { "db:up": "tsx scripts/start-mongo.ts" };
+      return {
+        "db:up": "tsx scripts/mongo.ts up",
+        "db:down": "tsx scripts/mongo.ts down",
+        "db:reset": "tsx scripts/mongo.ts reset",
+      };
   }
 }
 
@@ -514,7 +649,7 @@ async function ensurePackageScripts(
 }
 
 async function ensureMongoMemoryServerScript(projectDir: string): Promise<void> {
-  const scriptPath = path.join(projectDir, "scripts", "start-mongo.ts");
+  const scriptPath = path.join(projectDir, "scripts", "mongo.ts");
   if (await fs.pathExists(scriptPath)) {
     return;
   }
@@ -917,7 +1052,8 @@ function buildNextStepsForContext(opts: {
   if (context.databaseProvider === "mongo" && !context.databaseUrl) {
     nextSteps.push({
       command: getRunScriptCommand(context.packageManager, "db:up"),
-      description: "Start the local in-memory MongoDB replica set (mongodb-memory-server).",
+      description:
+        "Start the local in-memory MongoDB replica set, detached (mongodb-memory-server). Stop with `db:down`, wipe with `db:reset`.",
     });
   }
   nextSteps.push({

@@ -44,7 +44,11 @@ async function createDevDatabase(options?: ServerOptions): Promise<DevDatabase> 
   };
 }
 
-async function runCommand(projectDir: string, args: string[]): Promise<string> {
+async function runCommand(
+  projectDir: string,
+  args: string[],
+  extraEnv: Record<string, string> = {},
+): Promise<string> {
   const proc = Bun.spawn({
     cmd: args,
     cwd: projectDir,
@@ -52,6 +56,7 @@ async function runCommand(projectDir: string, args: string[]): Promise<string> {
       ...process.env,
       CI: "1",
       CREATE_PRISMA_DISABLE_TELEMETRY: "1",
+      ...extraEnv,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -73,8 +78,12 @@ async function runCommand(projectDir: string, args: string[]): Promise<string> {
   return [stdout, stderr].filter(Boolean).join("\n");
 }
 
-async function runScript(projectDir: string, scriptName: string): Promise<string> {
-  return runCommand(projectDir, ["bun", "run", scriptName]);
+async function runScript(
+  projectDir: string,
+  scriptName: string,
+  extraEnv: Record<string, string> = {},
+): Promise<string> {
+  return runCommand(projectDir, ["bun", "run", scriptName], extraEnv);
 }
 
 async function writeDatabaseUrl(projectDir: string, databaseUrl: string): Promise<void> {
@@ -225,94 +234,19 @@ async function startMemoryMongo(projectDir: string): Promise<MemoryMongoHandle> 
     projectDir,
     `mongodb://localhost:${port}/mydb?replicaSet=rs0&directConnection=true`,
   );
-
-  const proc = Bun.spawn({
-    cmd: ["bun", "run", "db:up"],
-    cwd: projectDir,
-    env: {
-      ...process.env,
-      MONGO_PORT: String(port),
-      CI: "1",
-      CREATE_PRISMA_DISABLE_TELEMETRY: "1",
-    },
-    stdout: "pipe",
-    stderr: "pipe",
+  // db:up is detached and exits when ready, so this returns once the server is listening.
+  await runScript(projectDir, "db:up", {
+    MONGO_PORT: String(port),
+    MONGO_READY_TIMEOUT_MS: String(MONGO_STARTUP_TIMEOUT),
   });
-
-  const stdoutChunks: string[] = [];
-  const stderrChunks: string[] = [];
-
-  const consume = async (
-    stream: ReadableStream<Uint8Array> | null | undefined,
-    sink: string[],
-  ): Promise<void> => {
-    if (!stream) return;
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) return;
-        sink.push(decoder.decode(value, { stream: true }));
-      }
-    } catch {
-      // stream closed
-    }
-  };
-
-  const stdoutConsumer = consume(
-    proc.stdout as ReadableStream<Uint8Array> | null | undefined,
-    stdoutChunks,
-  );
-  const stderrConsumer = consume(
-    proc.stderr as ReadableStream<Uint8Array> | null | undefined,
-    stderrChunks,
-  );
-
-  const ready = new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(
-        new Error(
-          `Timed out waiting for db:up to be ready.\nstdout:\n${stdoutChunks.join("")}\nstderr:\n${stderrChunks.join("")}`,
-        ),
-      );
-    }, MONGO_STARTUP_TIMEOUT);
-    const interval = setInterval(() => {
-      if (stdoutChunks.join("").includes("MongoDB memory server ready")) {
-        clearTimeout(timeout);
-        clearInterval(interval);
-        resolve();
-      }
-    }, 100);
-    proc.exited
-      .then((code) => {
-        if (!stdoutChunks.join("").includes("MongoDB memory server ready")) {
-          clearTimeout(timeout);
-          clearInterval(interval);
-          reject(
-            new Error(
-              `db:up exited prematurely with code ${code}.\nstdout:\n${stdoutChunks.join("")}\nstderr:\n${stderrChunks.join("")}`,
-            ),
-          );
-        }
-      })
-      .catch(() => {
-        // ignore
-      });
-  });
-
-  await ready;
-
   return {
     port,
     stop: async () => {
-      proc.kill("SIGTERM");
       try {
-        await proc.exited;
+        await runScript(projectDir, "db:down");
       } catch {
-        // ignore
+        // best-effort cleanup
       }
-      await Promise.allSettled([stdoutConsumer, stderrConsumer]);
     },
   };
 }
@@ -369,10 +303,12 @@ describe("create-prisma e2e", () => {
       async () => {
         const project = await scaffoldProject({ template, provider: "mongo" });
 
-        expect(await pathExists(path.join(project.projectDir, "scripts/start-mongo.ts"))).toBe(
-          true,
-        );
+        expect(await pathExists(path.join(project.projectDir, "scripts/mongo.ts"))).toBe(true);
         const pkgJson = await readJsonFile(path.join(project.projectDir, "package.json"));
+        const scriptsPkg = pkgJson.scripts as Record<string, string> | undefined;
+        expect(scriptsPkg?.["db:up"]).toContain("scripts/mongo.ts up");
+        expect(scriptsPkg?.["db:down"]).toContain("scripts/mongo.ts down");
+        expect(scriptsPkg?.["db:reset"]).toContain("scripts/mongo.ts reset");
         const devDeps = pkgJson.devDependencies as Record<string, string> | undefined;
         expect(devDeps?.["mongodb-memory-server"]).toBeDefined();
         expect(await pathExists(path.join(project.projectDir, "docker-compose.yml"))).toBe(false);
