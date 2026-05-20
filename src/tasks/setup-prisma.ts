@@ -81,17 +81,24 @@ const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
 
 const MONGO_MEMORY_SERVER_VERSION = "^11.1.0";
 
-const MONGO_MEMORY_SERVER_SCRIPT = `import { MongoMemoryReplSet } from "mongodb-memory-server";
+const MONGO_MEMORY_SERVER_SCRIPT = `import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { MongoMemoryReplSet } from "mongodb-memory-server";
 
 const port = Number(process.env.MONGO_PORT ?? 27017);
 const replSetName = process.env.MONGO_REPLSET ?? "rs0";
+const dbPath = path.resolve(process.env.MONGO_DB_PATH ?? ".mongo-data");
+
+// Persist data across restarts. Delete the directory for a clean slate.
+mkdirSync(dbPath, { recursive: true });
 
 const replSet = await MongoMemoryReplSet.create({
   replSet: { name: replSetName, count: 1, storageEngine: "wiredTiger" },
-  instanceOpts: [{ port, storageEngine: "wiredTiger" }],
+  instanceOpts: [{ port, storageEngine: "wiredTiger", dbPath }],
 });
 
 console.log(\`MongoDB memory server ready at \${replSet.getUri()}\`);
+console.log(\`Data directory: \${dbPath}\`);
 console.log("Press Ctrl+C to stop.");
 
 const shutdown = async () => {
@@ -555,6 +562,7 @@ async function writeMongoLocalHelpersForContext(
     await ensureMongoMemoryServerScript(projectDir);
     await ensureMongoMemoryServerDevDependency(projectDir);
     await ensurePackageScripts(projectDir, getMongoMemoryScripts(context.packageManager));
+    await ensureGitignoreEntry(projectDir, ".mongo-data");
     return true;
   } catch (error) {
     cancel(getCommandErrorMessage(error));
