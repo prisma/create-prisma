@@ -78,33 +78,41 @@ const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
 const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
-const MONGO_DOCKER_COMPOSE = `services:
-  mongodb:
-    image: mongo:latest
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb-data:/data/db
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mongosh --quiet --eval 'try { rs.status().members.some((member) => member.stateStr === \\"PRIMARY\\") } catch (error) { rs.initiate({_id: \\"rs0\\", members: [{ _id: 0, host: \\"localhost:27017\\" }] }); false }' | grep true",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 5s
 
-volumes:
-  mongodb-data:
+const MONGO_MEMORY_SERVER_VERSION = "^11.1.0";
+
+const MONGO_MEMORY_SERVER_SCRIPT = `import { MongoMemoryReplSet } from "mongodb-memory-server";
+
+const port = Number(process.env.MONGO_PORT ?? 27017);
+const replSetName = process.env.MONGO_REPLSET ?? "rs0";
+
+const replSet = await MongoMemoryReplSet.create({
+  replSet: { name: replSetName, count: 1, storageEngine: "wiredTiger" },
+  instanceOpts: [{ port, storageEngine: "wiredTiger" }],
+});
+
+console.log(\`MongoDB memory server ready at \${replSet.getUri()}\`);
+console.log("Press Ctrl+C to stop.");
+
+const shutdown = async () => {
+  await replSet.stop();
+  process.exit(0);
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 `;
 
-const mongoDockerScripts = {
-  "db:up": "docker compose up -d --wait",
-  "db:down": "docker compose down",
-} as const;
+function getMongoMemoryScripts(packageManager: PackageManager): Record<string, string> {
+  switch (packageManager) {
+    case "bun":
+      return { "db:up": "bun scripts/start-mongo.ts" };
+    case "deno":
+      return { "db:up": "deno run -A scripts/start-mongo.ts" };
+    default:
+      return { "db:up": "tsx scripts/start-mongo.ts" };
+  }
+}
 
 const requiredPrismaFileGroups = [
   ["prisma/contract.prisma", "prisma/contract.ts"],
@@ -498,16 +506,44 @@ async function ensurePackageScripts(
   }
 }
 
-async function ensureMongoDockerCompose(projectDir: string): Promise<void> {
-  const composePath = path.join(projectDir, "docker-compose.yml");
-  if (await fs.pathExists(composePath)) {
+async function ensureMongoMemoryServerScript(projectDir: string): Promise<void> {
+  const scriptPath = path.join(projectDir, "scripts", "start-mongo.ts");
+  if (await fs.pathExists(scriptPath)) {
     return;
   }
 
-  await fs.writeFile(composePath, MONGO_DOCKER_COMPOSE, "utf8");
+  await fs.ensureDir(path.dirname(scriptPath));
+  await fs.writeFile(scriptPath, MONGO_MEMORY_SERVER_SCRIPT, "utf8");
 }
 
-async function writeMongoDockerHelpersForContext(
+async function ensureMongoMemoryServerDevDependency(projectDir: string): Promise<void> {
+  const packageJsonPath = path.join(projectDir, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) {
+    return;
+  }
+
+  const packageJson = await fs.readJson(packageJsonPath);
+  if (!packageJson.devDependencies) {
+    packageJson.devDependencies = {};
+  }
+
+  if (packageJson.devDependencies["mongodb-memory-server"] === MONGO_MEMORY_SERVER_VERSION) {
+    return;
+  }
+
+  packageJson.devDependencies["mongodb-memory-server"] = MONGO_MEMORY_SERVER_VERSION;
+  packageJson.devDependencies = Object.fromEntries(
+    Object.entries(packageJson.devDependencies as Record<string, string>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    ),
+  );
+
+  await fs.writeJson(packageJsonPath, packageJson, {
+    spaces: 2,
+  });
+}
+
+async function writeMongoLocalHelpersForContext(
   context: PrismaSetupContext,
   projectDir: string,
 ): Promise<boolean> {
@@ -516,8 +552,9 @@ async function writeMongoDockerHelpersForContext(
   }
 
   try {
-    await ensureMongoDockerCompose(projectDir);
-    await ensurePackageScripts(projectDir, mongoDockerScripts);
+    await ensureMongoMemoryServerScript(projectDir);
+    await ensureMongoMemoryServerDevDependency(projectDir);
+    await ensurePackageScripts(projectDir, getMongoMemoryScripts(context.packageManager));
     return true;
   } catch (error) {
     cancel(getCommandErrorMessage(error));
@@ -872,7 +909,7 @@ function buildNextStepsForContext(opts: {
   if (context.databaseProvider === "mongo" && !context.databaseUrl) {
     nextSteps.push({
       command: getRunScriptCommand(context.packageManager, "db:up"),
-      description: "Start the local MongoDB replica set with Docker.",
+      description: "Start the local in-memory MongoDB replica set (mongodb-memory-server).",
     });
   }
   nextSteps.push({
@@ -970,8 +1007,8 @@ export async function executePrismaSetupContext(
     return false;
   }
 
-  const didWriteMongoDockerHelpers = await writeMongoDockerHelpersForContext(context, projectDir);
-  if (!didWriteMongoDockerHelpers) {
+  const didWriteMongoLocalHelpers = await writeMongoLocalHelpersForContext(context, projectDir);
+  if (!didWriteMongoLocalHelpers) {
     stopProgressOnFailure();
     return false;
   }
