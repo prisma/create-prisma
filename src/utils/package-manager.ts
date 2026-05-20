@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 
-import { dependencyVersionMap } from "../constants/dependencies";
+import { getPrismaNextPackageSpecifier } from "../constants/dependencies";
 import { PackageManagerSchema, type PackageManager } from "../types";
 
 type CommandAndArgs = {
@@ -134,14 +134,14 @@ export function getPackageManagerManifestValue(
 }
 
 export function getDenoPrismaSpecifier(): string {
-  return `npm:prisma-next@${dependencyVersionMap["prisma-next"]}`;
+  return `npm:${getPrismaNextPackageSpecifier("prisma-next")}`;
 }
 
 function getDenoAllowedScriptSpecifiers(): string {
   return [
-    `npm:prisma-next@${dependencyVersionMap["prisma-next"]}`,
-    `npm:@prisma-next/postgres@${dependencyVersionMap["@prisma-next/postgres"]}`,
-    `npm:@prisma-next/mongo@${dependencyVersionMap["@prisma-next/mongo"]}`,
+    `npm:${getPrismaNextPackageSpecifier("prisma-next")}`,
+    `npm:${getPrismaNextPackageSpecifier("@prisma-next/postgres")}`,
+    `npm:${getPrismaNextPackageSpecifier("@prisma-next/mongo")}`,
   ].join(",");
 }
 

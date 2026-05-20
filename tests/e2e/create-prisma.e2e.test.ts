@@ -228,7 +228,7 @@ describe("create-prisma e2e", () => {
       try {
         await writeDatabaseUrl(project!.projectDir, migrationDb.connectionString);
         await runScript(project!.projectDir, "migration:plan");
-        await runScript(project!.projectDir, "migration:apply");
+        await runScript(project!.projectDir, "migrate");
         await runScript(project!.projectDir, "db:seed");
         await verifyGeneratedProject(project!.projectDir, "postgres");
       } finally {
@@ -252,7 +252,7 @@ describe("create-prisma e2e", () => {
 
         await installAndEmit(project.projectDir);
         await runScript(project.projectDir, "migration:plan");
-        await runScript(project.projectDir, "migration:apply");
+        await runScript(project.projectDir, "migrate");
         await runScript(project.projectDir, "db:seed");
         await verifyGeneratedProject(project.projectDir, "mongo");
       } finally {

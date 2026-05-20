@@ -25,12 +25,12 @@ Database helper scripts are added to `package.json`:
 - `{{runScriptCommand packageManager "db:up"}}` - start the local MongoDB replica set
 - `{{runScriptCommand packageManager "db:down"}}` - stop the local MongoDB replica set
 - `{{runScriptCommand packageManager "migration:plan"}}` - create a MongoDB migration plan
-- `{{runScriptCommand packageManager "migration:apply"}}` - apply the planned MongoDB migration
+- `{{runScriptCommand packageManager "migrate"}}` - apply the planned MongoDB migration
 {{else}}
 - `{{runScriptCommand packageManager "db:init"}}` - initialize database state manually
 - `{{runScriptCommand packageManager "db:update"}}` - update database state manually
 - `{{runScriptCommand packageManager "migration:plan"}}` - create a migration plan
-- `{{runScriptCommand packageManager "migration:apply"}}` - apply a planned migration
+- `{{runScriptCommand packageManager "migrate"}}` - apply a planned migration
 {{/if}}
 
 - `{{runScriptCommand packageManager "db:seed"}}` - insert sample users manually

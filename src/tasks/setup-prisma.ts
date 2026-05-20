@@ -9,7 +9,7 @@ import {
   PRISMA_POSTGRES_TEMPORARY_NOTICE,
   provisionPrismaPostgres,
 } from "./prisma-postgres";
-import { dependencyVersionMap } from "../constants/dependencies";
+import { dependencyVersionMap, getPrismaNextPackageSpecifier } from "../constants/dependencies";
 import {
   AuthoringStyleSchema,
   DatabaseProviderSchema,
@@ -634,8 +634,8 @@ async function writeDependenciesForContext(
   }
 }
 
-function getPrismaNextPackageSpecifier(): string {
-  return `prisma-next@${dependencyVersionMap["prisma-next"]}`;
+function getPrismaNextCliPackageSpecifier(): string {
+  return getPrismaNextPackageSpecifier("prisma-next");
 }
 
 function getPrismaNextInitTarget(provider: DatabaseProvider): "mongodb" | "postgres" {
@@ -649,12 +649,12 @@ function getPrismaNextInitCliArgs(
   if (packageManager === "npm") {
     return {
       command: "npx",
-      args: ["--yes", getPrismaNextPackageSpecifier(), "init", ...prismaNextArgs],
+      args: ["--yes", getPrismaNextCliPackageSpecifier(), "init", ...prismaNextArgs],
     };
   }
 
   return getPackageExecutionArgs(packageManager, [
-    getPrismaNextPackageSpecifier(),
+    getPrismaNextCliPackageSpecifier(),
     "init",
     ...prismaNextArgs,
   ]);
@@ -882,7 +882,7 @@ async function finalizePrismaFilesForContext(
 
 function getPrismaNextCliCommand(packageManager: PackageManager, prismaNextArgs: string[]): string {
   if (packageManager === "deno") {
-    return `deno run -A --env-file=.env npm:prisma-next@${dependencyVersionMap["prisma-next"]} ${prismaNextArgs.join(" ")}`;
+    return `deno run -A --env-file=.env npm:${getPrismaNextCliPackageSpecifier()} ${prismaNextArgs.join(" ")}`;
   }
 
   return getLocalPackageBinaryCommand(packageManager, "prisma-next", prismaNextArgs);
@@ -899,7 +899,7 @@ function getPrismaNextCliArgs(
         "run",
         "-A",
         "--env-file=.env",
-        `npm:prisma-next@${dependencyVersionMap["prisma-next"]}`,
+        `npm:${getPrismaNextCliPackageSpecifier()}`,
         ...prismaNextArgs,
       ],
     };
@@ -1018,7 +1018,7 @@ function buildNextStepsForContext(opts: {
     description: "Compare the contract to the database and write a migration plan.",
   });
   nextSteps.push({
-    command: getRunScriptCommand(context.packageManager, "migration:apply"),
+    command: getRunScriptCommand(context.packageManager, "migrate"),
     description: "Apply the planned migration to the database.",
   });
   nextSteps.push({
