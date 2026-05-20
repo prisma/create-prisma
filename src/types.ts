@@ -6,6 +6,7 @@ export const databaseProviderInputs = ["postgres", "postgresql", "mongo", "mongo
 export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
 export const authoringStyles = ["psl", "typescript"] as const;
 export const createTemplates = [
+  "minimal",
   "hono",
   "elysia",
   "nest",

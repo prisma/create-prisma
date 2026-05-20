@@ -167,6 +167,32 @@ describe("writeCreateTemplateDependencies", () => {
       },
     );
   });
+
+  test("adds tsx to Minimal projects for Node-style package managers", async () => {
+    await withPackageJson(
+      {
+        name: "app",
+        dependencies: {},
+        devDependencies: {},
+      },
+      async (projectDir) => {
+        await writeCreateTemplateDependencies({
+          template: "minimal",
+          packageManager: "npm",
+          projectDir,
+        });
+
+        const packageJson = await readPackageJson(projectDir);
+
+        expect(packageJson.devDependencies).toMatchObject({
+          tsx: dependencyVersionMap.tsx,
+        });
+        expect(packageJson.devDependencies).not.toHaveProperty(
+          "@prisma-next/vite-plugin-contract-emit",
+        );
+      },
+    );
+  });
 });
 
 describe("scaffoldCreateTemplate", () => {
@@ -209,6 +235,35 @@ describe("scaffoldCreateTemplate", () => {
       } finally {
         await rm(projectDir, { recursive: true, force: true });
       }
+    }
+  });
+
+  test("renders Minimal as a script-first template without a build pipeline", async () => {
+    const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-template-"));
+
+    try {
+      await scaffoldCreateTemplate({
+        projectDir,
+        projectName: "app",
+        template: "minimal",
+        provider: "mongo",
+        authoring: "psl",
+        packageManager: "bun",
+      });
+
+      const packageJson = await readPackageJson(projectDir);
+      const index = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
+
+      expect(packageJson.scripts).toEqual({
+        dev: "bun src/index.ts",
+      });
+      expect(index).toContain("db.orm.users");
+      expect(index).toContain("Prisma Next is ready");
+      expect(await readFile(path.join(projectDir, "src/lib/prisma.ts"), "utf8")).toContain(
+        "@prisma-next/mongo/runtime",
+      );
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
     }
   });
 });

@@ -1,0 +1,13 @@
+{
+  "name": "{{projectName}}",
+  "private": true,
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
+  "type": "module",
+  "scripts": {
+    "dev": "{{runtimeScript packageManager "start" "src/index.ts" ""}}"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

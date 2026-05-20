@@ -1,0 +1,71 @@
+import "dotenv/config";
+{{#if (eq provider "mongo")}}
+import mongo from "@prisma-next/mongo/runtime";
+{{else}}
+import postgres from "@prisma-next/postgres/runtime";
+{{/if}}
+
+{{#if (eq provider "mongo")}}
+import type { DefaultModelRow } from "@prisma-next/mongo-orm";
+{{else}}
+import type { DefaultModelRow } from "@prisma-next/sql-orm-client";
+{{/if}}
+
+import type { Contract } from "../../prisma/contract.d";
+import contractJson from "../../prisma/contract.json" with { type: "json" };
+
+{{#if (eq provider "mongo")}}
+export const db = mongo<Contract>({
+  contractJson,
+  url: process.env["DATABASE_URL"],
+});
+{{else}}
+export const db = postgres<Contract>({
+  contractJson,
+  url: process.env["DATABASE_URL"],
+});
+{{/if}}
+
+type UserRow = DefaultModelRow<Contract, "User">;
+
+{{#if (eq provider "mongo")}}
+function toStarterUser(user: Pick<UserRow, "_id" | "email" | "name">) {
+  return {
+    id: String(user._id),
+    email: user.email,
+    name: user.name ?? null,
+    createdAt: null as Date | null,
+  };
+}
+{{else}}
+function toStarterUser(user: Pick<UserRow, "id" | "email" | "name" | "createdAt">) {
+  return {
+    id: String(user.id),
+    email: user.email,
+    name: user.name ?? null,
+    createdAt: user.createdAt,
+  };
+}
+{{/if}}
+
+export async function listUsers(limit = 10) {
+
+{{#if (eq provider "mongo")}}
+  const users: ReturnType<typeof toStarterUser>[] = [];
+
+  for await (const user of db.orm.users.select("_id", "email", "name").take(limit).all()) {
+    users.push(toStarterUser(user));
+  }
+
+  return users;
+{{else}}
+  const users = await db.orm.User.select("id", "email", "name", "createdAt").take(limit).all();
+
+  return users.map(toStarterUser);
+{{/if}}
+
+}
+
+export type StarterUser = Awaited<ReturnType<typeof listUsers>>[number];
+
+export default db;

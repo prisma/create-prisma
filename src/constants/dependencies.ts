@@ -59,7 +59,12 @@ export function getCreateTemplateDependencies(
     });
   }
 
-  if (template === "hono" || template === "elysia" || template === "nest") {
+  if (
+    template === "minimal" ||
+    template === "hono" ||
+    template === "elysia" ||
+    template === "nest"
+  ) {
     const runtimeDevDependencies: string[] = usesNodeStyleRuntime(packageManager) ? ["tsx"] : [];
 
     if (template === "elysia" && packageManager !== "deno") {

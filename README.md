@@ -10,7 +10,7 @@ Scaffold a new app with Prisma Next already wired up.
 - adds Prisma Next dependencies for PostgreSQL or MongoDB
 - runs `prisma-next init --no-install` to scaffold `prisma/contract.*`, `prisma-next.config.ts`, `prisma/db.ts`, `prisma-next.md`, `.env.example`, and the Prisma Next agent skill
 - writes a template-specific Prisma Next runtime helper
-- adds `contract:emit`, `db:init`, `db:update`, `db:verify`, `db:seed`, `migration:plan`, `migration:apply`, `migration:status`, and `migration:show` scripts
+- adds `contract:emit`, `db:init`, `db:update`, `db:verify`, `db:seed`, `migration:plan`, `migrate`, `migration:status`, and `migration:show` scripts
 - adds `db:up` / `db:down` and `docker-compose.yml` for default MongoDB projects
 - creates or updates `.env` with `DATABASE_URL`
 - can install dependencies and run `prisma-next contract emit`
@@ -57,6 +57,12 @@ Create a project interactively:
 create-prisma
 ```
 
+Create a Minimal project non-interactively:
+
+```bash
+create-prisma --name my-script --template minimal --provider postgres
+```
+
 Create a Hono app non-interactively:
 
 ```bash
@@ -89,14 +95,15 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 
 ## Supported Templates
 
-- `hono`
-- `elysia`
-- `nest`
-- `next`
-- `svelte`
-- `astro`
-- `nuxt`
-- `tanstack-start`
+- `minimal` - script-first Prisma Next starter with no web framework
+- `hono` - lightweight TypeScript API server
+- `elysia` - Bun-friendly TypeScript API server
+- `nest` - structured Node API with controllers and services
+- `next` - full-stack React app with App Router
+- `svelte` - full-stack Svelte 5 app with Vite
+- `astro` - content-oriented web app with server routes
+- `nuxt` - full-stack Vue app with Nitro server routes
+- `tanstack-start` - React app with file routes and server functions
 
 ## Supported Databases
 

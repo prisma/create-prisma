@@ -20,7 +20,7 @@ import {
 import { getCreatePrismaIntro } from "../ui/branding";
 
 const DEFAULT_PROJECT_NAME = "my-app";
-const DEFAULT_TEMPLATE: CreateTemplate = "hono";
+const DEFAULT_TEMPLATE: CreateTemplate = "minimal";
 
 export type CreateTargetPathState = {
   exists: boolean;
@@ -98,44 +98,49 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
     initialValue: DEFAULT_TEMPLATE,
     options: [
       {
+        value: "minimal",
+        label: "Minimal",
+        hint: "Script-first Prisma Next starter with no web framework",
+      },
+      {
         value: "hono",
         label: "Hono",
-        hint: "Default TypeScript API starter",
+        hint: "Lightweight TypeScript API server",
       },
       {
         value: "elysia",
         label: "Elysia",
-        hint: "TypeScript API starter with Elysia's Node adapter",
+        hint: "Bun-friendly TypeScript API server",
       },
       {
         value: "nest",
         label: "NestJS",
-        hint: "Official Nest-style API starter with a Prisma service",
+        hint: "Structured Node API with controllers and services",
       },
       {
         value: "next",
         label: "Next.js",
-        hint: "App Router + TypeScript starter",
+        hint: "Full-stack React app with App Router",
       },
       {
         value: "svelte",
         label: "SvelteKit",
-        hint: "Official minimal SvelteKit + TypeScript starter",
+        hint: "Full-stack Svelte 5 app with Vite",
       },
       {
         value: "astro",
         label: "Astro",
-        hint: "Official minimal Astro starter with API route example",
+        hint: "Content-oriented web app with server routes",
       },
       {
         value: "nuxt",
         label: "Nuxt",
-        hint: "Official minimal Nuxt starter with Nitro API route example",
+        hint: "Full-stack Vue app with Nitro server routes",
       },
       {
         value: "tanstack-start",
         label: "TanStack Start",
-        hint: "TanStack Start React app with file routes and server functions",
+        hint: "React app with file routes and server functions",
       },
     ],
   });
