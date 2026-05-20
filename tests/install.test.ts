@@ -72,14 +72,12 @@ describe("writePrismaDependencies", () => {
           hono: "^4.12.2",
         });
         expect(packageJson.devDependencies).toMatchObject({
-          "@prisma-next/agent-skill": PRISMA_NEXT_PACKAGE_VERSION,
           "@prisma-next/cli": PRISMA_NEXT_PACKAGE_VERSION,
           "@prisma-next/mongo-contract-ts": PRISMA_NEXT_PACKAGE_VERSION,
           "@prisma-next/mongo-orm": PRISMA_NEXT_PACKAGE_VERSION,
           "@prisma-next/target-mongo": PRISMA_NEXT_PACKAGE_VERSION,
           "@types/node": dependencyVersionMap["@types/node"],
           "prisma-next": PRISMA_NEXT_PACKAGE_VERSION,
-          skills: dependencyVersionMap.skills,
           typescript: "^5.8.3",
         });
         expect(packageJson.scripts).toMatchObject({
@@ -87,7 +85,6 @@ describe("writePrismaDependencies", () => {
           "contract:emit": "bun prisma-next contract emit",
           "migration:plan": "bun prisma-next migration plan",
           migrate: "bun prisma-next migrate",
-          "skills:sync": 'skills experimental_sync --agent "*" -y',
         });
       },
     );
@@ -111,7 +108,6 @@ describe("writePrismaDependencies", () => {
         expect(packageJson.scripts).toMatchObject({
           "contract:emit": `deno run -A --env-file=.env npm:prisma-next@${PRISMA_NEXT_PACKAGE_VERSION} contract emit`,
           "migration:plan": `deno run -A --env-file=.env npm:prisma-next@${PRISMA_NEXT_PACKAGE_VERSION} migration plan`,
-          "skills:sync": `deno run -A npm:skills@${dependencyVersionMap.skills} experimental_sync --agent "*" -y`,
         });
       },
     );

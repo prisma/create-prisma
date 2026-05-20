@@ -181,11 +181,6 @@ async function installAndEmit(projectDir: string): Promise<void> {
   expect(await pathExists(path.join(projectDir, ".env.example"))).toBe(true);
 
   await runCommand(projectDir, ["bun", "install"]);
-  await runScript(projectDir, "skills:sync");
-  expect(await pathExists(path.join(projectDir, ".agents/skills/prisma-next/SKILL.md"))).toBe(true);
-  expect(
-    await pathExists(path.join(projectDir, ".agents/skills/prisma-next-queries/SKILL.md")),
-  ).toBe(true);
   await runScript(projectDir, "contract:emit");
 }
 

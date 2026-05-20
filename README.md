@@ -8,7 +8,7 @@ Scaffold a new app with Prisma Next already wired up.
 
 - creates a new app from a supported template
 - adds Prisma Next dependencies for PostgreSQL or MongoDB
-- runs `prisma-next init --no-install` to scaffold `prisma/contract.*`, `prisma-next.config.ts`, `prisma/db.ts`, `prisma-next.md`, `.env.example`, and the Prisma Next agent skill
+- runs `prisma-next init --no-install` to scaffold `prisma/contract.*`, `prisma-next.config.ts`, `prisma/db.ts`, `prisma-next.md`, and `.env.example`
 - writes a template-specific Prisma Next runtime helper
 - adds `contract:emit`, `db:init`, `db:update`, `db:verify`, `db:seed`, `migration:plan`, `migrate`, `migration:status`, and `migration:show` scripts
 - adds `db:up` / `db:down` and `docker-compose.yml` for default MongoDB projects

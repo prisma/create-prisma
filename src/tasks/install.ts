@@ -3,7 +3,6 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import {
-  dependencyVersionMap,
   getDependencyVersion,
   getPrismaNextPackageSpecifier,
   getCreateTemplateDependencies,
@@ -13,11 +12,6 @@ import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager }
 import { getInstallArgs } from "../utils/package-manager";
 
 function getPrismaNextScriptMap(packageManager: PackageManager) {
-  const skillsSyncCommand =
-    packageManager === "deno"
-      ? `deno run -A npm:skills@${dependencyVersionMap.skills} experimental_sync --agent "*" -y`
-      : 'skills experimental_sync --agent "*" -y';
-
   if (packageManager === "deno") {
     const prismaNextCli = `deno run -A --env-file=.env npm:${getPrismaNextPackageSpecifier("prisma-next")}`;
 
@@ -31,7 +25,6 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
       migrate: `${prismaNextCli} migrate`,
       "migration:status": `${prismaNextCli} migration status`,
       "migration:show": `${prismaNextCli} migration show`,
-      "skills:sync": skillsSyncCommand,
     } as const;
   }
 
@@ -48,7 +41,6 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
       migrate: `${prismaNextCli} migrate`,
       "migration:status": `${prismaNextCli} migration status`,
       "migration:show": `${prismaNextCli} migration show`,
-      "skills:sync": skillsSyncCommand,
     } as const;
   }
 
@@ -62,7 +54,6 @@ function getPrismaNextScriptMap(packageManager: PackageManager) {
     migrate: "prisma-next migrate",
     "migration:status": "prisma-next migration status",
     "migration:show": "prisma-next migration show",
-    "skills:sync": skillsSyncCommand,
   } as const;
 }
 
@@ -201,13 +192,7 @@ export async function writePrismaDependencies(
   projectDir = process.cwd(),
 ): Promise<void> {
   const dependencies: string[] = [getDbPackages(provider, packageManager), "dotenv"];
-  const devDependencies: string[] = [
-    "prisma-next",
-    "@prisma-next/cli",
-    "@prisma-next/agent-skill",
-    "@types/node",
-    "skills",
-  ];
+  const devDependencies: string[] = ["prisma-next", "@prisma-next/cli", "@types/node"];
   devDependencies.push(...getGeneratedContractTypePackages(provider));
   devDependencies.push(...getMigrationPackages(provider));
   devDependencies.push(...getOrmTypePackages(provider));
