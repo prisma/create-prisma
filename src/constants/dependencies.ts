@@ -5,6 +5,7 @@ export const dependencyVersionMap = {
   "@elysiajs/node": "^1.4.5",
   "@types/node": "^25.6.2",
   dotenv: "^17.4.2",
+  "mongodb-memory-server": "^11.1.0",
   tsx: "^4.21.0",
 } as const;
 

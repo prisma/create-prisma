@@ -236,7 +236,6 @@ async function startMemoryMongo(projectDir: string): Promise<MemoryMongoHandle> 
   );
   // db:up is detached and exits when ready, so this returns once the server is listening.
   await runScript(projectDir, "db:up", {
-    MONGO_PORT: String(port),
     MONGO_READY_TIMEOUT_MS: String(MONGO_STARTUP_TIMEOUT),
   });
   return {
@@ -303,12 +302,12 @@ describe("create-prisma e2e", () => {
       async () => {
         const project = await scaffoldProject({ template, provider: "mongo" });
 
-        expect(await pathExists(path.join(project.projectDir, "scripts/mongo.ts"))).toBe(true);
+        expect(await pathExists(path.join(project.projectDir, "scripts/mongo.mjs"))).toBe(true);
         const pkgJson = await readJsonFile(path.join(project.projectDir, "package.json"));
         const scriptsPkg = pkgJson.scripts as Record<string, string> | undefined;
-        expect(scriptsPkg?.["db:up"]).toContain("scripts/mongo.ts up");
-        expect(scriptsPkg?.["db:down"]).toContain("scripts/mongo.ts down");
-        expect(scriptsPkg?.["db:reset"]).toContain("scripts/mongo.ts reset");
+        expect(scriptsPkg?.["db:up"]).toContain("scripts/mongo.mjs up");
+        expect(scriptsPkg?.["db:down"]).toContain("scripts/mongo.mjs down");
+        expect(scriptsPkg?.["db:reset"]).toContain("scripts/mongo.mjs reset");
         const devDeps = pkgJson.devDependencies as Record<string, string> | undefined;
         expect(devDeps?.["mongodb-memory-server"]).toBeDefined();
         expect(await pathExists(path.join(project.projectDir, "docker-compose.yml"))).toBe(false);

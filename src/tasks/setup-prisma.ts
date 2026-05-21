@@ -9,7 +9,7 @@ import {
   PRISMA_POSTGRES_TEMPORARY_NOTICE,
   provisionPrismaPostgres,
 } from "./prisma-postgres";
-import { getPrismaNextPackageSpecifier } from "../constants/dependencies";
+import { getDependencyVersion, getPrismaNextPackageSpecifier } from "../constants/dependencies";
 import {
   AuthoringStyleSchema,
   DatabaseProviderSchema,
@@ -21,6 +21,7 @@ import {
 } from "../types";
 import {
   detectPackageManager,
+  getDenoPrismaSpecifier,
   getInstallCommand,
   getPackageExecutionArgs,
   getLocalPackageBinaryArgs,
@@ -79,27 +80,43 @@ const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
 const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
 
-const MONGO_MEMORY_SERVER_VERSION = "^11.1.0";
-
 const MONGO_MEMORY_SERVER_SCRIPT = `import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+const defaultDatabaseUrl = "mongodb://localhost:27017/mydb?replicaSet=rs0&directConnection=true";
 const dbPath = path.resolve(process.env.MONGO_DB_PATH ?? ".mongo-data");
 const pidFile = path.join(dbPath, "mongo.pid");
 const logFile = path.join(dbPath, "mongo.log");
-const port = Number(process.env.MONGO_PORT ?? 27017);
-const replSetName = process.env.MONGO_REPLSET ?? "rs0";
 const readyTimeoutMs = Number(process.env.MONGO_READY_TIMEOUT_MS ?? 60_000);
 
-function readPid(): number | null {
+function getMongoConfig() {
+  const databaseUrl = process.env.DATABASE_URL ?? defaultDatabaseUrl;
+  const url = new URL(databaseUrl);
+  if (url.protocol !== "mongodb:") {
+    throw new Error("DATABASE_URL must use the mongodb:// protocol.");
+  }
+
+  const port = Number(url.port || "27017");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(\`DATABASE_URL has an invalid MongoDB port: \${url.port}\`);
+  }
+
+  return {
+    databaseUrl,
+    port,
+    replSetName: url.searchParams.get("replicaSet") || "rs0",
+  };
+}
+
+function readPid() {
   if (!existsSync(pidFile)) return null;
   const raw = readFileSync(pidFile, "utf8").trim();
   const pid = Number(raw);
   return Number.isFinite(pid) && pid > 0 ? pid : null;
 }
 
-function isAlive(pid: number): boolean {
+function isAlive(pid) {
   try {
     process.kill(pid, 0);
     return true;
@@ -108,22 +125,23 @@ function isAlive(pid: number): boolean {
   }
 }
 
-function getChildCommand(): { command: string; args: string[] } {
+function getChildCommand() {
   const scriptPath = path.resolve(process.argv[1] ?? "");
-  const versions = process.versions as Record<string, string | undefined>;
-  if (versions.bun) return { command: process.execPath, args: [scriptPath, "_run"] };
+  const versions = process.versions;
   if (versions.deno) return { command: process.execPath, args: ["run", "-A", scriptPath, "_run"] };
-  return { command: "tsx", args: [scriptPath, "_run"] };
+  return { command: process.execPath, args: [scriptPath, "_run"] };
 }
 
-async function runServer(): Promise<void> {
+async function runServer() {
   mkdirSync(dbPath, { recursive: true });
-  const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+  const config = getMongoConfig();
+  const memoryServer = await import("mongodb-memory-server");
+  const { MongoMemoryReplSet } = memoryServer.default ?? memoryServer;
   const replSet = await MongoMemoryReplSet.create({
-    replSet: { name: replSetName, count: 1, storageEngine: "wiredTiger" },
-    instanceOpts: [{ port, storageEngine: "wiredTiger", dbPath }],
+    replSet: { name: config.replSetName, count: 1, storageEngine: "wiredTiger" },
+    instanceOpts: [{ port: config.port, storageEngine: "wiredTiger", dbPath }],
   });
-  console.log(\`MongoDB memory server ready at \${replSet.getUri()}\`);
+  console.log(\`MongoDB server ready for \${config.databaseUrl}\`);
   console.log(\`Data directory: \${dbPath}\`);
   const shutdown = async () => {
     await replSet.stop();
@@ -133,7 +151,7 @@ async function runServer(): Promise<void> {
   process.on("SIGTERM", shutdown);
 }
 
-async function up(): Promise<void> {
+async function up() {
   mkdirSync(dbPath, { recursive: true });
   const existing = readPid();
   if (existing !== null && isAlive(existing)) {
@@ -145,11 +163,16 @@ async function up(): Promise<void> {
   writeFileSync(logFile, "");
   const logFd = openSync(logFile, "a");
   const { command, args } = getChildCommand();
-  const child = spawn(command, args, {
-    detached: true,
-    stdio: ["ignore", logFd, logFd],
-    env: process.env,
-  });
+  const child = spawn(
+    command,
+    args,
+    {
+      detached: true,
+      stdio: ["ignore", logFd, logFd],
+      env: process.env,
+    },
+  );
+  closeSync(logFd);
   if (typeof child.pid !== "number") throw new Error("Failed to spawn MongoDB child process.");
   writeFileSync(pidFile, String(child.pid));
   child.unref();
@@ -163,7 +186,7 @@ async function up(): Promise<void> {
       process.exit(1);
     }
     const log = readFileSync(logFile, "utf8");
-    if (log.includes("MongoDB memory server ready")) {
+    if (log.includes("MongoDB server ready")) {
       for (const line of log.split("\\n")) {
         if (line.trim().length > 0) console.log(line);
       }
@@ -184,7 +207,7 @@ async function up(): Promise<void> {
   process.exit(1);
 }
 
-async function down(wipe: boolean): Promise<void> {
+async function down(wipe) {
   const pid = readPid();
   if (pid !== null && isAlive(pid)) {
     process.kill(pid, "SIGTERM");
@@ -237,21 +260,21 @@ function getMongoMemoryScripts(packageManager: PackageManager): Record<string, s
   switch (packageManager) {
     case "bun":
       return {
-        "db:up": "bun scripts/mongo.ts up",
-        "db:down": "bun scripts/mongo.ts down",
-        "db:reset": "bun scripts/mongo.ts reset",
+        "db:up": "bun --env-file=.env scripts/mongo.mjs up",
+        "db:down": "bun --env-file=.env scripts/mongo.mjs down",
+        "db:reset": "bun --env-file=.env scripts/mongo.mjs reset",
       };
     case "deno":
       return {
-        "db:up": "deno run -A scripts/mongo.ts up",
-        "db:down": "deno run -A scripts/mongo.ts down",
-        "db:reset": "deno run -A scripts/mongo.ts reset",
+        "db:up": "deno run -A --env-file=.env scripts/mongo.mjs up",
+        "db:down": "deno run -A --env-file=.env scripts/mongo.mjs down",
+        "db:reset": "deno run -A --env-file=.env scripts/mongo.mjs reset",
       };
     default:
       return {
-        "db:up": "tsx scripts/mongo.ts up",
-        "db:down": "tsx scripts/mongo.ts down",
-        "db:reset": "tsx scripts/mongo.ts reset",
+        "db:up": "node --env-file=.env scripts/mongo.mjs up",
+        "db:down": "node --env-file=.env scripts/mongo.mjs down",
+        "db:reset": "node --env-file=.env scripts/mongo.mjs reset",
       };
   }
 }
@@ -649,7 +672,7 @@ async function ensurePackageScripts(
 }
 
 async function ensureMongoMemoryServerScript(projectDir: string): Promise<void> {
-  const scriptPath = path.join(projectDir, "scripts", "mongo.ts");
+  const scriptPath = path.join(projectDir, "scripts", "mongo.mjs");
   if (await fs.pathExists(scriptPath)) {
     return;
   }
@@ -669,11 +692,12 @@ async function ensureMongoMemoryServerDevDependency(projectDir: string): Promise
     packageJson.devDependencies = {};
   }
 
-  if (packageJson.devDependencies["mongodb-memory-server"] === MONGO_MEMORY_SERVER_VERSION) {
+  const memoryServerVersion = getDependencyVersion("mongodb-memory-server");
+  if (packageJson.devDependencies["mongodb-memory-server"] === memoryServerVersion) {
     return;
   }
 
-  packageJson.devDependencies["mongodb-memory-server"] = MONGO_MEMORY_SERVER_VERSION;
+  packageJson.devDependencies["mongodb-memory-server"] = memoryServerVersion;
   packageJson.devDependencies = Object.fromEntries(
     Object.entries(packageJson.devDependencies as Record<string, string>).sort(([a], [b]) =>
       a.localeCompare(b),
@@ -935,7 +959,7 @@ async function finalizePrismaFilesForContext(
 
 function getPrismaNextCliCommand(packageManager: PackageManager, prismaNextArgs: string[]): string {
   if (packageManager === "deno") {
-    return `deno run -A --env-file=.env npm:${getPrismaNextCliPackageSpecifier()} ${prismaNextArgs.join(" ")}`;
+    return `deno run -A --env-file=.env ${getDenoPrismaSpecifier()} ${prismaNextArgs.join(" ")}`;
   }
 
   return getLocalPackageBinaryCommand(packageManager, "prisma-next", prismaNextArgs);
@@ -948,13 +972,7 @@ function getPrismaNextCliArgs(
   if (packageManager === "deno") {
     return {
       command: "deno",
-      args: [
-        "run",
-        "-A",
-        "--env-file=.env",
-        `npm:${getPrismaNextCliPackageSpecifier()}`,
-        ...prismaNextArgs,
-      ],
+      args: ["run", "-A", "--env-file=.env", getDenoPrismaSpecifier(), ...prismaNextArgs],
     };
   }
 
@@ -1053,7 +1071,7 @@ function buildNextStepsForContext(opts: {
     nextSteps.push({
       command: getRunScriptCommand(context.packageManager, "db:up"),
       description:
-        "Start the local in-memory MongoDB replica set, detached (mongodb-memory-server). Stop with `db:down`, wipe with `db:reset`.",
+        "Start the local MongoDB replica set with mongodb-memory-server. Stop with `db:down`, wipe with `db:reset`.",
     });
   }
   nextSteps.push({
@@ -1131,6 +1149,12 @@ export async function executePrismaSetupContext(
     return false;
   }
 
+  const didWriteMongoLocalHelpers = await writeMongoLocalHelpersForContext(context, projectDir);
+  if (!didWriteMongoLocalHelpers) {
+    stopProgressOnFailure();
+    return false;
+  }
+
   if (context.shouldInstall) {
     progressSpinner?.message("Installing dependencies...");
   }
@@ -1147,12 +1171,6 @@ export async function executePrismaSetupContext(
     provisionResult,
   );
   if (!didFinalizePrismaFiles) {
-    stopProgressOnFailure();
-    return false;
-  }
-
-  const didWriteMongoLocalHelpers = await writeMongoLocalHelpersForContext(context, projectDir);
-  if (!didWriteMongoLocalHelpers) {
     stopProgressOnFailure();
     return false;
   }

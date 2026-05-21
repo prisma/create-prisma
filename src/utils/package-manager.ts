@@ -1,7 +1,6 @@
 import fs from "fs-extra";
 import path from "node:path";
 
-import { getPrismaNextPackageSpecifier } from "../constants/dependencies";
 import { PackageManagerSchema, type PackageManager } from "../types";
 
 type CommandAndArgs = {
@@ -134,14 +133,19 @@ export function getPackageManagerManifestValue(
 }
 
 export function getDenoPrismaSpecifier(): string {
-  return `npm:${getPrismaNextPackageSpecifier("prisma-next")}`;
+  return "npm:prisma-next";
+}
+
+function getDenoNpmSpecifier(packageSpecifier: string): string {
+  return `npm:${packageSpecifier.replace(/@latest$/, "")}`;
 }
 
 function getDenoAllowedScriptSpecifiers(): string {
   return [
-    `npm:${getPrismaNextPackageSpecifier("prisma-next")}`,
-    `npm:${getPrismaNextPackageSpecifier("@prisma-next/postgres")}`,
-    `npm:${getPrismaNextPackageSpecifier("@prisma-next/mongo")}`,
+    "npm:prisma-next",
+    "npm:@prisma-next/postgres",
+    "npm:@prisma-next/mongo",
+    "npm:mongodb-memory-server",
   ].join(",");
 }
 
@@ -260,7 +264,7 @@ export function getPackageExecutionArgs(
 
       return {
         command: "deno",
-        args: ["run", "-A", `npm:${packageName}`, ...args],
+        args: ["run", "-A", getDenoNpmSpecifier(packageName), ...args],
       };
     }
     case "npm":
