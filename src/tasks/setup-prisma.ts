@@ -85,9 +85,10 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, write
 import path from "node:path";
 
 const defaultDatabaseUrl = "mongodb://localhost:27017/mydb?replicaSet=rs0&directConnection=true";
-const dbPath = path.resolve(process.env.MONGO_DB_PATH ?? ".mongo-data");
-const pidFile = path.join(dbPath, "mongo.pid");
-const logFile = path.join(dbPath, "mongo.log");
+const dataRoot = path.resolve(process.env.MONGO_DB_PATH ?? ".mongo-data");
+const dbPath = path.join(dataRoot, "db");
+const pidFile = path.join(dataRoot, "mongo.pid");
+const logFile = path.join(dataRoot, "mongo.log");
 const readyTimeoutMs = Number(process.env.MONGO_READY_TIMEOUT_MS ?? 60_000);
 
 function getMongoConfig() {
@@ -138,7 +139,7 @@ async function runServer() {
   const memoryServer = await import("mongodb-memory-server");
   const { MongoMemoryReplSet } = memoryServer.default ?? memoryServer;
   const replSet = await MongoMemoryReplSet.create({
-    replSet: { name: config.replSetName, count: 1, storageEngine: "wiredTiger" },
+    replSet: { name: config.replSetName, count: 1 },
     instanceOpts: [{ port: config.port, storageEngine: "wiredTiger", dbPath }],
   });
   console.log(\`MongoDB server ready for \${config.databaseUrl}\`);
@@ -152,7 +153,7 @@ async function runServer() {
 }
 
 async function up() {
-  mkdirSync(dbPath, { recursive: true });
+  mkdirSync(dataRoot, { recursive: true });
   const existing = readPid();
   if (existing !== null && isAlive(existing)) {
     console.log(\`MongoDB is already running (PID \${existing}). Use \\\`db:down\\\` to stop.\`);
@@ -231,8 +232,8 @@ async function down(wipe) {
   }
   rmSync(pidFile, { force: true });
   if (wipe) {
-    rmSync(dbPath, { recursive: true, force: true });
-    console.log(\`Removed \${dbPath}.\`);
+    rmSync(dataRoot, { recursive: true, force: true });
+    console.log(\`Removed \${dataRoot}.\`);
   }
 }
 

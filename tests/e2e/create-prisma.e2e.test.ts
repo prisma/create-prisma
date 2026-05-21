@@ -316,6 +316,14 @@ describe("create-prisma e2e", () => {
 
         const mongo = await startMemoryMongo(project.projectDir);
         try {
+          expect(await pathExists(path.join(project.projectDir, ".mongo-data", "db"))).toBe(true);
+          expect(await pathExists(path.join(project.projectDir, ".mongo-data", "mongo.log"))).toBe(
+            true,
+          );
+          expect(await pathExists(path.join(project.projectDir, ".mongo-data", "mongo.pid"))).toBe(
+            true,
+          );
+
           await runScript(project.projectDir, "migration:plan");
           await runScript(project.projectDir, "migrate");
           await runScript(project.projectDir, "db:seed");
