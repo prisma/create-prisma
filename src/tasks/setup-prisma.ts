@@ -9,7 +9,7 @@ import {
   PRISMA_POSTGRES_TEMPORARY_NOTICE,
   provisionPrismaPostgres,
 } from "./prisma-postgres";
-import { getPrismaNextPackageSpecifier } from "../constants/dependencies";
+import { getDependencyVersion, getPrismaNextPackageSpecifier } from "../constants/dependencies";
 import {
   AuthoringStyleSchema,
   DatabaseProviderSchema,
@@ -21,6 +21,7 @@ import {
 } from "../types";
 import {
   detectPackageManager,
+  getDenoPrismaSpecifier,
   getInstallCommand,
   getPackageExecutionArgs,
   getLocalPackageBinaryArgs,
@@ -78,33 +79,206 @@ const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
 const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
-const MONGO_DOCKER_COMPOSE = `services:
-  mongodb:
-    image: mongo:latest
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb-data:/data/db
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mongosh --quiet --eval 'try { rs.status().members.some((member) => member.stateStr === \\"PRIMARY\\") } catch (error) { rs.initiate({_id: \\"rs0\\", members: [{ _id: 0, host: \\"localhost:27017\\" }] }); false }' | grep true",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 5s
 
-volumes:
-  mongodb-data:
+const MONGO_MEMORY_SERVER_SCRIPT = `import { spawn } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+const defaultDatabaseUrl = "mongodb://localhost:27017/mydb?replicaSet=rs0&directConnection=true";
+const dataRoot = path.resolve(process.env.MONGO_DB_PATH ?? ".mongo-data");
+const dbPath = path.join(dataRoot, "db");
+const pidFile = path.join(dataRoot, "mongo.pid");
+const logFile = path.join(dataRoot, "mongo.log");
+const readyTimeoutMs = Number(process.env.MONGO_READY_TIMEOUT_MS ?? 60_000);
+
+function getMongoConfig() {
+  const databaseUrl = process.env.DATABASE_URL ?? defaultDatabaseUrl;
+  const url = new URL(databaseUrl);
+  if (url.protocol !== "mongodb:") {
+    throw new Error("DATABASE_URL must use the mongodb:// protocol.");
+  }
+
+  const port = Number(url.port || "27017");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(\`DATABASE_URL has an invalid MongoDB port: \${url.port}\`);
+  }
+
+  return {
+    databaseUrl,
+    port,
+    replSetName: url.searchParams.get("replicaSet") || "rs0",
+  };
+}
+
+function readPid() {
+  if (!existsSync(pidFile)) return null;
+  const raw = readFileSync(pidFile, "utf8").trim();
+  const pid = Number(raw);
+  return Number.isFinite(pid) && pid > 0 ? pid : null;
+}
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getChildCommand() {
+  const scriptPath = path.resolve(process.argv[1] ?? "");
+  const versions = process.versions;
+  if (versions.deno) return { command: process.execPath, args: ["run", "-A", scriptPath, "_run"] };
+  return { command: process.execPath, args: [scriptPath, "_run"] };
+}
+
+async function runServer() {
+  mkdirSync(dbPath, { recursive: true });
+  const config = getMongoConfig();
+  const memoryServer = await import("mongodb-memory-server");
+  const { MongoMemoryReplSet } = memoryServer.default ?? memoryServer;
+  const replSet = await MongoMemoryReplSet.create({
+    replSet: { name: config.replSetName, count: 1 },
+    instanceOpts: [{ port: config.port, storageEngine: "wiredTiger", dbPath }],
+  });
+  console.log(\`MongoDB server ready for \${config.databaseUrl}\`);
+  console.log(\`Data directory: \${dbPath}\`);
+  const shutdown = async () => {
+    await replSet.stop();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+async function up() {
+  mkdirSync(dataRoot, { recursive: true });
+  const existing = readPid();
+  if (existing !== null && isAlive(existing)) {
+    console.log(\`MongoDB is already running (PID \${existing}). Use \\\`db:down\\\` to stop.\`);
+    return;
+  }
+  if (existing !== null) rmSync(pidFile, { force: true });
+
+  writeFileSync(logFile, "");
+  const logFd = openSync(logFile, "a");
+  const { command, args } = getChildCommand();
+  const child = spawn(
+    command,
+    args,
+    {
+      detached: true,
+      stdio: ["ignore", logFd, logFd],
+      env: process.env,
+    },
+  );
+  closeSync(logFd);
+  if (typeof child.pid !== "number") throw new Error("Failed to spawn MongoDB child process.");
+  writeFileSync(pidFile, String(child.pid));
+  child.unref();
+
+  const start = Date.now();
+  while (Date.now() - start < readyTimeoutMs) {
+    if (!isAlive(child.pid)) {
+      console.error("MongoDB failed to start:");
+      console.error(readFileSync(logFile, "utf8"));
+      rmSync(pidFile, { force: true });
+      process.exit(1);
+    }
+    const log = readFileSync(logFile, "utf8");
+    if (log.includes("MongoDB server ready")) {
+      for (const line of log.split("\\n")) {
+        if (line.trim().length > 0) console.log(line);
+      }
+      console.log(\`Detached (PID \${child.pid}). Logs: \${logFile}\`);
+      console.log("Stop with \`db:down\` or wipe with \`db:reset\`.");
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  console.error(\`Timed out waiting for MongoDB after \${readyTimeoutMs}ms.\`);
+  console.error(readFileSync(logFile, "utf8"));
+  try {
+    process.kill(child.pid, "SIGTERM");
+  } catch {
+    // ignore
+  }
+  rmSync(pidFile, { force: true });
+  process.exit(1);
+}
+
+async function down(wipe) {
+  const pid = readPid();
+  if (pid !== null && isAlive(pid)) {
+    process.kill(pid, "SIGTERM");
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline && isAlive(pid)) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (isAlive(pid)) {
+      console.warn(\`MongoDB (PID \${pid}) did not exit within 10s; sending SIGKILL.\`);
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // ignore
+      }
+    }
+    console.log(\`Stopped MongoDB (PID \${pid}).\`);
+  } else if (pid !== null) {
+    console.log("MongoDB was not running (stale PID file).");
+  } else {
+    console.log("MongoDB is not running.");
+  }
+  rmSync(pidFile, { force: true });
+  if (wipe) {
+    rmSync(dataRoot, { recursive: true, force: true });
+    console.log(\`Removed \${dataRoot}.\`);
+  }
+}
+
+const cmd = process.argv[2] ?? "up";
+switch (cmd) {
+  case "up":
+    await up();
+    break;
+  case "down":
+    await down(false);
+    break;
+  case "reset":
+    await down(true);
+    break;
+  case "_run":
+    await runServer();
+    break;
+  default:
+    console.error(\`Unknown command: \${cmd}. Use: up | down | reset\`);
+    process.exit(2);
+}
 `;
 
-const mongoDockerScripts = {
-  "db:up": "docker compose up -d --wait",
-  "db:down": "docker compose down",
-} as const;
+function getMongoMemoryScripts(packageManager: PackageManager): Record<string, string> {
+  switch (packageManager) {
+    case "bun":
+      return {
+        "db:up": "bun --env-file=.env scripts/mongo.mjs up",
+        "db:down": "bun --env-file=.env scripts/mongo.mjs down",
+        "db:reset": "bun --env-file=.env scripts/mongo.mjs reset",
+      };
+    case "deno":
+      return {
+        "db:up": "deno run -A --env-file=.env scripts/mongo.mjs up",
+        "db:down": "deno run -A --env-file=.env scripts/mongo.mjs down",
+        "db:reset": "deno run -A --env-file=.env scripts/mongo.mjs reset",
+      };
+    default:
+      return {
+        "db:up": "node --env-file=.env scripts/mongo.mjs up",
+        "db:down": "node --env-file=.env scripts/mongo.mjs down",
+        "db:reset": "node --env-file=.env scripts/mongo.mjs reset",
+      };
+  }
+}
 
 const requiredPrismaFileGroups = [
   ["prisma/contract.prisma", "prisma/contract.ts"],
@@ -498,16 +672,45 @@ async function ensurePackageScripts(
   }
 }
 
-async function ensureMongoDockerCompose(projectDir: string): Promise<void> {
-  const composePath = path.join(projectDir, "docker-compose.yml");
-  if (await fs.pathExists(composePath)) {
+async function ensureMongoMemoryServerScript(projectDir: string): Promise<void> {
+  const scriptPath = path.join(projectDir, "scripts", "mongo.mjs");
+  if (await fs.pathExists(scriptPath)) {
     return;
   }
 
-  await fs.writeFile(composePath, MONGO_DOCKER_COMPOSE, "utf8");
+  await fs.ensureDir(path.dirname(scriptPath));
+  await fs.writeFile(scriptPath, MONGO_MEMORY_SERVER_SCRIPT, "utf8");
 }
 
-async function writeMongoDockerHelpersForContext(
+async function ensureMongoMemoryServerDevDependency(projectDir: string): Promise<void> {
+  const packageJsonPath = path.join(projectDir, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) {
+    return;
+  }
+
+  const packageJson = await fs.readJson(packageJsonPath);
+  if (!packageJson.devDependencies) {
+    packageJson.devDependencies = {};
+  }
+
+  const memoryServerVersion = getDependencyVersion("mongodb-memory-server");
+  if (packageJson.devDependencies["mongodb-memory-server"] === memoryServerVersion) {
+    return;
+  }
+
+  packageJson.devDependencies["mongodb-memory-server"] = memoryServerVersion;
+  packageJson.devDependencies = Object.fromEntries(
+    Object.entries(packageJson.devDependencies as Record<string, string>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    ),
+  );
+
+  await fs.writeJson(packageJsonPath, packageJson, {
+    spaces: 2,
+  });
+}
+
+async function writeMongoLocalHelpersForContext(
   context: PrismaSetupContext,
   projectDir: string,
 ): Promise<boolean> {
@@ -516,8 +719,10 @@ async function writeMongoDockerHelpersForContext(
   }
 
   try {
-    await ensureMongoDockerCompose(projectDir);
-    await ensurePackageScripts(projectDir, mongoDockerScripts);
+    await ensureMongoMemoryServerScript(projectDir);
+    await ensureMongoMemoryServerDevDependency(projectDir);
+    await ensurePackageScripts(projectDir, getMongoMemoryScripts(context.packageManager));
+    await ensureGitignoreEntry(projectDir, ".mongo-data");
     return true;
   } catch (error) {
     cancel(getCommandErrorMessage(error));
@@ -755,7 +960,7 @@ async function finalizePrismaFilesForContext(
 
 function getPrismaNextCliCommand(packageManager: PackageManager, prismaNextArgs: string[]): string {
   if (packageManager === "deno") {
-    return `deno run -A --env-file=.env npm:${getPrismaNextCliPackageSpecifier()} ${prismaNextArgs.join(" ")}`;
+    return `deno run -A --env-file=.env ${getDenoPrismaSpecifier()} ${prismaNextArgs.join(" ")}`;
   }
 
   return getLocalPackageBinaryCommand(packageManager, "prisma-next", prismaNextArgs);
@@ -768,13 +973,7 @@ function getPrismaNextCliArgs(
   if (packageManager === "deno") {
     return {
       command: "deno",
-      args: [
-        "run",
-        "-A",
-        "--env-file=.env",
-        `npm:${getPrismaNextCliPackageSpecifier()}`,
-        ...prismaNextArgs,
-      ],
+      args: ["run", "-A", "--env-file=.env", getDenoPrismaSpecifier(), ...prismaNextArgs],
     };
   }
 
@@ -872,7 +1071,8 @@ function buildNextStepsForContext(opts: {
   if (context.databaseProvider === "mongo" && !context.databaseUrl) {
     nextSteps.push({
       command: getRunScriptCommand(context.packageManager, "db:up"),
-      description: "Start the local MongoDB replica set with Docker.",
+      description:
+        "Start the local MongoDB replica set with mongodb-memory-server. Stop with `db:down`, wipe with `db:reset`.",
     });
   }
   nextSteps.push({
@@ -950,6 +1150,12 @@ export async function executePrismaSetupContext(
     return false;
   }
 
+  const didWriteMongoLocalHelpers = await writeMongoLocalHelpersForContext(context, projectDir);
+  if (!didWriteMongoLocalHelpers) {
+    stopProgressOnFailure();
+    return false;
+  }
+
   if (context.shouldInstall) {
     progressSpinner?.message("Installing dependencies...");
   }
@@ -966,12 +1172,6 @@ export async function executePrismaSetupContext(
     provisionResult,
   );
   if (!didFinalizePrismaFiles) {
-    stopProgressOnFailure();
-    return false;
-  }
-
-  const didWriteMongoDockerHelpers = await writeMongoDockerHelpersForContext(context, projectDir);
-  if (!didWriteMongoDockerHelpers) {
     stopProgressOnFailure();
     return false;
   }

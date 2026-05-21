@@ -106,8 +106,8 @@ describe("writePrismaDependencies", () => {
         const packageJson = await readPackageJson(projectDir);
 
         expect(packageJson.scripts).toMatchObject({
-          "contract:emit": `deno run -A --env-file=.env npm:prisma-next@${PRISMA_NEXT_PACKAGE_VERSION} contract emit`,
-          "migration:plan": `deno run -A --env-file=.env npm:prisma-next@${PRISMA_NEXT_PACKAGE_VERSION} migration plan`,
+          "contract:emit": "deno run -A --env-file=.env npm:prisma-next contract emit",
+          "migration:plan": "deno run -A --env-file=.env npm:prisma-next migration plan",
         });
       },
     );
@@ -272,13 +272,14 @@ describe("getInstallArgs", () => {
     expect(getInstallArgs("bun")).toEqual({ command: "bun", args: ["install"] });
   });
 
-  test("uses Prisma Next latest npm specifiers for Deno installs", () => {
-    expect(getDenoPrismaSpecifier()).toBe(`npm:prisma-next@${PRISMA_NEXT_PACKAGE_VERSION}`);
+  test("uses Deno-compatible npm specifiers for Deno installs", () => {
+    expect(PRISMA_NEXT_PACKAGE_VERSION).toBe("latest");
+    expect(getDenoPrismaSpecifier()).toBe("npm:prisma-next");
     expect(getInstallArgs("deno")).toEqual({
       command: "deno",
       args: [
         "install",
-        `--allow-scripts=npm:prisma-next@${PRISMA_NEXT_PACKAGE_VERSION},npm:@prisma-next/postgres@${PRISMA_NEXT_PACKAGE_VERSION},npm:@prisma-next/mongo@${PRISMA_NEXT_PACKAGE_VERSION}`,
+        "--allow-scripts=npm:prisma-next,npm:@prisma-next/postgres,npm:@prisma-next/mongo,npm:mongodb-memory-server",
       ],
     });
   });

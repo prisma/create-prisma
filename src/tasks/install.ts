@@ -2,18 +2,14 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import {
-  getDependencyVersion,
-  getPrismaNextPackageSpecifier,
-  getCreateTemplateDependencies,
-} from "../constants/dependencies";
+import { getDependencyVersion, getCreateTemplateDependencies } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
-import { getInstallArgs } from "../utils/package-manager";
+import { getDenoPrismaSpecifier, getInstallArgs } from "../utils/package-manager";
 
 function getPrismaNextScriptMap(packageManager: PackageManager) {
   if (packageManager === "deno") {
-    const prismaNextCli = `deno run -A --env-file=.env npm:${getPrismaNextPackageSpecifier("prisma-next")}`;
+    const prismaNextCli = `deno run -A --env-file=.env ${getDenoPrismaSpecifier()}`;
 
     return {
       "contract:emit": `${prismaNextCli} contract emit`,
