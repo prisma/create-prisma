@@ -11,13 +11,13 @@ Scaffold a new app with Prisma Next already wired up.
 - runs `prisma-next init --no-install` to scaffold `prisma/contract.*`, `prisma-next.config.ts`, `prisma/db.ts`, `prisma-next.md`, and `.env.example`
 - writes a template-specific Prisma Next runtime helper
 - adds `contract:emit`, `db:init`, `db:update`, `db:verify`, `db:seed`, `migration:plan`, `migrate`, `migration:status`, and `migration:show` scripts
-- adds `db:up` / `db:down` and `docker-compose.yml` for default MongoDB projects
+- adds `db:up` / `db:down` / `db:reset` plus `scripts/mongo.mjs` when you opt into local MongoDB (`mongodb-memory-server`, each project gets its own port)
 - creates or updates `.env` with `DATABASE_URL`
 - can install dependencies and run `prisma-next contract emit`
 
 `db:init`, migrations, and seeding are never run automatically. PostgreSQL projects show
 `db:init` as a manual follow-up command; MongoDB projects show `db:up` plus the migration
-plan/apply path for initial schema setup.
+plan/apply path for initial schema setup. The generated `README.md` has a numbered `## Getting Started` section that lists the exact commands to run.
 
 ## Quick Start
 
@@ -130,6 +130,7 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 - `--no-install` scaffold only
 - `--no-emit` skip `prisma-next contract emit`
 - `--prisma-postgres` provision Prisma Postgres for PostgreSQL
+- `--local-mongo` scaffold the local `mongodb-memory-server` helper for MongoDB (default with `--yes`; pass `--no-local-mongo` to opt out)
 - `--force` allow scaffolding into a non-empty directory
 - `--verbose` print full command output
 

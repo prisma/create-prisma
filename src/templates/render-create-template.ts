@@ -7,6 +7,7 @@ type CreateTemplateContext = {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  useLocalMongo: boolean;
 };
 
 function getCreateTemplateDir(template: CreateTemplate): string {
@@ -22,7 +23,8 @@ function createTemplateContext(
   template: CreateTemplate,
   provider: DatabaseProvider,
   authoring: AuthoringStyle,
-  packageManager?: PackageManager,
+  packageManager: PackageManager | undefined,
+  useLocalMongo: boolean,
 ): CreateTemplateContext {
   return {
     projectName,
@@ -30,6 +32,7 @@ function createTemplateContext(
     provider,
     authoring,
     packageManager,
+    useLocalMongo,
   };
 }
 
@@ -40,11 +43,20 @@ export async function scaffoldCreateTemplate(opts: {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  useLocalMongo: boolean;
 }): Promise<void> {
-  const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
+  const { projectDir, projectName, template, provider, authoring, packageManager, useLocalMongo } =
+    opts;
   const templateRoot = getCreateTemplateDir(template);
   const sharedTemplateRoot = getCreateSharedTemplateDir();
-  const context = createTemplateContext(projectName, template, provider, authoring, packageManager);
+  const context = createTemplateContext(
+    projectName,
+    template,
+    provider,
+    authoring,
+    packageManager,
+    useLocalMongo,
+  );
   await renderTemplateTree<CreateTemplateContext>({
     templateRoot: sharedTemplateRoot,
     outputDir: projectDir,

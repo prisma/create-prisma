@@ -315,6 +315,7 @@ async function executeCreateContext(
       provider: context.prismaSetupContext.databaseProvider,
       authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
+      useLocalMongo: context.prismaSetupContext.useLocalMongo,
     });
 
     if (context.prismaSetupContext.verbose) {

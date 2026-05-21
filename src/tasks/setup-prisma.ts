@@ -62,6 +62,7 @@ export type PrismaSetupContext = {
   authoring: AuthoringStyle;
   databaseUrl?: string;
   shouldUsePrismaPostgres: boolean;
+  useLocalMongo: boolean;
   packageManager: PackageManager;
   shouldInstall: boolean;
 };
@@ -70,6 +71,7 @@ type FinalizePrismaOptions = {
   provider: DatabaseProvider;
   databaseUrl?: string;
   claimUrl?: string;
+  useLocalMongo: boolean;
   projectDir?: string;
 };
 
@@ -79,6 +81,10 @@ const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
 const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
+const DEFAULT_INTERACTIVE_LOCAL_MONGO = true;
+const DEFAULT_AUTOMATED_LOCAL_MONGO = true;
+const LOCAL_MONGO_PORT_BASE = 27018;
+const LOCAL_MONGO_PORT_RANGE = 1000;
 
 const MONGO_MEMORY_SERVER_SCRIPT = `import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -136,7 +142,8 @@ function getChildCommand() {
 async function runServer() {
   mkdirSync(dbPath, { recursive: true });
   const config = getMongoConfig();
-  const memoryServer = await import("mongodb-memory-server");
+  const specifier = process.versions.deno ? "npm:mongodb-memory-server" : "mongodb-memory-server";
+  const memoryServer = await import(specifier);
   const { MongoMemoryReplSet } = memoryServer.default ?? memoryServer;
   const replSet = await MongoMemoryReplSet.create({
     replSet: { name: config.replSetName, count: 1 },
@@ -150,6 +157,8 @@ async function runServer() {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  // Keep the event loop alive: Deno doesn't ref signal listeners.
+  await new Promise(() => {});
 }
 
 async function up() {
@@ -359,6 +368,22 @@ async function promptForPrismaPostgres(): Promise<boolean | undefined> {
   return Boolean(shouldUsePrismaPostgres);
 }
 
+async function promptForLocalMongo(): Promise<boolean | undefined> {
+  const useLocalMongo = await confirm({
+    message: "Run a local MongoDB for development?",
+    active: "Yes, start an in-memory replica set with mongodb-memory-server",
+    inactive: "No, I'll set DATABASE_URL myself",
+    initialValue: DEFAULT_INTERACTIVE_LOCAL_MONGO,
+  });
+
+  if (isCancel(useLocalMongo)) {
+    cancel("Operation cancelled.");
+    return undefined;
+  }
+
+  return Boolean(useLocalMongo);
+}
+
 function getPackageManagerHint(
   option: PackageManager,
   detected: PackageManager,
@@ -466,21 +491,39 @@ export async function collectPrismaSetupContext(
   }
 
   const databaseUrl = input.databaseUrl;
+
+  if (input.prismaPostgres === true && databaseProvider !== "postgres") {
+    cancel("--prisma-postgres is only supported with --provider postgres.");
+    return;
+  }
+  if (input.localMongo === true && databaseProvider !== "mongo") {
+    cancel("--local-mongo is only supported with --provider mongo.");
+    return;
+  }
+  if (input.prismaPostgres === true && databaseUrl) {
+    cancel("Use either --database-url or --prisma-postgres, not both.");
+    return;
+  }
+  if (input.localMongo === true && databaseUrl) {
+    cancel("Use either --database-url or --local-mongo, not both.");
+    return;
+  }
+
   const shouldUsePrismaPostgres =
-    input.prismaPostgres ??
-    (databaseProvider === "postgres" && !databaseUrl && !useDefaults
-      ? await promptForPrismaPostgres()
-      : DEFAULT_AUTOMATED_PRISMA_POSTGRES);
+    databaseProvider === "postgres" && !databaseUrl
+      ? (input.prismaPostgres ??
+        (useDefaults ? DEFAULT_AUTOMATED_PRISMA_POSTGRES : await promptForPrismaPostgres()))
+      : false;
   if (shouldUsePrismaPostgres === undefined) {
     return;
   }
 
-  if (shouldUsePrismaPostgres && databaseProvider !== "postgres") {
-    cancel("--prisma-postgres is only supported with --provider postgres.");
-    return;
-  }
-  if (shouldUsePrismaPostgres && databaseUrl) {
-    cancel("Use either --database-url or --prisma-postgres, not both.");
+  const useLocalMongo =
+    databaseProvider === "mongo" && !databaseUrl
+      ? (input.localMongo ??
+        (useDefaults ? DEFAULT_AUTOMATED_LOCAL_MONGO : await promptForLocalMongo()))
+      : false;
+  if (useLocalMongo === undefined) {
     return;
   }
 
@@ -513,17 +556,46 @@ export async function collectPrismaSetupContext(
     authoring,
     databaseUrl,
     shouldUsePrismaPostgres,
+    useLocalMongo,
     packageManager,
     shouldInstall,
   };
 }
 
-function getDefaultDatabaseUrl(provider: DatabaseProvider): string {
+function hashStringToOffset(value: string, range: number): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % range;
+}
+
+function sanitizeMongoDbName(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "_")
+      .replace(/^[_-]+|[_-]+$/g, "") || "app"
+  );
+}
+
+function getLocalMongoDatabaseUrl(projectName: string): string {
+  const port = LOCAL_MONGO_PORT_BASE + hashStringToOffset(projectName, LOCAL_MONGO_PORT_RANGE);
+  const dbName = sanitizeMongoDbName(projectName);
+  return `mongodb://localhost:${port}/${dbName}?replicaSet=rs0&directConnection=true`;
+}
+
+function getDefaultDatabaseUrl(
+  provider: DatabaseProvider,
+  opts: { projectName: string; useLocalMongo: boolean },
+): string {
   switch (provider) {
     case "postgres":
       return "postgresql://user:password@localhost:5432/mydb";
     case "mongo":
-      return "mongodb://localhost:27017/mydb?replicaSet=rs0&directConnection=true";
+      return opts.useLocalMongo
+        ? getLocalMongoDatabaseUrl(opts.projectName)
+        : "mongodb://user:password@localhost:27017/mydb?replicaSet=rs0&directConnection=true";
     default: {
       const exhaustiveCheck: never = provider;
       throw new Error(`Unsupported Prisma Next target: ${String(exhaustiveCheck)}`);
@@ -714,7 +786,7 @@ async function writeMongoLocalHelpersForContext(
   context: PrismaSetupContext,
   projectDir: string,
 ): Promise<boolean> {
-  if (context.databaseProvider !== "mongo" || context.databaseUrl) {
+  if (!context.useLocalMongo) {
     return true;
   }
 
@@ -759,7 +831,12 @@ async function finalizePrismaFiles(options: FinalizePrismaOptions): Promise<void
 
   await ensureRequiredPrismaFiles(projectDir);
 
-  const databaseUrl = options.databaseUrl ?? getDefaultDatabaseUrl(options.provider);
+  const databaseUrl =
+    options.databaseUrl ??
+    getDefaultDatabaseUrl(options.provider, {
+      projectName: path.basename(projectDir),
+      useLocalMongo: options.useLocalMongo,
+    });
   await ensureEnvVarInEnv(projectDir, "DATABASE_URL", databaseUrl, {
     mode: options.databaseUrl ? "upsert" : "keep-existing",
     comment: "Added by create-prisma",
@@ -945,6 +1022,7 @@ async function finalizePrismaFilesForContext(
       provider: context.databaseProvider,
       databaseUrl: provisionResult.databaseUrl,
       claimUrl: provisionResult.claimUrl,
+      useLocalMongo: context.useLocalMongo,
       projectDir,
     });
 
@@ -1068,7 +1146,7 @@ function buildNextStepsForContext(opts: {
       description: "Create the initial PostgreSQL database objects and sign the database.",
     });
   }
-  if (context.databaseProvider === "mongo" && !context.databaseUrl) {
+  if (context.useLocalMongo) {
     nextSteps.push({
       command: getRunScriptCommand(context.packageManager, "db:up"),
       description:
@@ -1101,15 +1179,17 @@ function formatNextSteps(nextSteps: NextStep[]): string {
   return nextSteps.map((step) => `${step.command}\n  ${step.description}`).join("\n\n");
 }
 
-function formatAgentPrompt(): string {
-  return [
-    "Ask your agent:",
-    "What can I do with Prisma Next?",
-    "",
-    "Learn more:",
-    `Docs: prisma-next.md`,
-    "Skills: https://github.com/prisma/prisma-next/tree/main/skills",
-  ].join("\n");
+function formatFirstSteps(prependNextSteps: NextStep[]): string {
+  const lines: string[] = [];
+  for (const step of prependNextSteps) {
+    lines.push(step.command);
+  }
+  lines.push("");
+  lines.push("Ask your agent:");
+  lines.push("What can I do with Prisma Next?");
+  lines.push("");
+  lines.push("See README.md for the full setup sequence and available scripts.");
+  return lines.join("\n");
 }
 
 export async function executePrismaSetupContext(
@@ -1194,9 +1274,9 @@ export async function executePrismaSetupContext(
     note(warningLines.map((line) => line.replace(/^- /, "")).join("\n"), "Heads up");
   }
 
-  note(formatAgentPrompt(), "Agent prompt");
+  note(formatFirstSteps(options.prependNextSteps ?? []), "Next steps");
   if (context.verbose) {
-    note(formatNextSteps(nextSteps), "Next steps for Prisma Next");
+    note(formatNextSteps(nextSteps), "Full command reference");
   }
   outro("Prisma Next setup complete.");
 
