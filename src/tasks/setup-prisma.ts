@@ -1085,7 +1085,7 @@ function buildNextStepsForContext(opts: {
   });
   nextSteps.push({
     command: getRunScriptCommand(context.packageManager, "db:seed"),
-    description: "Insert the sample user and post data from prisma/seed.ts.",
+    description: "Insert the sample users from prisma/seed.ts.",
   });
   if (options.includeDevNextStep) {
     nextSteps.push({

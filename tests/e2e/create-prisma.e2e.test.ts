@@ -174,7 +174,7 @@ try {
   }
 
   const alice = ${aliceQuery};
-  if (!alice || alice.name !== "Alice") {
+  if (!alice || alice.name !== "Alice" || alice.username !== "alice") {
     throw new Error(\`Expected Alice query result, received \${JSON.stringify(alice)}\`);
   }
 } finally {

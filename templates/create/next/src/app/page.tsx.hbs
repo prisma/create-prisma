@@ -43,7 +43,7 @@ export default async function Home() {
               <li key={user.id}>
                 <div>
                   <strong>{user.name ?? "Unnamed user"}</strong>
-                  <p>{user.email}</p>
+                  <p>{user.username ? `@${user.username}` : user.email}</p>
                 </div>
                 {user.createdAt ? (
                   <time dateTime={user.createdAt.toISOString()}>

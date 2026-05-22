@@ -254,6 +254,7 @@ describe("scaffoldCreateTemplate", () => {
         dev: "bun src/index.ts",
       });
       expect(index).toContain("db.orm.users");
+      expect(index).toContain('username: "first-user"');
       expect(index).toContain("Prisma Next is ready");
       expect(await readFile(path.join(projectDir, "src/lib/prisma.ts"), "utf8")).toContain(
         "@prisma-next/mongo/runtime",

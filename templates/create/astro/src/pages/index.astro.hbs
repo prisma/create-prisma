@@ -51,7 +51,7 @@ const users = await listUsers(10).catch(() => undefined);
               <li>
                 <div>
                   <strong>{user.name ?? "Unnamed user"}</strong>
-                  <p>{user.email}</p>
+                  <p>{user.username ? `@${user.username}` : user.email}</p>
                 </div>
                 {user.createdAt ? (
                   <time datetime={user.createdAt.toISOString()}>

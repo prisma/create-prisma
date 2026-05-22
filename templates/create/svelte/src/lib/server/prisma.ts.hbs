@@ -17,31 +17,33 @@ import contractJson from "../../../prisma/contract.json" with { type: "json" };
 {{#if (eq provider "mongo")}}
 export const db = mongo<Contract>({
   contractJson,
-  url: process.env["DATABASE_URL"],
+  url: process.env["DATABASE_URL"]!,
 });
 {{else}}
 export const db = postgres<Contract>({
   contractJson,
-  url: process.env["DATABASE_URL"],
+  url: process.env["DATABASE_URL"]!,
 });
 {{/if}}
 
 type UserRow = DefaultModelRow<Contract, "User">;
 
 {{#if (eq provider "mongo")}}
-function toStarterUser(user: Pick<UserRow, "_id" | "email" | "name">) {
+function toStarterUser(user: Pick<UserRow, "_id" | "email" | "username" | "name">) {
   return {
     id: String(user._id),
     email: user.email,
+    username: user.username ?? null,
     name: user.name ?? null,
     createdAt: null as Date | null,
   };
 }
 {{else}}
-function toStarterUser(user: Pick<UserRow, "id" | "email" | "name" | "createdAt">) {
+function toStarterUser(user: Pick<UserRow, "id" | "email" | "username" | "name" | "createdAt">) {
   return {
     id: String(user.id),
     email: user.email,
+    username: user.username ?? null,
     name: user.name ?? null,
     createdAt: user.createdAt,
   };
@@ -53,13 +55,13 @@ export async function listUsers(limit = 10) {
 {{#if (eq provider "mongo")}}
   const users: ReturnType<typeof toStarterUser>[] = [];
 
-  for await (const user of db.orm.users.select("_id", "email", "name").take(limit).all()) {
+  for await (const user of db.orm.users.select("_id", "email", "username", "name").take(limit).all()) {
     users.push(toStarterUser(user));
   }
 
   return users;
 {{else}}
-  const users = await db.orm.User.select("id", "email", "name", "createdAt").take(limit).all();
+  const users = await db.orm.User.select("id", "email", "username", "name", "createdAt").take(limit).all();
 
   return users.map(toStarterUser);
 {{/if}}

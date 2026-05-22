@@ -16,9 +16,9 @@ import { db } from "../src/lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}
 {{/if}}
 
 const seedUsers = [
-  { email: "alice@prisma.io", name: "Alice" },
-  { email: "bob@prisma.io", name: "Bob" },
-  { email: "carol@prisma.io", name: "Carol" },
+  { email: "alice@prisma.io", username: "alice", name: "Alice" },
+  { email: "bob@prisma.io", username: "bob", name: "Bob" },
+  { email: "carol@prisma.io", username: "carol", name: "Carol" },
 ];
 
 let createdCount = 0;
@@ -50,4 +50,3 @@ try {
   await db.runtime().close();
 }
 {{/if}}
-

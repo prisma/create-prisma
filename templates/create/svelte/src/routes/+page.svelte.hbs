@@ -44,7 +44,7 @@
 					<li>
 						<div>
 							<strong>{user.name ?? 'Unnamed user'}</strong>
-							<p>{user.email}</p>
+							<p>{user.username ? `@${user.username}` : user.email}</p>
 						</div>
 						{#if user.createdAt}
 							<time datetime={new Date(user.createdAt).toISOString()}>
@@ -177,4 +177,3 @@
 		}
 	}
 </style>
-

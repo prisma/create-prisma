@@ -6,6 +6,7 @@ useHead({
 type User = {
   id: string;
   email: string;
+  username: string | null;
   name: string | null;
   createdAt: string | null;
 };
@@ -56,7 +57,7 @@ function formatCreatedAt(value: string): string {
         <li v-for="user in data.users" :key="user.id">
           <div>
             <strong>\{{ user.name ?? "Unnamed user" }}</strong>
-            <p>\{{ user.email }}</p>
+            <p>\{{ user.username ? "@" + user.username : user.email }}</p>
           </div>
           <time v-if="user.createdAt" :datetime="user.createdAt">\{{ formatCreatedAt(user.createdAt) }}</time>
           <span v-else class="muted">No timestamp</span>
