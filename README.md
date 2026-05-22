@@ -11,7 +11,7 @@ Scaffold a new app with Prisma Next already wired up.
 - runs `prisma-next init --no-install` to scaffold `prisma/contract.*`, `prisma-next.config.ts`, `prisma/db.ts`, `prisma-next.md`, and `.env.example`
 - writes a template-specific Prisma Next runtime helper
 - adds `contract:emit`, `db:init`, `db:update`, `db:verify`, `db:seed`, `migration:plan`, `migrate`, `migration:status`, and `migration:show` scripts
-- adds `db:up` / `db:down` / `db:reset` plus `scripts/mongo.mjs` when you opt into local MongoDB (`mongodb-memory-server`, each project gets its own port)
+- adds `db:up` / `db:down` / `db:reset` plus `scripts/mongo.mjs` for MongoDB projects (in-memory replica set via `mongodb-memory-server`, each project gets its own port baked into `DATABASE_URL`). Point `DATABASE_URL` at your own MongoDB to skip the local server.
 - creates or updates `.env` with `DATABASE_URL`
 - can install dependencies and run `prisma-next contract emit`
 
@@ -130,7 +130,6 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 - `--no-install` scaffold only
 - `--no-emit` skip `prisma-next contract emit`
 - `--prisma-postgres` provision Prisma Postgres for PostgreSQL
-- `--local-mongo` scaffold the local `mongodb-memory-server` helper for MongoDB (default with `--yes`; pass `--no-local-mongo` to opt out)
 - `--force` allow scaffolding into a non-empty directory
 - `--verbose` print full command output
 

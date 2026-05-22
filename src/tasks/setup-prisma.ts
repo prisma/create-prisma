@@ -81,8 +81,6 @@ const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
 const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
-const DEFAULT_INTERACTIVE_LOCAL_MONGO = true;
-const DEFAULT_AUTOMATED_LOCAL_MONGO = true;
 const LOCAL_MONGO_PORT_BASE = 27018;
 const LOCAL_MONGO_PORT_RANGE = 1000;
 
@@ -368,22 +366,6 @@ async function promptForPrismaPostgres(): Promise<boolean | undefined> {
   return Boolean(shouldUsePrismaPostgres);
 }
 
-async function promptForLocalMongo(): Promise<boolean | undefined> {
-  const useLocalMongo = await confirm({
-    message: "Run a local MongoDB for development?",
-    active: "Yes, start an in-memory replica set with mongodb-memory-server",
-    inactive: "No, I'll set DATABASE_URL myself",
-    initialValue: DEFAULT_INTERACTIVE_LOCAL_MONGO,
-  });
-
-  if (isCancel(useLocalMongo)) {
-    cancel("Operation cancelled.");
-    return undefined;
-  }
-
-  return Boolean(useLocalMongo);
-}
-
 function getPackageManagerHint(
   option: PackageManager,
   detected: PackageManager,
@@ -496,16 +478,8 @@ export async function collectPrismaSetupContext(
     cancel("--prisma-postgres is only supported with --provider postgres.");
     return;
   }
-  if (input.localMongo === true && databaseProvider !== "mongo") {
-    cancel("--local-mongo is only supported with --provider mongo.");
-    return;
-  }
   if (input.prismaPostgres === true && databaseUrl) {
     cancel("Use either --database-url or --prisma-postgres, not both.");
-    return;
-  }
-  if (input.localMongo === true && databaseUrl) {
-    cancel("Use either --database-url or --local-mongo, not both.");
     return;
   }
 
@@ -518,14 +492,7 @@ export async function collectPrismaSetupContext(
     return;
   }
 
-  const useLocalMongo =
-    databaseProvider === "mongo" && !databaseUrl
-      ? (input.localMongo ??
-        (useDefaults ? DEFAULT_AUTOMATED_LOCAL_MONGO : await promptForLocalMongo()))
-      : false;
-  if (useLocalMongo === undefined) {
-    return;
-  }
+  const useLocalMongo = databaseProvider === "mongo" && !databaseUrl;
 
   const authoring =
     input.authoring ?? (useDefaults ? DEFAULT_AUTHORING : await promptForAuthoringStyle());

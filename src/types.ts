@@ -61,12 +61,6 @@ export const PrismaSetupOptionsSchema = z.object({
     .boolean()
     .optional()
     .describe("Provision Prisma Postgres with create-db when target is postgres"),
-  localMongo: z
-    .boolean()
-    .optional()
-    .describe(
-      "Scaffold an in-memory MongoDB replica set (mongodb-memory-server) when target is mongo",
-    ),
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
   emit: z.boolean().optional().describe("Emit Prisma Next contract artifacts after scaffolding"),
