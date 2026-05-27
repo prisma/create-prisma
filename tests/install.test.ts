@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { dependencyVersionMap, PRISMA_NEXT_PACKAGE_VERSION } from "../src/constants/dependencies";
+import { dependencyVersionMap, PRISMA_NEXT_DEFAULT_VERSION } from "../src/constants/dependencies";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import { writeCreateTemplateDependencies, writePrismaDependencies } from "../src/tasks/install";
 import { getDenoPrismaSpecifier, getInstallArgs } from "../src/utils/package-manager";
@@ -40,7 +40,7 @@ function expectPrismaNextPackagesUseLatest(packageJson: PackageJson): void {
 
   for (const [packageName, version] of Object.entries(dependencies)) {
     if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
-      expect(version).toBe(PRISMA_NEXT_PACKAGE_VERSION);
+      expect(version).toBe(PRISMA_NEXT_DEFAULT_VERSION);
     }
   }
 }
@@ -67,17 +67,17 @@ describe("writePrismaDependencies", () => {
         expectPrismaNextPackagesUseLatest(packageJson);
 
         expect(packageJson.dependencies).toMatchObject({
-          "@prisma-next/mongo": PRISMA_NEXT_PACKAGE_VERSION,
+          "@prisma-next/mongo": PRISMA_NEXT_DEFAULT_VERSION,
           dotenv: dependencyVersionMap.dotenv,
           hono: "^4.12.2",
         });
         expect(packageJson.devDependencies).toMatchObject({
-          "@prisma-next/cli": PRISMA_NEXT_PACKAGE_VERSION,
-          "@prisma-next/mongo-contract-ts": PRISMA_NEXT_PACKAGE_VERSION,
-          "@prisma-next/mongo-orm": PRISMA_NEXT_PACKAGE_VERSION,
-          "@prisma-next/target-mongo": PRISMA_NEXT_PACKAGE_VERSION,
+          "@prisma-next/cli": PRISMA_NEXT_DEFAULT_VERSION,
+          "@prisma-next/mongo-contract-ts": PRISMA_NEXT_DEFAULT_VERSION,
+          "@prisma-next/mongo-orm": PRISMA_NEXT_DEFAULT_VERSION,
+          "@prisma-next/target-mongo": PRISMA_NEXT_DEFAULT_VERSION,
           "@types/node": dependencyVersionMap["@types/node"],
-          "prisma-next": PRISMA_NEXT_PACKAGE_VERSION,
+          "prisma-next": PRISMA_NEXT_DEFAULT_VERSION,
           typescript: "^5.8.3",
         });
         expect(packageJson.scripts).toMatchObject({
@@ -86,6 +86,62 @@ describe("writePrismaDependencies", () => {
           "migration:plan": "bun prisma-next migration plan",
           migrate: "bun prisma-next migrate",
         });
+      },
+    );
+  });
+
+  test("pins every Prisma Next package to a non-default spec when one is provided", async () => {
+    await withPackageJson(
+      {
+        name: "app",
+        dependencies: {},
+        devDependencies: {},
+      },
+      async (projectDir) => {
+        await writePrismaDependencies("postgres", "bun", "psl", projectDir, {
+          kind: "npm",
+          spec: "0.10.0",
+        });
+
+        const packageJson = await readPackageJson(projectDir);
+        const allDependencies = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+
+        for (const [packageName, version] of Object.entries(allDependencies)) {
+          if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
+            expect(version).toBe("0.10.0");
+          }
+        }
+      },
+    );
+  });
+
+  test("writes pkg.pr.new URL specifiers for every Prisma Next dependency", async () => {
+    await withPackageJson(
+      {
+        name: "app",
+        dependencies: {},
+        devDependencies: {},
+      },
+      async (projectDir) => {
+        await writePrismaDependencies("postgres", "bun", "psl", projectDir, {
+          kind: "pkg-pr-new",
+          ref: "bad6795",
+        });
+
+        const packageJson = await readPackageJson(projectDir);
+        const allDependencies = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+
+        for (const [packageName, version] of Object.entries(allDependencies)) {
+          if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
+            expect(version).toBe(`https://pkg.pr.new/prisma/prisma-next/${packageName}@bad6795`);
+          }
+        }
       },
     );
   });
@@ -134,7 +190,7 @@ describe("writeCreateTemplateDependencies", () => {
         const packageJson = await readPackageJson(projectDir);
 
         expect(packageJson.devDependencies).toMatchObject({
-          "@prisma-next/vite-plugin-contract-emit": PRISMA_NEXT_PACKAGE_VERSION,
+          "@prisma-next/vite-plugin-contract-emit": PRISMA_NEXT_DEFAULT_VERSION,
           vite: "^7.3.3",
         });
       },
@@ -274,7 +330,7 @@ describe("getInstallArgs", () => {
   });
 
   test("uses Deno-compatible npm specifiers for Deno installs", () => {
-    expect(PRISMA_NEXT_PACKAGE_VERSION).toBe("latest");
+    expect(PRISMA_NEXT_DEFAULT_VERSION).toBe("latest");
     expect(getDenoPrismaSpecifier()).toBe("npm:prisma-next");
     expect(getInstallArgs("deno")).toEqual({
       command: "deno",

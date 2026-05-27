@@ -2,7 +2,12 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { getDependencyVersion, getCreateTemplateDependencies } from "../constants/dependencies";
+import {
+  DEFAULT_PRISMA_NEXT_SPEC,
+  getCreateTemplateDependencies,
+  getDependencyVersion,
+  type ResolvedPrismaNextSpec,
+} from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { getDenoPrismaSpecifier, getInstallArgs } from "../utils/package-manager";
@@ -114,6 +119,7 @@ export async function addPackageDependency(opts: {
   scripts?: Record<string, string>;
   scriptMode?: "if-missing";
   projectDir: string;
+  prismaNextSpec?: ResolvedPrismaNextSpec;
 }): Promise<void> {
   const {
     dependencies = [],
@@ -122,6 +128,7 @@ export async function addPackageDependency(opts: {
     scripts = {},
     scriptMode,
     projectDir,
+    prismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
   } = opts;
 
   const pkgJsonPath = path.join(projectDir, "package.json");
@@ -138,7 +145,7 @@ export async function addPackageDependency(opts: {
   if (!pkgJson.scripts) pkgJson.scripts = {};
 
   for (const pkgName of unique(dependencies)) {
-    const version = getDependencyVersion(pkgName);
+    const version = getDependencyVersion(pkgName, prismaNextSpec);
     if (version) {
       pkgJson.dependencies[pkgName] = version;
     } else {
@@ -147,7 +154,7 @@ export async function addPackageDependency(opts: {
   }
 
   for (const pkgName of unique(devDependencies)) {
-    const version = getDependencyVersion(pkgName);
+    const version = getDependencyVersion(pkgName, prismaNextSpec);
     if (version) {
       pkgJson.devDependencies[pkgName] = version;
     } else {
@@ -186,6 +193,7 @@ export async function writePrismaDependencies(
   packageManager: PackageManager,
   authoring: AuthoringStyle,
   projectDir = process.cwd(),
+  prismaNextSpec: ResolvedPrismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
 ): Promise<void> {
   const dependencies: string[] = [getDbPackages(provider, packageManager), "dotenv"];
   const devDependencies: string[] = ["prisma-next", "@prisma-next/cli", "@types/node"];
@@ -202,6 +210,7 @@ export async function writePrismaDependencies(
     devDependencies,
     scripts: prismaScriptMap,
     projectDir,
+    prismaNextSpec,
   });
 }
 
@@ -209,8 +218,14 @@ export async function writeCreateTemplateDependencies(opts: {
   template: CreateTemplate;
   packageManager: PackageManager;
   projectDir?: string;
+  prismaNextSpec?: ResolvedPrismaNextSpec;
 }): Promise<void> {
-  const { template, packageManager, projectDir = process.cwd() } = opts;
+  const {
+    template,
+    packageManager,
+    projectDir = process.cwd(),
+    prismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
+  } = opts;
   const targets = getCreateTemplateDependencies(template, packageManager);
 
   for (const dependencyTarget of targets) {
@@ -221,6 +236,7 @@ export async function writeCreateTemplateDependencies(opts: {
       devDependencies: dependencyTarget.devDependencies,
       customDependencies: dependencyTarget.customDependencies,
       projectDir: targetDirectory,
+      prismaNextSpec,
     });
   }
 }

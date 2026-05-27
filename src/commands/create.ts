@@ -334,6 +334,7 @@ async function executeCreateContext(
       template: context.template,
       packageManager: context.prismaSetupContext.packageManager,
       projectDir: context.targetDirectory,
+      prismaNextSpec: context.prismaSetupContext.prismaNextSpec,
     });
   } catch (error) {
     createSpinner?.stop("Could not create Prisma Next project.");

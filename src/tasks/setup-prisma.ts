@@ -9,7 +9,13 @@ import {
   PRISMA_POSTGRES_TEMPORARY_NOTICE,
   provisionPrismaPostgres,
 } from "./prisma-postgres";
-import { getDependencyVersion, getPrismaNextPackageSpecifier } from "../constants/dependencies";
+import {
+  DEFAULT_PRISMA_NEXT_SPEC,
+  getDependencyVersion,
+  getPrismaNextPackageSpecifier,
+  parsePrismaNextVersionSpec,
+  type ResolvedPrismaNextSpec,
+} from "../constants/dependencies";
 import {
   AuthoringStyleSchema,
   DatabaseProviderSchema,
@@ -64,6 +70,7 @@ export type PrismaSetupContext = {
   shouldUsePrismaPostgres: boolean;
   packageManager: PackageManager;
   shouldInstall: boolean;
+  prismaNextSpec: ResolvedPrismaNextSpec;
 };
 
 type FinalizePrismaOptions = {
@@ -459,6 +466,14 @@ export async function collectPrismaSetupContext(
   const verbose = input.verbose === true;
   const shouldEmit = input.emit ?? DEFAULT_EMIT;
 
+  let prismaNextSpec: ResolvedPrismaNextSpec;
+  try {
+    prismaNextSpec = parsePrismaNextVersionSpec(input.prismaNextVersion);
+  } catch (error) {
+    cancel(error instanceof Error ? error.message : String(error));
+    return;
+  }
+
   const databaseProvider =
     input.provider ?? (useDefaults ? DEFAULT_DATABASE_PROVIDER : await promptForDatabaseProvider());
   if (!databaseProvider) {
@@ -515,6 +530,7 @@ export async function collectPrismaSetupContext(
     shouldUsePrismaPostgres,
     packageManager,
     shouldInstall,
+    prismaNextSpec,
   };
 }
 
@@ -821,6 +837,7 @@ async function writeDependenciesForContext(
       context.packageManager,
       context.authoring,
       projectDir,
+      context.prismaNextSpec,
     );
     return true;
   } catch (error) {
@@ -829,8 +846,10 @@ async function writeDependenciesForContext(
   }
 }
 
-function getPrismaNextCliPackageSpecifier(): string {
-  return getPrismaNextPackageSpecifier("prisma-next");
+function getPrismaNextCliPackageSpecifier(
+  prismaNextSpec: ResolvedPrismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
+): string {
+  return getPrismaNextPackageSpecifier("prisma-next", prismaNextSpec);
 }
 
 function getPrismaNextInitTarget(provider: DatabaseProvider): "mongodb" | "postgres" {
@@ -840,16 +859,17 @@ function getPrismaNextInitTarget(provider: DatabaseProvider): "mongodb" | "postg
 function getPrismaNextInitCliArgs(
   packageManager: PackageManager,
   prismaNextArgs: string[],
+  prismaNextSpec: ResolvedPrismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
 ): { command: string; args: string[] } {
   if (packageManager === "npm") {
     return {
       command: "npx",
-      args: ["--yes", getPrismaNextCliPackageSpecifier(), "init", ...prismaNextArgs],
+      args: ["--yes", getPrismaNextCliPackageSpecifier(prismaNextSpec), "init", ...prismaNextArgs],
     };
   }
 
   return getPackageExecutionArgs(packageManager, [
-    getPrismaNextCliPackageSpecifier(),
+    getPrismaNextCliPackageSpecifier(prismaNextSpec),
     "init",
     ...prismaNextArgs,
   ]);
@@ -858,8 +878,9 @@ function getPrismaNextInitCliArgs(
 function getPrismaNextInitCliCommand(
   packageManager: PackageManager,
   prismaNextArgs: string[],
+  prismaNextSpec: ResolvedPrismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
 ): string {
-  const execution = getPrismaNextInitCliArgs(packageManager, prismaNextArgs);
+  const execution = getPrismaNextInitCliArgs(packageManager, prismaNextArgs, prismaNextSpec);
   return [execution.command, ...execution.args].join(" ");
 }
 
@@ -878,14 +899,22 @@ async function runPrismaNextInitForContext(
     getContractPath(context.authoring),
     "--no-install",
   ];
-  const initCommand = getPrismaNextInitCliCommand(context.packageManager, initArgs);
+  const initCommand = getPrismaNextInitCliCommand(
+    context.packageManager,
+    initArgs,
+    context.prismaNextSpec,
+  );
 
   if (context.verbose) {
     log.step(`Running ${initCommand}`);
   }
 
   try {
-    const initExecution = getPrismaNextInitCliArgs(context.packageManager, initArgs);
+    const initExecution = getPrismaNextInitCliArgs(
+      context.packageManager,
+      initArgs,
+      context.prismaNextSpec,
+    );
     await execa(initExecution.command, initExecution.args, {
       cwd: projectDir,
       stdio: context.verbose ? "inherit" : "pipe",
