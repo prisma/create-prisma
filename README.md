@@ -93,6 +93,18 @@ Use Prisma Postgres auto-provisioning:
 create-prisma --name my-app --template nest --provider postgres --prisma-postgres
 ```
 
+Target a specific Prisma Next release (useful for regression / bisect work):
+
+```bash
+create-prisma --name my-app --template hono --prisma-next-version 0.10.0
+```
+
+Scaffold against an open PR via pkg.pr.new:
+
+```bash
+create-prisma --name my-app --template hono --prisma-next-version pkg-pr-new:bad6795
+```
+
 ## Supported Templates
 
 - `minimal` - script-first Prisma Next starter with no web framework
@@ -130,6 +142,10 @@ create-prisma --name my-app --template nest --provider postgres --prisma-postgre
 - `--no-install` scaffold only
 - `--no-emit` skip `prisma-next contract emit`
 - `--prisma-postgres` provision Prisma Postgres for PostgreSQL
+- `--prisma-next-version <spec>` target a specific Prisma Next release, npm dist-tag, or
+  pkg.pr.new PR preview. Accepts a published version (`0.10.0`, `0.11.0-dev.9`),
+  an npm dist-tag (`latest` (default), `dev`, `next`, …), or `pkg-pr-new:<sha|branch|pr-number>`
+  to install from `https://pkg.pr.new/prisma/prisma-next/<package>@<ref>`.
 - `--force` allow scaffolding into a non-empty directory
 - `--verbose` print full command output
 

@@ -64,6 +64,14 @@ export const PrismaSetupOptionsSchema = z.object({
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
   emit: z.boolean().optional().describe("Emit Prisma Next contract artifacts after scaffolding"),
+  prismaNextVersion: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      "Prisma Next version, npm dist-tag, or 'pkg-pr-new:<sha|branch|pr>' (default: latest)",
+    ),
 });
 
 export const PrismaSetupCommandInputSchema = CommonCommandOptionsSchema.extend(

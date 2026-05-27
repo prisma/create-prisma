@@ -3,10 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  dependencyVersionMap,
-  PRISMA_NEXT_DEFAULT_VERSION,
-} from "../src/constants/dependencies";
+import { dependencyVersionMap, PRISMA_NEXT_DEFAULT_VERSION } from "../src/constants/dependencies";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import { writeCreateTemplateDependencies, writePrismaDependencies } from "../src/tasks/install";
 import { getDenoPrismaSpecifier, getInstallArgs } from "../src/utils/package-manager";
@@ -89,6 +86,62 @@ describe("writePrismaDependencies", () => {
           "migration:plan": "bun prisma-next migration plan",
           migrate: "bun prisma-next migrate",
         });
+      },
+    );
+  });
+
+  test("pins every Prisma Next package to a non-default spec when one is provided", async () => {
+    await withPackageJson(
+      {
+        name: "app",
+        dependencies: {},
+        devDependencies: {},
+      },
+      async (projectDir) => {
+        await writePrismaDependencies("postgres", "bun", "psl", projectDir, {
+          kind: "npm",
+          spec: "0.10.0",
+        });
+
+        const packageJson = await readPackageJson(projectDir);
+        const allDependencies = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+
+        for (const [packageName, version] of Object.entries(allDependencies)) {
+          if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
+            expect(version).toBe("0.10.0");
+          }
+        }
+      },
+    );
+  });
+
+  test("writes pkg.pr.new URL specifiers for every Prisma Next dependency", async () => {
+    await withPackageJson(
+      {
+        name: "app",
+        dependencies: {},
+        devDependencies: {},
+      },
+      async (projectDir) => {
+        await writePrismaDependencies("postgres", "bun", "psl", projectDir, {
+          kind: "pkg-pr-new",
+          ref: "bad6795",
+        });
+
+        const packageJson = await readPackageJson(projectDir);
+        const allDependencies = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+
+        for (const [packageName, version] of Object.entries(allDependencies)) {
+          if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
+            expect(version).toBe(`https://pkg.pr.new/prisma/prisma-next/${packageName}@bad6795`);
+          }
+        }
       },
     );
   });
