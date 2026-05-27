@@ -85,7 +85,7 @@ const DEFAULT_AUTHORING: AuthoringStyle = "psl";
 const DEFAULT_INSTALL = true;
 const DEFAULT_EMIT = true;
 const DEFAULT_INTERACTIVE_PRISMA_POSTGRES = true;
-const DEFAULT_AUTOMATED_PRISMA_POSTGRES = false;
+const DEFAULT_AUTOMATED_PRISMA_POSTGRES = true;
 
 const MONGO_MEMORY_SERVER_SCRIPT = `import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -366,6 +366,25 @@ async function promptForPrismaPostgres(): Promise<boolean | undefined> {
   return Boolean(shouldUsePrismaPostgres);
 }
 
+async function resolvePrismaPostgresChoice(options: {
+  explicitChoice?: boolean;
+  databaseProvider: DatabaseProvider;
+  databaseUrl?: string;
+  useDefaults: boolean;
+}): Promise<boolean | undefined> {
+  const { explicitChoice, databaseProvider, databaseUrl, useDefaults } = options;
+
+  if (explicitChoice !== undefined) {
+    return explicitChoice;
+  }
+
+  if (databaseProvider !== "postgres" || databaseUrl) {
+    return false;
+  }
+
+  return useDefaults ? DEFAULT_AUTOMATED_PRISMA_POSTGRES : await promptForPrismaPostgres();
+}
+
 function getPackageManagerHint(
   option: PackageManager,
   detected: PackageManager,
@@ -481,11 +500,12 @@ export async function collectPrismaSetupContext(
   }
 
   const databaseUrl = input.databaseUrl;
-  const shouldUsePrismaPostgres =
-    input.prismaPostgres ??
-    (databaseProvider === "postgres" && !databaseUrl && !useDefaults
-      ? await promptForPrismaPostgres()
-      : DEFAULT_AUTOMATED_PRISMA_POSTGRES);
+  const shouldUsePrismaPostgres = await resolvePrismaPostgresChoice({
+    explicitChoice: input.prismaPostgres,
+    databaseProvider,
+    databaseUrl,
+    useDefaults,
+  });
   if (shouldUsePrismaPostgres === undefined) {
     return;
   }
