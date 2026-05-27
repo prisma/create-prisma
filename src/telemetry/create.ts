@@ -1,7 +1,43 @@
 import type { CreatePromptContext } from "../commands/create";
+import {
+  DEFAULT_PRISMA_NEXT_SPEC,
+  PRISMA_NEXT_DEFAULT_VERSION,
+  type ResolvedPrismaNextSpec,
+} from "../constants/dependencies";
 import type { CreateCommandInput } from "../types";
 
 import { trackCliTelemetry } from "./client";
+
+export type PrismaNextVersionKind = "default" | "npm-tag" | "npm-version" | "pkg-pr-new";
+
+function classifyPrismaNextSpec(spec: ResolvedPrismaNextSpec | undefined): PrismaNextVersionKind {
+  if (!spec || spec === DEFAULT_PRISMA_NEXT_SPEC) {
+    return "default";
+  }
+
+  if (spec.kind === "pkg-pr-new") {
+    return "pkg-pr-new";
+  }
+
+  if (spec.spec === PRISMA_NEXT_DEFAULT_VERSION) {
+    return "default";
+  }
+
+  // npm dist-tags are sequences of lowercase letters / digits / hyphens that
+  // don't start with a digit; semver releases always start with a digit. This
+  // is intentionally a coarse classifier — npm itself accepts anything as a
+  // tag, but tags collected over the wire are useful as a low-cardinality
+  // signal for the onboarding audit.
+  return /^[0-9]/.test(spec.spec) ? "npm-version" : "npm-tag";
+}
+
+function getPrismaNextVersionSpecString(spec: ResolvedPrismaNextSpec | undefined): string | null {
+  if (!spec) {
+    return null;
+  }
+
+  return spec.kind === "pkg-pr-new" ? `pkg-pr-new:${spec.ref}` : spec.spec;
+}
 
 export const CREATE_PRISMA_NEXT_COMPLETED_EVENT = "cli:create_prisma_next_command_completed";
 export const CREATE_PRISMA_NEXT_FAILED_EVENT = "cli:create_prisma_next_command_failed";
@@ -29,6 +65,8 @@ function getBaseCreateProperties(
   input: CreateCommandInput,
   context?: CreatePromptContext,
 ): Record<string, boolean | number | string | string[] | null> {
+  const resolvedPrismaNextSpec = context?.prismaSetupContext.prismaNextSpec;
+
   return {
     command: "create",
     "uses-defaults": input.yes === true,
@@ -43,6 +81,9 @@ function getBaseCreateProperties(
     "uses-prisma-postgres":
       context?.prismaSetupContext.shouldUsePrismaPostgres ?? input.prismaPostgres ?? null,
     "target-directory-state": context ? getTargetDirectoryState(context) : null,
+    "prisma-next-version-kind": classifyPrismaNextSpec(resolvedPrismaNextSpec),
+    "prisma-next-version-spec":
+      getPrismaNextVersionSpecString(resolvedPrismaNextSpec) ?? input.prismaNextVersion ?? null,
   };
 }
 
