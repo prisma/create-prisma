@@ -763,7 +763,7 @@ export async function executePrismaSetupContext(
     ok: true,
     nextSteps,
     warningSection,
-    databaseUrl,
+    databaseUrl: provisionResult.databaseUrl ?? context.databaseUrl,
   };
 }
 
