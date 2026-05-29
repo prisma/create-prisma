@@ -4,7 +4,7 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 
-import { listUsers } from "./lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { listUsers } from "./prisma/users{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
 const app = new Hono();
 

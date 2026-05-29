@@ -1,19 +1,7 @@
 {{#if (requiresDotenvConfigImport packageManager)}}
 import "dotenv/config";
 {{/if}}
-{{#if (eq template "nuxt")}}
-import { db } from "../server/utils/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{else}}
-{{#if (eq template "svelte")}}
-import { db } from "../src/lib/server/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{else}}
-{{#if (eq template "tanstack-start")}}
-import { db } from "../src/lib/prisma.server{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{else}}
-import { db } from "../src/lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{/if}}
-{{/if}}
-{{/if}}
+import { db } from "./db{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
 const seedUsers = [
   { email: "alice@prisma.io", username: "alice", name: "Alice" },

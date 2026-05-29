@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { listUsers } from "../../lib/prisma";
+import { listUsers } from "../../prisma/users";
 
 export const GET: APIRoute = async () => {
   const users = await listUsers(10).catch((error) => {
@@ -23,4 +23,3 @@ export const GET: APIRoute = async () => {
     },
   });
 };
-

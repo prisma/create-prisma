@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
 
-  const { listUsers } = await import("../lib/prisma");
+  const { listUsers } = await import("../prisma/users");
   const formatter = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -20,7 +20,7 @@ export default async function Home() {
         <h1>Users from your database, loaded on the server.</h1>
         <p className="lede">
           This page reads from <code>src/app/page.tsx</code> using the Prisma Next helper in{" "}
-          <code>src/lib/prisma.ts</code>.
+          <code>src/prisma/users.ts</code>.
         </p>
       </div>
 

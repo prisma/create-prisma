@@ -1,6 +1,6 @@
 import type { PageServerLoad } from "./$types";
 
-import { listUsers } from "$lib/server/prisma";
+import { listUsers } from "../prisma/users";
 
 export const load: PageServerLoad = async () => {
   const users = await listUsers(10)
@@ -14,4 +14,3 @@ export const load: PageServerLoad = async () => {
 
   return { users };
 };
-

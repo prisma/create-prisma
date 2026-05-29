@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 
-import { listUsers as listStarterUsers } from "../lib/prisma.server";
+import { listUsers as listStarterUsers } from "../prisma/users";
 
 const listUsers = createServerFn({ method: "GET" }).handler(async () => {
   return listStarterUsers(10)
@@ -38,7 +38,7 @@ function Home() {
         <h1>Users from your database, loaded through a server function.</h1>
         <p className="lede">
           This route uses TanStack Start&apos;s server function API and the Prisma Next helper in{" "}
-          <code>src/lib/prisma.server.ts</code>.
+          <code>src/prisma/users.ts</code>.
         </p>
       </div>
 

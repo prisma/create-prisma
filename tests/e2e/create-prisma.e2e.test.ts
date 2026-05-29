@@ -138,17 +138,8 @@ async function scaffoldProject(opts: {
   };
 }
 
-function getPrismaModuleSpecifier(template: CreateTemplate): string {
-  switch (template) {
-    case "nuxt":
-      return "./server/utils/prisma";
-    case "svelte":
-      return "./src/lib/server/prisma";
-    case "tanstack-start":
-      return "./src/lib/prisma.server";
-    default:
-      return "./src/lib/prisma";
-  }
+function getPrismaModuleSpecifier(_template: CreateTemplate): string {
+  return "./src/prisma/users";
 }
 
 async function writeVerificationScript(
@@ -188,7 +179,8 @@ try {
 
 async function installAndEmit(projectDir: string): Promise<void> {
   expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(true);
-  expect(await pathExists(path.join(projectDir, "prisma/db.ts"))).toBe(true);
+  expect(await pathExists(path.join(projectDir, "src/prisma/db.ts"))).toBe(true);
+  expect(await pathExists(path.join(projectDir, "prisma"))).toBe(false);
   expect(await pathExists(path.join(projectDir, ".env.example"))).toBe(true);
 
   await runCommand(projectDir, ["bun", "install"]);

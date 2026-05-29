@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { db, listUsers, type StarterUser } from "./lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { db, listUsers, type StarterUser } from "./prisma/users{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
 @Injectable()
 export class PrismaService {

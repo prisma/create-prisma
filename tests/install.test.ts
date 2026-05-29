@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -30,6 +30,15 @@ async function withPackageJson<T>(
 
 async function readPackageJson(projectDir: string): Promise<PackageJson> {
   return JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8")) as PackageJson;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function expectPrismaNextPackagesUseLatest(packageJson: PackageJson): void {
@@ -261,7 +270,7 @@ describe("scaffoldCreateTemplate", () => {
         packageManager: "npm",
       });
 
-      const seed = await readFile(path.join(projectDir, "prisma/seed.ts"), "utf8");
+      const seed = await readFile(path.join(projectDir, "src/prisma/seed.ts"), "utf8");
       expect(seed).toContain('import "dotenv/config";');
     } finally {
       await rm(projectDir, { recursive: true, force: true });
@@ -282,7 +291,7 @@ describe("scaffoldCreateTemplate", () => {
           packageManager,
         });
 
-        const seed = await readFile(path.join(projectDir, "prisma/seed.ts"), "utf8");
+        const seed = await readFile(path.join(projectDir, "src/prisma/seed.ts"), "utf8");
         expect(seed).not.toContain('import "dotenv/config";');
       } finally {
         await rm(projectDir, { recursive: true, force: true });
@@ -312,9 +321,10 @@ describe("scaffoldCreateTemplate", () => {
       expect(index).toContain("db.orm.users");
       expect(index).toContain('username: "first-user"');
       expect(index).toContain("Prisma Next is ready");
-      expect(await readFile(path.join(projectDir, "src/lib/prisma.ts"), "utf8")).toContain(
-        "@prisma-next/mongo/runtime",
+      expect(await readFile(path.join(projectDir, "src/prisma/users.ts"), "utf8")).toContain(
+        'from "./db',
       );
+      expect(await pathExists(path.join(projectDir, "prisma"))).toBe(false);
     } finally {
       await rm(projectDir, { recursive: true, force: true });
     }

@@ -1,9 +1,5 @@
 import "dotenv/config";
-{{#if (eq provider "mongo")}}
-import mongo from "@prisma-next/mongo/runtime";
-{{else}}
-import postgres from "@prisma-next/postgres/runtime";
-{{/if}}
+import { db } from "./db{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
 {{#if (eq provider "mongo")}}
 import type { DefaultModelRow } from "@prisma-next/mongo-orm";
@@ -11,20 +7,9 @@ import type { DefaultModelRow } from "@prisma-next/mongo-orm";
 import type { DefaultModelRow } from "@prisma-next/sql-orm-client";
 {{/if}}
 
-import type { Contract } from "../../../prisma/contract.d";
-import contractJson from "../../../prisma/contract.json" with { type: "json" };
+import type { Contract } from "./contract.d";
 
-{{#if (eq provider "mongo")}}
-export const db = mongo<Contract>({
-  contractJson,
-  url: process.env["DATABASE_URL"]!,
-});
-{{else}}
-export const db = postgres<Contract>({
-  contractJson,
-  url: process.env["DATABASE_URL"]!,
-});
-{{/if}}
+export { db };
 
 type UserRow = DefaultModelRow<Contract, "User">;
 
@@ -69,5 +54,3 @@ export async function listUsers(limit = 10) {
 }
 
 export type StarterUser = Awaited<ReturnType<typeof listUsers>>[number];
-
-export default db;

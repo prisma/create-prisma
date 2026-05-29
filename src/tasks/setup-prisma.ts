@@ -288,18 +288,13 @@ function getMongoMemoryScripts(packageManager: PackageManager): Record<string, s
 }
 
 const requiredPrismaFileGroups = [
-  ["prisma/contract.prisma", "prisma/contract.ts"],
+  ["src/prisma/contract.prisma", "src/prisma/contract.ts"],
   ["prisma-next.config.ts"],
-  [
-    "src/lib/prisma.ts",
-    "src/lib/prisma.server.ts",
-    "src/lib/server/prisma.ts",
-    "server/utils/prisma.ts",
-  ],
+  ["src/prisma/db.ts"],
 ] as const;
 
 function getContractPath(authoring: AuthoringStyle): string {
-  return `prisma/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
+  return `src/prisma/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
 }
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
@@ -1134,7 +1129,7 @@ function buildNextStepsForContext(opts: {
   });
   nextSteps.push({
     command: getRunScriptCommand(context.packageManager, "db:seed"),
-    description: "Insert the sample users from prisma/seed.ts.",
+    description: "Insert the sample users from src/prisma/seed.ts.",
   });
   if (options.includeDevNextStep) {
     nextSteps.push({

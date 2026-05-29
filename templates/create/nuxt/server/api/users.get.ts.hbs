@@ -1,4 +1,4 @@
-import { listUsers } from "../utils/prisma";
+import { listUsers } from "../../src/prisma/users";
 
 export default defineEventHandler(async () => {
   const users = await listUsers(10)
@@ -22,4 +22,3 @@ export default defineEventHandler(async () => {
 
   return { users };
 });
-

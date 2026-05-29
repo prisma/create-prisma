@@ -1,4 +1,4 @@
-import { db, listUsers } from "./lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { db, listUsers } from "./prisma/users{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
 const sampleUser = {
   email: "first.user@prisma.io",
