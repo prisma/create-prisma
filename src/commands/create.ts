@@ -1,6 +1,5 @@
 import { cancel, intro, isCancel, log, outro, select, spinner, text } from "@clack/prompts";
 import fs from "fs-extra";
-import os from "node:os";
 import path from "node:path";
 
 import { scaffoldCreateTemplate } from "../templates/render-create-template";
@@ -90,27 +89,6 @@ function validateProjectName(value: string | undefined): string | undefined {
   }
 
   return undefined;
-}
-
-function formatDeployEnvFile(databaseUrl: string): string {
-  if (/[\r\n]/.test(databaseUrl)) {
-    throw new Error("DATABASE_URL must be a single-line value.");
-  }
-
-  return `DATABASE_URL=${databaseUrl}\n`;
-}
-
-async function createDeployEnvFile(databaseUrl: string): Promise<{
-  path: string;
-  cleanup(): Promise<void>;
-}> {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "create-prisma-compute-env-"));
-  const envFilePath = path.join(tempDir, ".env");
-  await fs.writeFile(envFilePath, formatDeployEnvFile(databaseUrl), "utf8");
-  return {
-    path: envFilePath,
-    cleanup: () => fs.remove(tempDir),
-  };
 }
 
 async function promptForProjectName(): Promise<string | undefined> {
@@ -452,16 +430,15 @@ async function executeCreateContext(
 
   let deployResult: ComputeDeployResult | undefined;
   if (context.computeDeployContext) {
-    let deployEnvFile: Awaited<ReturnType<typeof createDeployEnvFile>> | undefined;
     try {
-      if (prismaResult.databaseUrl) {
-        deployEnvFile = await createDeployEnvFile(prismaResult.databaseUrl);
-      }
-
       const result = await executeComputeDeployContext({
         context: context.computeDeployContext,
         projectDir: context.targetDirectory,
-        envFilePath: deployEnvFile?.path,
+        envVars: prismaResult.databaseUrl
+          ? {
+              DATABASE_URL: prismaResult.databaseUrl,
+            }
+          : undefined,
       });
       if (!result.ok && !result.cancelled) {
         return {
@@ -479,10 +456,6 @@ async function executeCreateContext(
         stage: "compute_deploy",
         error,
       };
-    } finally {
-      if (deployEnvFile) {
-        await deployEnvFile.cleanup().catch(() => undefined);
-      }
     }
   }
 
@@ -492,8 +465,9 @@ async function executeCreateContext(
     summaryLines.push(
       "",
       "Deployed to Prisma Compute:",
-      `- Service URL: ${deployResult.serviceUrl}`,
-      `- Version URL: ${deployResult.versionUrl}`,
+      ...(deployResult.appUrl ? [`- App URL: ${deployResult.appUrl}`] : []),
+      `- App: ${deployResult.appName} (${deployResult.appId})`,
+      `- Deployment: ${deployResult.deploymentId}`,
     );
   }
   summaryLines.push("", "Next steps:", prismaResult.nextSteps.join("\n"));

@@ -9,69 +9,101 @@ import {
 } from "../types";
 import { getPackageExecutionArgs, getPackageExecutionCommand } from "../utils/package-manager";
 
-// Mirrors sdk/src/types.ts:KNOWN_REGION_IDS. Drift risk: low — region list rarely
-// changes; if it does, this falls out of sync until someone updates it.
-const COMPUTE_REGIONS = [
-  "us-east-1",
-  "us-west-1",
-  "eu-west-3",
-  "eu-central-1",
-  "ap-northeast-1",
-  "ap-southeast-1",
-] as const;
-const COMPUTE_CLI_PACKAGE = "@prisma/compute-cli";
+const PRISMA_CLI_PACKAGE = "@prisma/cli@dev";
 
-type ComputeProject = {
+type DeployFramework = "nextjs" | "hono" | "tanstack-start" | "bun";
+
+const DEPLOY_OPTIONS_BY_TEMPLATE: Partial<
+  Record<CreateTemplate, { framework: DeployFramework; httpPort?: number }>
+> = {
+  hono: { framework: "hono", httpPort: 8080 },
+  elysia: { framework: "bun", httpPort: 8080 },
+  next: { framework: "nextjs" },
+  "tanstack-start": { framework: "tanstack-start" },
+};
+
+type PrismaProject = {
   id: string;
   name: string;
-  defaultRegion?: string;
 };
-type ProjectJsonResult =
-  | { ok: true; data: ComputeProject }
-  | { ok: false; error: { message?: string; name?: string } };
-type ProjectSelection = { type: "create" } | { type: "existing"; project: ComputeProject };
 
-export type ComputeDeployContext = {
+type ProjectListJsonResult =
+  | {
+      ok: true;
+      result: {
+        items: PrismaProject[];
+      };
+    }
+  | { ok: false; error: { message?: string; summary?: string; name?: string } };
+
+type AppDeployJsonResult =
+  | {
+      ok: true;
+      result: {
+        project: PrismaProject;
+        branch: {
+          name: string;
+        };
+        app: {
+          id: string;
+          name: string;
+        };
+        deployment: {
+          id: string;
+          status: string;
+          url: string | null;
+        };
+      };
+    }
+  | { ok: false; error: { message?: string; summary?: string; name?: string } };
+
+type ProjectSelection = { type: "create" } | { type: "existing"; project: PrismaProject };
+type ProjectTarget =
+  | { projectRef: string; createProjectName?: never }
+  | { projectRef?: never; createProjectName: string };
+
+export type ComputeDeployContext = ProjectTarget & {
   template: CreateTemplate;
   packageManager: PackageManager;
-  projectId: string;
-  serviceName: string;
-  region: string;
+  appName: string;
+  framework: DeployFramework;
+  httpPort?: number;
 };
 
 export type ComputeDeployResult = {
-  serviceUrl: string;
-  versionUrl: string;
-  serviceId: string;
-  versionId: string;
+  appUrl: string | null;
+  appId: string;
+  appName: string;
+  deploymentId: string;
   projectId: string;
-  region: string;
+  projectName: string;
+  branchName: string;
 };
 
-function getComputeCliCommand(packageManager: PackageManager): string {
-  return getPackageExecutionCommand(packageManager, [COMPUTE_CLI_PACKAGE]);
+function getPrismaCliCommand(packageManager: PackageManager): string {
+  return getPackageExecutionCommand(packageManager, [PRISMA_CLI_PACKAGE]);
 }
 
-function runComputeCli(packageManager: PackageManager, args: string[], options: ExecaOptions = {}) {
-  const execution = getPackageExecutionArgs(packageManager, [COMPUTE_CLI_PACKAGE, ...args]);
+function runPrismaCli(packageManager: PackageManager, args: string[], options: ExecaOptions = {}) {
+  const execution = getPackageExecutionArgs(packageManager, [PRISMA_CLI_PACKAGE, ...args]);
   return execa(execution.command, execution.args, options);
 }
 
 async function isAuthenticated(packageManager: PackageManager): Promise<boolean> {
   try {
-    await runComputeCli(packageManager, ["projects", "list", "--json"], { stdio: "pipe" });
+    await runPrismaCli(packageManager, ["project", "list", "--json"], { stdio: "pipe" });
     return true;
   } catch {
     return false;
   }
 }
 
-async function ensureComputeCliAvailable(packageManager: PackageManager): Promise<boolean> {
+async function ensurePrismaCliAvailable(packageManager: PackageManager): Promise<boolean> {
   try {
-    await runComputeCli(packageManager, ["--help"], { stdio: "pipe" });
+    await runPrismaCli(packageManager, ["--help"], { stdio: "pipe" });
     return true;
   } catch (error) {
-    const command = getComputeCliCommand(packageManager);
+    const command = getPrismaCliCommand(packageManager);
     const isMissing =
       typeof error === "object" &&
       error !== null &&
@@ -88,70 +120,38 @@ async function ensureComputeCliAvailable(packageManager: PackageManager): Promis
   }
 }
 
-async function fetchProjects(packageManager: PackageManager): Promise<ComputeProject[]> {
-  const { stdout } = await runComputeCli(packageManager, ["projects", "list", "--json"], {
+async function fetchProjects(packageManager: PackageManager): Promise<PrismaProject[]> {
+  const { stdout } = await runPrismaCli(packageManager, ["project", "list", "--json"], {
     stdio: "pipe",
   });
-  if (typeof stdout !== "string") {
-    throw new Error("Failed to list Compute projects: invalid command output");
+  const parsed = parseProjectListJson(stdout);
+  if (!parsed) {
+    throw new Error("Failed to list Prisma projects: invalid command output");
   }
-
-  const parsed = JSON.parse(stdout) as
-    | { ok: true; data: ComputeProject[] }
-    | { ok: false; error: { message?: string } };
   if (!parsed.ok) {
-    throw new Error(parsed.error?.message ?? "Failed to list Compute projects");
+    throw new Error(getJsonErrorMessage(parsed.error, "Failed to list Prisma projects"));
   }
-  return parsed.data;
+  return parsed.result.items.map((project) => ({
+    id: project.id,
+    name: project.name,
+  }));
 }
 
-function parseProjectJson(stdout: unknown): ProjectJsonResult | null {
+function parseProjectListJson(stdout: unknown): ProjectListJsonResult | null {
   if (typeof stdout !== "string" || stdout.trim().length === 0) {
     return null;
   }
 
   try {
-    return JSON.parse(stdout) as ProjectJsonResult;
+    return JSON.parse(stdout) as ProjectListJsonResult;
   } catch {
     return null;
   }
 }
 
-async function createComputeProject(
-  packageManager: PackageManager,
-  name: string,
-): Promise<ComputeProject> {
-  try {
-    const { stdout } = await runComputeCli(packageManager, [
-      "projects",
-      "create",
-      "--json",
-      "--name",
-      name,
-    ]);
-    const parsed = parseProjectJson(stdout);
-    if (!parsed) {
-      throw new Error("Could not parse Compute project creation output.");
-    }
-    if (!parsed.ok) {
-      throw new Error(parsed.error.message ?? "Failed to create Compute project.");
-    }
-    return parsed.data;
-  } catch (error) {
-    const parsed = parseProjectJson((error as { stdout?: unknown })?.stdout);
-    if (parsed?.ok) {
-      return parsed.data;
-    }
-    if (parsed && !parsed.ok) {
-      throw new Error(redactSecrets(parsed.error.message ?? "Failed to create Compute project."));
-    }
-    throw new Error(getErrorMessage(error));
-  }
-}
-
 async function promptForNewProjectName(defaultProjectName: string): Promise<string | undefined> {
   const projectNameInput = await text({
-    message: "Compute project name",
+    message: "Prisma project name",
     placeholder: defaultProjectName,
     initialValue: defaultProjectName,
     validate: (value) => {
@@ -168,27 +168,59 @@ async function promptForNewProjectName(defaultProjectName: string): Promise<stri
   return projectNameInput.trim();
 }
 
-async function createProjectFromPrompt(options: {
+async function promptForNewProjectTarget(
+  defaultProjectName: string,
+): Promise<ProjectTarget | undefined> {
+  const projectName = await promptForNewProjectName(defaultProjectName);
+  return projectName ? { createProjectName: projectName } : undefined;
+}
+
+async function collectProjectTarget(options: {
   packageManager: PackageManager;
   defaultProjectName: string;
-}): Promise<ComputeProject | undefined> {
-  const projectName = await promptForNewProjectName(options.defaultProjectName);
-  if (!projectName) {
-    return undefined;
+}): Promise<ProjectTarget | undefined> {
+  const projects = await fetchProjects(options.packageManager);
+
+  if (projects.length === 1) {
+    // biome-ignore lint/style/noNonNullAssertion: length === 1
+    const only = projects[0]!;
+    const shouldUseExistingProject = await confirm({
+      message: `Use Prisma project ${only.name}?`,
+      initialValue: true,
+    });
+    if (isCancel(shouldUseExistingProject)) {
+      cancel("Operation cancelled.");
+      return undefined;
+    }
+    return shouldUseExistingProject
+      ? { projectRef: only.id }
+      : promptForNewProjectTarget(options.defaultProjectName);
   }
 
-  const createSpinner = spinner();
-  createSpinner.start("Creating Compute project...");
-  try {
-    const project = await createComputeProject(options.packageManager, projectName);
-    createSpinner.stop(`Created Compute project: ${project.name} (${project.id})`);
-    return project;
-  } catch (error) {
-    createSpinner.error(
-      `Could not create Compute project${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
-    );
-    return undefined;
+  if (projects.length > 1) {
+    const sortedProjects = projects.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const selection = await select<ProjectSelection>({
+      message: "Select Prisma project",
+      options: [
+        { value: { type: "create" }, label: "Create new project" },
+        ...sortedProjects.map((project) => ({
+          value: { type: "existing" as const, project },
+          label: project.name,
+          hint: project.id,
+        })),
+      ],
+    });
+    if (isCancel(selection)) {
+      cancel("Operation cancelled.");
+      return undefined;
+    }
+    return selection.type === "create"
+      ? promptForNewProjectTarget(options.defaultProjectName)
+      : { projectRef: selection.project.id };
   }
+
+  log.info("No Prisma projects found.");
+  return promptForNewProjectTarget(options.defaultProjectName);
 }
 
 export async function collectComputeDeployContext(
@@ -227,20 +259,20 @@ export async function collectComputeDeployContext(
 
   if (!wantsDeploy) return null;
 
-  if (!(await ensureComputeCliAvailable(options.packageManager))) {
+  if (!(await ensurePrismaCliAvailable(options.packageManager))) {
     if (input.deploy === true) {
-      throw createExplicitDeployError("the Compute CLI is not available");
+      throw createExplicitDeployError("the Prisma CLI is not available");
     }
     return null;
   }
 
   if (!(await isAuthenticated(options.packageManager))) {
-    log.info("Authenticating with Prisma Compute...");
+    log.info("Authenticating with Prisma...");
     try {
-      await runComputeCli(options.packageManager, ["login"], { stdio: "inherit" });
+      await runPrismaCli(options.packageManager, ["auth", "login"], { stdio: "inherit" });
     } catch (error) {
       log.warn(
-        `Compute login was not completed${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
+        `Prisma login was not completed${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
       );
       if (input.deploy === true) {
         throw createExplicitDeployError("authentication failed", error);
@@ -249,133 +281,64 @@ export async function collectComputeDeployContext(
     }
   }
 
-  let projects: ComputeProject[];
+  let projectTarget: ProjectTarget | undefined;
   try {
-    projects = await fetchProjects(options.packageManager);
-  } catch (error) {
-    log.warn(
-      `Could not list Compute projects${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
-    );
-    if (input.deploy === true) {
-      throw createExplicitDeployError("could not list Compute projects", error);
-    }
-    return null;
-  }
-
-  let selectedProject: ComputeProject | undefined;
-  if (projects.length === 1) {
-    // biome-ignore lint/style/noNonNullAssertion: length === 1
-    const only = projects[0]!;
-    const shouldUseExistingProject = await confirm({
-      message: `Use Compute project ${only.name}?`,
-      initialValue: true,
-    });
-    if (isCancel(shouldUseExistingProject)) {
-      cancel("Operation cancelled.");
-      return undefined;
-    }
-    if (shouldUseExistingProject) {
-      selectedProject = only;
-    } else {
-      selectedProject = await createProjectFromPrompt({
-        packageManager: options.packageManager,
-        defaultProjectName: options.defaultServiceName,
-      });
-    }
-  } else if (projects.length > 1) {
-    const sortedProjects = projects.slice().sort((a, b) => a.name.localeCompare(b.name));
-    const selection = await select<ProjectSelection>({
-      message: "Select Compute project",
-      options: [
-        { value: { type: "create" }, label: "Create new project" },
-        ...sortedProjects.map((project) => ({
-          value: { type: "existing" as const, project },
-          label: project.name,
-          hint: project.id,
-        })),
-      ],
-    });
-    if (isCancel(selection)) {
-      cancel("Operation cancelled.");
-      return undefined;
-    }
-    selectedProject =
-      selection.type === "create"
-        ? await createProjectFromPrompt({
-            packageManager: options.packageManager,
-            defaultProjectName: options.defaultServiceName,
-          })
-        : selection.project;
-  } else {
-    log.info("No Compute projects found.");
-    selectedProject = await createProjectFromPrompt({
+    projectTarget = await collectProjectTarget({
       packageManager: options.packageManager,
       defaultProjectName: options.defaultServiceName,
     });
-  }
-
-  if (!selectedProject) {
+  } catch (error) {
+    log.warn(
+      `Could not list Prisma projects${error instanceof Error ? `: ${redactSecrets(error.message)}` : "."}`,
+    );
     if (input.deploy === true) {
-      throw createExplicitDeployError("no Compute project was selected or created");
+      throw createExplicitDeployError("could not list Prisma projects", error);
     }
     return null;
   }
 
-  const serviceNameInput = await text({
-    message: "Service name",
+  if (!projectTarget) {
+    if (input.deploy === true) {
+      throw createExplicitDeployError("no Prisma project was selected or created");
+    }
+    return null;
+  }
+
+  const appNameInput = await text({
+    message: "App name",
     placeholder: options.defaultServiceName,
     initialValue: options.defaultServiceName,
     validate: (value) => {
       if (!value || value.trim().length === 0) {
-        return "Service name is required";
+        return "App name is required";
       }
       return undefined;
     },
   });
-  if (isCancel(serviceNameInput)) {
+  if (isCancel(appNameInput)) {
     cancel("Operation cancelled.");
     return undefined;
   }
-  const serviceName = serviceNameInput.trim();
 
-  const region = await select<string>({
-    message: "Region",
-    initialValue: selectedProject?.defaultRegion ?? COMPUTE_REGIONS[0],
-    options: COMPUTE_REGIONS.map((id) => ({ value: id, label: id })),
-  });
-  if (isCancel(region)) {
-    cancel("Operation cancelled.");
-    return undefined;
+  const deployOptions = DEPLOY_OPTIONS_BY_TEMPLATE[options.template];
+  if (!deployOptions) {
+    if (input.deploy === true) {
+      throw createExplicitDeployError(
+        `${options.template} is not supported by prisma app deploy yet`,
+      );
+    }
+    return null;
   }
 
   return {
+    ...projectTarget,
     template: options.template,
     packageManager: options.packageManager,
-    projectId: selectedProject.id,
-    serviceName,
-    region,
+    appName: appNameInput.trim(),
+    framework: deployOptions.framework,
+    httpPort: deployOptions.httpPort,
   };
 }
-
-type DeployJsonOk = {
-  ok: true;
-  data: {
-    projectId: string;
-    serviceId: string;
-    serviceName: string;
-    region: string;
-    versionId: string;
-    versionEndpointDomain: string;
-    serviceEndpointDomain: string | null;
-  };
-};
-
-type DeployJsonErr = {
-  ok: false;
-  error: { message?: string; name?: string };
-};
-
-type DeployJsonResult = DeployJsonOk | DeployJsonErr;
 
 function redactSecrets(message: string): string {
   return message
@@ -389,16 +352,23 @@ function redactSecrets(message: string): string {
     );
 }
 
-function parseDeployJson(stdout: unknown): DeployJsonResult | null {
+function parseDeployJson(stdout: unknown): AppDeployJsonResult | null {
   if (typeof stdout !== "string" || stdout.trim().length === 0) {
     return null;
   }
 
   try {
-    return JSON.parse(stdout) as DeployJsonResult;
+    return JSON.parse(stdout) as AppDeployJsonResult;
   } catch {
     return null;
   }
+}
+
+function getJsonErrorMessage(
+  error: { message?: string; summary?: string; name?: string } | undefined,
+  fallback: string,
+): string {
+  return error?.summary ?? error?.message ?? error?.name ?? fallback;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -414,43 +384,47 @@ function createExplicitDeployError(reason: string, error?: unknown): Error {
   return new Error(`Deploy requested but ${reason}${detail}`);
 }
 
-function toUrl(domainOrUrl: string): string {
-  return /^https?:\/\//.test(domainOrUrl) ? domainOrUrl : `https://${domainOrUrl}`;
-}
-
-function toComputeDeployResult(data: DeployJsonOk["data"]): ComputeDeployResult {
-  const serviceDomain = data.serviceEndpointDomain ?? data.versionEndpointDomain;
+function toComputeDeployResult(data: AppDeployJsonResult & { ok: true }): ComputeDeployResult {
   return {
-    serviceUrl: toUrl(serviceDomain),
-    versionUrl: toUrl(data.versionEndpointDomain),
-    serviceId: data.serviceId,
-    versionId: data.versionId,
-    projectId: data.projectId,
-    region: data.region,
+    appUrl: data.result.deployment.url,
+    appId: data.result.app.id,
+    appName: data.result.app.name,
+    deploymentId: data.result.deployment.id,
+    projectId: data.result.project.id,
+    projectName: data.result.project.name,
+    branchName: data.result.branch.name,
   };
 }
 
 export async function executeComputeDeployContext(params: {
   context: ComputeDeployContext;
   projectDir: string;
-  envFilePath?: string;
   envVars?: Record<string, string>;
 }): Promise<
   { ok: true; result: ComputeDeployResult } | { ok: false; cancelled: boolean; error?: unknown }
 > {
   const args = [
+    "app",
     "deploy",
     "--json",
-    "--project",
-    params.context.projectId,
-    "--service-name",
-    params.context.serviceName,
-    "--region",
-    params.context.region,
+    "--yes",
+    "--app",
+    params.context.appName,
+    "--framework",
+    params.context.framework,
   ];
 
-  if (params.envFilePath) {
-    args.push("--env", params.envFilePath);
+  if (params.context.projectRef) {
+    args.push("--project", params.context.projectRef);
+  } else if (params.context.createProjectName) {
+    args.push("--create-project", params.context.createProjectName);
+  } else {
+    const error = new Error("Deploy target is missing a Prisma project.");
+    return { ok: false, cancelled: false, error };
+  }
+
+  if (params.context.httpPort) {
+    args.push("--http-port", String(params.context.httpPort));
   }
 
   for (const [key, value] of Object.entries(params.envVars ?? {})) {
@@ -461,7 +435,7 @@ export async function executeComputeDeployContext(params: {
   deploySpinner.start("Deploying to Prisma Compute...");
 
   try {
-    const { stdout, exitCode } = await runComputeCli(params.context.packageManager, args, {
+    const { stdout, exitCode } = await runPrismaCli(params.context.packageManager, args, {
       cwd: params.projectDir,
       reject: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -469,12 +443,16 @@ export async function executeComputeDeployContext(params: {
 
     const parsed = parseDeployJson(stdout);
     if (!parsed) {
-      deploySpinner.error("Deploy failed: could not parse compute deploy output.");
-      return { ok: false, cancelled: false, error: new Error("Invalid compute deploy output") };
+      deploySpinner.error("Deploy failed: could not parse prisma app deploy output.");
+      return { ok: false, cancelled: false, error: new Error("Invalid prisma app deploy output") };
     }
 
     if (exitCode !== 0 || !parsed.ok) {
-      const error = createDeployError(parsed.ok ? "Compute deploy failed." : parsed.error.message);
+      const error = createDeployError(
+        parsed.ok
+          ? "Prisma app deploy failed."
+          : getJsonErrorMessage(parsed.error, "Prisma app deploy failed."),
+      );
       deploySpinner.error(`Deploy failed: ${error.message}`);
       return { ok: false, cancelled: false, error };
     }
@@ -482,7 +460,7 @@ export async function executeComputeDeployContext(params: {
     deploySpinner.stop("Deployed to Prisma Compute.");
     return {
       ok: true,
-      result: toComputeDeployResult(parsed.data),
+      result: toComputeDeployResult(parsed),
     };
   } catch (error) {
     const parsed = parseDeployJson((error as { stdout?: unknown })?.stdout);
@@ -490,12 +468,14 @@ export async function executeComputeDeployContext(params: {
       deploySpinner.stop("Deployed to Prisma Compute.");
       return {
         ok: true,
-        result: toComputeDeployResult(parsed.data),
+        result: toComputeDeployResult(parsed),
       };
     }
 
     if (parsed && !parsed.ok) {
-      const deployError = createDeployError(parsed.error.message);
+      const deployError = createDeployError(
+        getJsonErrorMessage(parsed.error, "Prisma app deploy failed."),
+      );
       deploySpinner.error(`Deploy failed: ${deployError.message}`);
       return { ok: false, cancelled: false, error: deployError };
     }
