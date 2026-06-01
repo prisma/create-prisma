@@ -369,6 +369,7 @@ async function executeCreateContext(
     const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
+      createdProjectPath: context.targetDirectory,
       includeDevNextStep: true,
       progressSpinner: createSpinner,
     });

@@ -40,6 +40,7 @@ type EnvWriteMode = "keep-existing" | "upsert";
 type PrismaSetupRunOptions = {
   prependNextSteps?: NextStep[];
   projectDir?: string;
+  createdProjectPath?: string;
   includeDevNextStep?: boolean;
   progressSpinner?: ReturnType<typeof spinner>;
 };
@@ -1236,6 +1237,10 @@ export async function executePrismaSetupContext(
 
   if (warningLines.length > 0) {
     note(warningLines.map((line) => line.replace(/^- /, "")).join("\n"), "Heads up");
+  }
+
+  if (options.createdProjectPath) {
+    note(path.resolve(options.createdProjectPath), "Project path");
   }
 
   note(formatAgentPrompt(), "Agent prompt");
