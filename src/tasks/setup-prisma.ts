@@ -816,7 +816,7 @@ async function migrateAndSeedIfRequested(
     migrateSpinner.stop("Initial migration applied.");
     didMigrate = true;
   } catch (error) {
-    migrateSpinner.error(`Migration failed${error instanceof Error ? `: ${error.message}` : "."}`);
+    migrateSpinner.stop(`Migration failed${error instanceof Error ? `: ${error.message}` : "."}`);
     return {
       didMigrate: false,
       didSeed: false,
@@ -835,7 +835,7 @@ async function migrateAndSeedIfRequested(
     seedSpinner.stop("Database seeded.");
     didSeed = true;
   } catch (error) {
-    seedSpinner.error(`Seed failed${error instanceof Error ? `: ${error.message}` : "."}`);
+    seedSpinner.stop(`Seed failed${error instanceof Error ? `: ${error.message}` : "."}`);
     return {
       didMigrate,
       didSeed: false,
