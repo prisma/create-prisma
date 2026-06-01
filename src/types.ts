@@ -71,9 +71,7 @@ export const PrismaSetupOptionsSchema = z.object({
   migrateAndSeed: z
     .boolean()
     .optional()
-    .describe(
-      "Run prisma migrate dev --name init and then prisma db seed after generating the client",
-    ),
+    .describe("Run an initial migration and seed after Prisma Client generation"),
   schemaPreset: SchemaPresetSchema.optional().describe(
     "Schema preset to scaffold in prisma/schema.prisma",
   ),

@@ -16,12 +16,13 @@ import { requiresDotenvConfigImport } from "../utils/runtime";
 function getPrismaScriptMap(packageManager: PackageManager) {
   if (packageManager === "deno") {
     const prismaSpecifier = getDenoPrismaSpecifier();
+    const prismaCli = `deno run -A --env-file=.env ${prismaSpecifier}`;
 
     return {
-      "db:generate": `deno run -A --env-file=.env ${prismaSpecifier} generate`,
-      "db:push": `deno run -A --env-file=.env ${prismaSpecifier} db push`,
-      "db:migrate": `deno run -A --env-file=.env ${prismaSpecifier} migrate dev`,
-      "db:seed": `deno run -A --env-file=.env ${prismaSpecifier} db seed`,
+      "db:generate": `${prismaCli} generate`,
+      "db:push": `${prismaCli} db push`,
+      "db:migrate": `${prismaCli} migrate dev`,
+      "db:seed": `${prismaCli} db seed`,
     } as const;
   }
 
@@ -174,18 +175,16 @@ export async function writePrismaDependencies(
 ): Promise<void> {
   const dependencies: string[] = ["@prisma/client"];
   const devDependencies: string[] = ["prisma"];
-  dependencies.push(getDbPackages(provider));
+  dependencies.push(getDbPackages(provider, packageManager));
+  if (provider === "sqlite") {
+    dependencies.push("@libsql/client");
+  }
 
   if (
     requiresDotenvConfigImport(packageManager) ||
     (await projectContainsText(projectDir, "dotenv/config"))
   ) {
     dependencies.push("dotenv");
-  }
-
-  // Deno needs node-gyp available when sqlite pulls in better-sqlite3.
-  if (provider === "sqlite" && packageManager === "deno") {
-    devDependencies.push("node-gyp");
   }
 
   const prismaScriptMap = getPrismaScriptMap(packageManager);

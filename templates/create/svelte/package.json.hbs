@@ -12,7 +12,8 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"db:generate": "svelte-kit sync && {{prismaCommand packageManager "generate"}}"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",

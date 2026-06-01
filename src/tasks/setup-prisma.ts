@@ -70,6 +70,7 @@ const DEFAULT_PRISMA_POSTGRES = true;
 const DEFAULT_INSTALL = true;
 const DEFAULT_GENERATE = true;
 const DEFAULT_MIGRATE_AND_SEED = true;
+const PRISMA_POSTGRES_MIGRATION_DELAY_MS = 2000;
 
 const requiredPrismaFileGroups = [
   ["prisma/schema.prisma", "packages/db/prisma/schema.prisma"],
@@ -281,8 +282,7 @@ export async function collectPrismaSetupContext(
     return;
   }
 
-  // migrate + seed needs deps installed and a generated client; skip the prompt
-  // if either is off, since the user opted out of the prerequisites.
+  // Migrate + seed needs installed deps and a generated client.
   const canMigrateAndSeed = shouldInstall && shouldGenerate;
   const shouldMigrateAndSeed = !canMigrateAndSeed
     ? false
@@ -804,10 +804,10 @@ async function migrateAndSeedIfRequested(
   migrateSpinner.start("Creating and applying initial migration...");
   let didMigrate = false;
   try {
-    // Just-provisioned Prisma Postgres can briefly reject connections (P1017).
-    // Give it a moment before the first connection attempt.
     if (context.shouldUsePrismaPostgres) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Newly provisioned Prisma Postgres databases can briefly reject the first migration.
+      // TODO(2026-04-26): replace this grace period with an explicit readiness probe.
+      await new Promise((resolve) => setTimeout(resolve, PRISMA_POSTGRES_MIGRATION_DELAY_MS));
     }
     await execa(migrateInvocation.command, migrateInvocation.args, {
       cwd: prismaProjectDir,
@@ -820,7 +820,7 @@ async function migrateAndSeedIfRequested(
     return {
       didMigrate: false,
       didSeed: false,
-      warning: "Migration failed; run `prisma migrate dev --name init` manually.",
+      warning: `Migration failed; run \`${getRunScriptCommand(context.packageManager, "db:migrate")}\` manually.`,
     };
   }
 
@@ -839,7 +839,7 @@ async function migrateAndSeedIfRequested(
     return {
       didMigrate,
       didSeed: false,
-      warning: "Seed failed; run `prisma db seed` manually.",
+      warning: `Seed failed; run \`${getRunScriptCommand(context.packageManager, "db:seed")}\` manually.`,
     };
   }
 
