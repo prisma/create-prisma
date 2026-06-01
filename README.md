@@ -24,23 +24,23 @@ plan/apply path for initial schema setup.
 Use the package runner you already have:
 
 ```bash
-npx create-prisma@next
+npx create-prisma@next my-app
 ```
 
 ```bash
-pnpm dlx create-prisma@next
+pnpm dlx create-prisma@next my-app
 ```
 
 ```bash
-yarn dlx create-prisma@next
+yarn dlx create-prisma@next my-app
 ```
 
 ```bash
-bunx create-prisma@next
+bunx create-prisma@next my-app
 ```
 
 ```bash
-deno run -A npm:create-prisma@next
+deno run -A npm:create-prisma@next my-app
 ```
 
 If you already have it available locally:
@@ -60,49 +60,49 @@ create-prisma
 Create a Minimal project non-interactively:
 
 ```bash
-create-prisma --name my-script --template minimal --provider postgres
+create-prisma my-script --template minimal --provider postgres
 ```
 
 Create a Hono app non-interactively:
 
 ```bash
-create-prisma --name my-api --template hono --provider postgres
+create-prisma my-api --template hono --provider postgres
 ```
 
 Create a MongoDB app:
 
 ```bash
-create-prisma --name my-api --template hono --provider mongodb
+create-prisma my-api --template hono --provider mongodb
 ```
 
 Scaffold into the current directory:
 
 ```bash
-create-prisma --name . --template hono --provider postgres
+create-prisma . --template hono --provider postgres
 ```
 
 Use TypeScript contract authoring:
 
 ```bash
-create-prisma --name my-app --template next --authoring typescript
+create-prisma my-app --template next --authoring typescript
 ```
 
 Use Prisma Postgres auto-provisioning:
 
 ```bash
-create-prisma --name my-app --template nest --provider postgres --prisma-postgres
+create-prisma my-app --template nest --provider postgres --prisma-postgres
 ```
 
 Target a specific Prisma Next release (useful for regression / bisect work):
 
 ```bash
-create-prisma --name my-app --template hono --prisma-next-version 0.10.0
+create-prisma my-app --template hono --prisma-next-version 0.10.0
 ```
 
 Scaffold against an open PR via pkg.pr.new:
 
 ```bash
-create-prisma --name my-app --template hono --prisma-next-version pkg-pr-new:bad6795
+create-prisma my-app --template hono --prisma-next-version pkg-pr-new:bad6795
 ```
 
 ## Supported Templates
@@ -132,7 +132,7 @@ create-prisma --name my-app --template hono --prisma-next-version pkg-pr-new:bad
 
 ## Useful Flags
 
-- `--name` project name or relative path
+- positional project name or `--name` project name / relative path
 - `--template` choose the template
 - `--provider postgres|postgresql|mongo|mongodb` (default: `postgres`)
 - `--authoring psl|typescript` (default: `psl`)

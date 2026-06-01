@@ -254,6 +254,36 @@ afterEach(async () => {
 const templates: CreateTemplate[] = ["hono", "next"];
 
 describe("create-prisma e2e", () => {
+  test(
+    "accepts a positional project name",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-e2e-positional-"));
+      tempRoots.push(rootDir);
+
+      const projectName = "positional-app";
+      await runCommand(rootDir, [
+        "bun",
+        path.join(process.cwd(), "src/cli.ts"),
+        projectName,
+        "--yes",
+        "--template",
+        "minimal",
+        "--provider",
+        "mongo",
+        "--package-manager",
+        "bun",
+        "--no-install",
+        "--no-emit",
+      ]);
+
+      const projectDir = path.join(rootDir, projectName);
+      expect(await pathExists(path.join(projectDir, "package.json"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "src/prisma/db.ts"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "prisma"))).toBe(false);
+    },
+    TEST_TIMEOUT,
+  );
+
   for (const template of templates) {
     test(
       `${template} + postgres runs db init, migrations, seed, generated queries, and build`,

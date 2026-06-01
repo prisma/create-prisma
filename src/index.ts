@@ -1,10 +1,30 @@
 import { os } from "@orpc/server";
 import { createCli } from "trpc-cli";
+import { z } from "zod";
 
 import { runCreateCommand } from "./commands/create";
 import { CreateCommandInputSchema, type CreateCommandInput } from "./types";
 
 const CLI_VERSION = process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0";
+
+const CreateCliInputSchema = z.tuple([
+  z
+    .string()
+    .trim()
+    .min(1, "Please enter a valid project name")
+    .optional()
+    .describe("Project name / directory"),
+  CreateCommandInputSchema,
+]);
+
+function normalizeCreateCliInput(input: z.infer<typeof CreateCliInputSchema>): CreateCommandInput {
+  const [projectName, options] = input;
+
+  return {
+    ...options,
+    name: options.name ?? projectName,
+  };
+}
 
 export const router = os.router({
   create: os
@@ -13,9 +33,9 @@ export const router = os.router({
       default: true,
       negateBooleans: true,
     })
-    .input(CreateCommandInputSchema.optional())
+    .input(CreateCliInputSchema)
     .handler(async ({ input }) => {
-      await runCreateCommand(input ?? {});
+      await runCreateCommand(normalizeCreateCliInput(input));
     }),
 });
 
