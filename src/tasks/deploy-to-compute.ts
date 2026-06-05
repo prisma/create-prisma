@@ -14,10 +14,13 @@ const PRISMA_CLI_PACKAGE = "@prisma/cli@latest";
 type DeployFramework = "nextjs" | "hono" | "tanstack-start" | "bun";
 
 const DEPLOY_OPTIONS_BY_TEMPLATE: Partial<
-  Record<CreateTemplate, { framework: DeployFramework; httpPort?: number }>
+  Record<
+    CreateTemplate,
+    { framework: DeployFramework; httpPort?: number; requiresExplicitFramework?: boolean }
+  >
 > = {
   hono: { framework: "hono", httpPort: 8080 },
-  elysia: { framework: "bun", httpPort: 8080 },
+  elysia: { framework: "bun", httpPort: 8080, requiresExplicitFramework: true },
   next: { framework: "nextjs" },
   "tanstack-start": { framework: "tanstack-start" },
 };
@@ -52,6 +55,7 @@ export type ComputeDeployContext = {
   createProjectName: string;
   framework: DeployFramework;
   httpPort?: number;
+  requiresExplicitFramework?: boolean;
 };
 
 export type ComputeDeployResult = {
@@ -79,12 +83,7 @@ function getPrismaCliAppDeployCommand(packageManager: PackageManager): string {
 }
 
 export function getComputeDeployScriptMap(context: ComputeDeployContext): Record<string, string> {
-  const deployArgs = [
-    "--prod",
-    "--framework",
-    context.framework,
-    ...(context.httpPort ? ["--http-port", String(context.httpPort)] : []),
-  ];
+  const deployArgs = ["--prod", ...getComputeDeployRuntimeArgs(context)];
   const deployCommand = [getPrismaCliAppDeployCommand(context.packageManager), ...deployArgs].join(
     " ",
   );
@@ -93,6 +92,13 @@ export function getComputeDeployScriptMap(context: ComputeDeployContext): Record
     "compute:deploy": deployCommand,
     "compute:deploy:ci": `${deployCommand} --yes`,
   };
+}
+
+function getComputeDeployRuntimeArgs(context: ComputeDeployContext): string[] {
+  return [
+    ...(context.requiresExplicitFramework ? ["--framework", context.framework] : []),
+    ...(context.httpPort ? ["--http-port", String(context.httpPort)] : []),
+  ];
 }
 
 function runPrismaCli(packageManager: PackageManager, args: string[], options: ExecaOptions = {}) {
@@ -213,6 +219,7 @@ export async function collectComputeDeployContext(
     createProjectName: options.defaultServiceName,
     framework: deployOptions.framework,
     httpPort: deployOptions.httpPort,
+    requiresExplicitFramework: deployOptions.requiresExplicitFramework,
   };
 }
 
@@ -286,10 +293,9 @@ export async function executeComputeDeployContext(params: {
     "deploy",
     "--json",
     "--yes",
-    "--framework",
-    params.context.framework,
     "--create-project",
     params.context.createProjectName,
+    ...getComputeDeployRuntimeArgs(params.context),
   ];
 
   try {
