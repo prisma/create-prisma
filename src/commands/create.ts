@@ -3,7 +3,7 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import { scaffoldCreateTemplate } from "../templates/render-create-template";
-import { writeCreateTemplateDependencies } from "../tasks/install";
+import { addPackageDependency, writeCreateTemplateDependencies } from "../tasks/install";
 import type { CreateAddonSetupContext } from "../tasks/setup-addons";
 import type { PrismaSetupContext } from "../tasks/setup-prisma";
 import {
@@ -21,6 +21,7 @@ import {
 import {
   collectComputeDeployContext,
   executeComputeDeployContext,
+  getComputeDeployScriptMap,
   type ComputeDeployContext,
   type ComputeDeployResult,
 } from "../tasks/deploy-to-compute";
@@ -30,6 +31,7 @@ import {
   type CreateTelemetryFailureStage,
 } from "../telemetry";
 import { getCreatePrismaIntro } from "../ui/branding";
+import { getRunScriptCommand } from "../utils/package-manager";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "hono";
@@ -367,6 +369,13 @@ async function executeCreateContext(
       packageManager: context.prismaSetupContext.packageManager,
       projectDir: context.targetDirectory,
     });
+    if (context.computeDeployContext) {
+      await addPackageDependency({
+        scripts: getComputeDeployScriptMap(context.computeDeployContext),
+        scriptMode: "if-missing",
+        projectDir: context.targetDirectory,
+      });
+    }
   } catch (error) {
     return {
       ok: false,
@@ -449,6 +458,9 @@ async function executeCreateContext(
       }
       if (result.ok) {
         deployResult = result.result;
+        prismaResult.nextSteps.push(
+          `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "compute:deploy")}`,
+        );
       }
     } catch (error) {
       return {

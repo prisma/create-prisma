@@ -70,6 +70,31 @@ function getPrismaCliCommand(packageManager: PackageManager): string {
   ]);
 }
 
+function getPrismaCliAppDeployCommand(packageManager: PackageManager): string {
+  return getPackageExecutionCommand(getPrismaCliExecutionPackageManager(packageManager), [
+    PRISMA_CLI_PACKAGE,
+    "app",
+    "deploy",
+  ]);
+}
+
+export function getComputeDeployScriptMap(context: ComputeDeployContext): Record<string, string> {
+  const deployArgs = [
+    "--prod",
+    "--framework",
+    context.framework,
+    ...(context.httpPort ? ["--http-port", String(context.httpPort)] : []),
+  ];
+  const deployCommand = [getPrismaCliAppDeployCommand(context.packageManager), ...deployArgs].join(
+    " ",
+  );
+
+  return {
+    "compute:deploy": deployCommand,
+    "compute:deploy:ci": `${deployCommand} --yes`,
+  };
+}
+
 function runPrismaCli(packageManager: PackageManager, args: string[], options: ExecaOptions = {}) {
   const execution = getPackageExecutionArgs(getPrismaCliExecutionPackageManager(packageManager), [
     PRISMA_CLI_PACKAGE,
