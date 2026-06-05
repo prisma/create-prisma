@@ -9,7 +9,7 @@ import {
 } from "../types";
 import { getPackageExecutionArgs, getPackageExecutionCommand } from "../utils/package-manager";
 
-const PRISMA_CLI_PACKAGE = "@prisma/cli@dev";
+const PRISMA_CLI_PACKAGE = "@prisma/cli@latest";
 
 type DeployFramework = "nextjs" | "hono" | "tanstack-start" | "bun";
 
@@ -81,12 +81,22 @@ export type ComputeDeployResult = {
 };
 
 function getPrismaCliCommand(packageManager: PackageManager): string {
-  return getPackageExecutionCommand(packageManager, [PRISMA_CLI_PACKAGE]);
+  return getPackageExecutionCommand(getPrismaCliExecutionPackageManager(packageManager), [
+    PRISMA_CLI_PACKAGE,
+  ]);
 }
 
 function runPrismaCli(packageManager: PackageManager, args: string[], options: ExecaOptions = {}) {
-  const execution = getPackageExecutionArgs(packageManager, [PRISMA_CLI_PACKAGE, ...args]);
+  const execution = getPackageExecutionArgs(getPrismaCliExecutionPackageManager(packageManager), [
+    PRISMA_CLI_PACKAGE,
+    ...args,
+  ]);
   return execa(execution.command, execution.args, options);
+}
+
+function getPrismaCliExecutionPackageManager(packageManager: PackageManager): PackageManager {
+  // @prisma/cli is a Node CLI; Deno's npm runner currently fails to load its dependencies.
+  return packageManager === "deno" ? "npm" : packageManager;
 }
 
 async function isAuthenticated(packageManager: PackageManager): Promise<boolean> {
