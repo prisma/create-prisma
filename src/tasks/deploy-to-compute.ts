@@ -10,8 +10,6 @@ import {
 import { getPackageExecutionArgs, getPackageExecutionCommand } from "../utils/package-manager";
 
 const PRISMA_CLI_PACKAGE = "@prisma/cli@latest";
-const COMPUTE_DEPLOY_BRANCH = "main";
-const COMPUTE_ENV_ROLE = "production";
 
 type DeployFramework = "nextjs" | "hono" | "tanstack-start" | "bun";
 
@@ -24,31 +22,14 @@ const DEPLOY_OPTIONS_BY_TEMPLATE: Partial<
   "tanstack-start": { framework: "tanstack-start" },
 };
 
-type PrismaProject = {
-  id: string;
-  name: string;
-};
-
-type ProjectCreateJsonResult =
-  | {
-      ok: true;
-      result: {
-        project: PrismaProject;
-      };
-    }
-  | { ok: false; error: { message?: string; summary?: string; name?: string } };
-
-type ProjectEnvJsonResult =
-  | {
-      ok: true;
-    }
-  | { ok: false; error: { message?: string; summary?: string; name?: string } };
-
 type AppDeployJsonResult =
   | {
       ok: true;
       result: {
-        project: PrismaProject;
+        project: {
+          id: string;
+          name: string;
+        };
         branch: {
           name: string;
         };
@@ -223,24 +204,12 @@ function redactSecrets(message: string): string {
 }
 
 function parseDeployJson(stdout: unknown): AppDeployJsonResult | null {
-  return parsePrismaCliJson<AppDeployJsonResult>(stdout);
-}
-
-function parseProjectCreateJson(stdout: unknown): ProjectCreateJsonResult | null {
-  return parsePrismaCliJson<ProjectCreateJsonResult>(stdout);
-}
-
-function parseProjectEnvJson(stdout: unknown): ProjectEnvJsonResult | null {
-  return parsePrismaCliJson<ProjectEnvJsonResult>(stdout);
-}
-
-function parsePrismaCliJson<T>(stdout: unknown): T | null {
   if (typeof stdout !== "string" || stdout.trim().length === 0) {
     return null;
   }
 
   try {
-    return JSON.parse(stdout) as T;
+    return JSON.parse(stdout) as AppDeployJsonResult;
   } catch {
     return null;
   }
@@ -278,96 +247,6 @@ function toComputeDeployResult(data: AppDeployJsonResult & { ok: true }): Comput
   };
 }
 
-async function createComputeProjectForDeploy(params: {
-  context: ComputeDeployContext;
-  projectDir: string;
-}): Promise<string> {
-  const { stdout, exitCode } = await runPrismaCli(
-    params.context.packageManager,
-    ["project", "create", params.context.createProjectName, "--json", "--yes"],
-    {
-      cwd: params.projectDir,
-      reject: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  const parsed = parseProjectCreateJson(stdout);
-  if (!parsed) {
-    throw new Error("Could not parse prisma project create output.");
-  }
-  if (exitCode !== 0 || !parsed.ok) {
-    throw createDeployError(
-      parsed.ok
-        ? "Prisma project create failed."
-        : getJsonErrorMessage(parsed.error, "Prisma project create failed."),
-    );
-  }
-
-  return parsed.result.project.id;
-}
-
-async function writeComputeEnvironmentVariables(params: {
-  context: ComputeDeployContext;
-  projectDir: string;
-  projectRef: string;
-  envVars: Record<string, string> | undefined;
-}): Promise<void> {
-  for (const [key, value] of Object.entries(params.envVars ?? {})) {
-    const assignment = `${key}=${value}`;
-    const commonArgs = [
-      assignment,
-      "--project",
-      params.projectRef,
-      "--role",
-      COMPUTE_ENV_ROLE,
-      "--json",
-      "--yes",
-    ];
-
-    const addResult = await runProjectEnvCommand(params.context, params.projectDir, [
-      "add",
-      ...commonArgs,
-    ]);
-    if (addResult.ok) {
-      continue;
-    }
-
-    const updateResult = await runProjectEnvCommand(params.context, params.projectDir, [
-      "update",
-      ...commonArgs,
-    ]);
-    if (!updateResult.ok) {
-      throw createDeployError(
-        getJsonErrorMessage(updateResult.error, `Failed to configure ${key} for Prisma Compute.`),
-      );
-    }
-  }
-}
-
-async function runProjectEnvCommand(
-  context: ComputeDeployContext,
-  projectDir: string,
-  args: string[],
-): Promise<ProjectEnvJsonResult> {
-  const { stdout, exitCode } = await runPrismaCli(
-    context.packageManager,
-    ["project", "env", ...args],
-    {
-      cwd: projectDir,
-      reject: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  const parsed = parseProjectEnvJson(stdout);
-  if (!parsed) {
-    throw new Error("Could not parse prisma project env output.");
-  }
-  if (exitCode !== 0 && parsed.ok) {
-    return { ok: false, error: { message: "Prisma project env command failed." } };
-  }
-  return parsed;
-}
-
 export async function executeComputeDeployContext(params: {
   context: ComputeDeployContext;
   projectDir: string;
@@ -377,10 +256,6 @@ export async function executeComputeDeployContext(params: {
 > {
   const deploySpinner = spinner();
   deploySpinner.start("Deploying to Prisma Compute...");
-  const envVars = params.envVars ?? {};
-  // @prisma/cli@latest rejects inline deploy env vars today, so write them first.
-  const shouldPreconfigureEnvVars = Object.keys(envVars).length > 0;
-
   const args = [
     "app",
     "deploy",
@@ -388,25 +263,13 @@ export async function executeComputeDeployContext(params: {
     "--yes",
     "--framework",
     params.context.framework,
-    "--branch",
-    COMPUTE_DEPLOY_BRANCH,
+    "--create-project",
+    params.context.createProjectName,
   ];
 
   try {
-    if (shouldPreconfigureEnvVars) {
-      const projectRef = await createComputeProjectForDeploy({
-        context: params.context,
-        projectDir: params.projectDir,
-      });
-      await writeComputeEnvironmentVariables({
-        context: params.context,
-        projectDir: params.projectDir,
-        projectRef,
-        envVars,
-      });
-      args.push("--project", projectRef);
-    } else {
-      args.push("--create-project", params.context.createProjectName);
+    for (const [key, value] of Object.entries(params.envVars ?? {})) {
+      args.push("--env", `${key}=${value}`);
     }
 
     if (params.context.httpPort) {
