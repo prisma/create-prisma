@@ -64,7 +64,7 @@ export const PrismaSetupOptionsSchema = z.object({
   prismaPostgres: z
     .boolean()
     .optional()
-    .describe("Provision Prisma Postgres with create-db when provider is postgresql"),
+    .describe("Use Prisma Postgres when provider is postgresql"),
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
   generate: z.boolean().optional().describe("Generate Prisma Client after scaffolding"),

@@ -45,6 +45,13 @@ type AppDeployJsonResult =
           status: string;
           url: string | null;
         };
+        branchDatabase?: {
+          status: "created" | "skipped";
+          database?: {
+            id: string;
+            name: string;
+          };
+        };
       };
     }
   | { ok: false; error: { message?: string; summary?: string; name?: string } };
@@ -66,6 +73,10 @@ export type ComputeDeployResult = {
   projectId: string;
   projectName: string;
   branchName: string;
+  database?: {
+    id: string;
+    name: string;
+  };
 };
 
 function getPrismaCliCommand(packageManager: PackageManager): string {
@@ -90,7 +101,6 @@ export function getComputeDeployScriptMap(context: ComputeDeployContext): Record
 
   return {
     "compute:deploy": deployCommand,
-    "compute:deploy:ci": `${deployCommand} --yes`,
   };
 }
 
@@ -145,15 +155,13 @@ async function ensurePrismaCliAvailable(packageManager: PackageManager): Promise
   }
 }
 
-export async function collectComputeDeployContext(
+export async function collectComputeDeployIntent(
   input: CreateCommandInput,
   options: {
     template: CreateTemplate;
-    packageManager: PackageManager;
     useDefaults: boolean;
-    defaultServiceName: string;
   },
-): Promise<ComputeDeployContext | null | undefined> {
+): Promise<boolean | null | undefined> {
   if (!isComputeDeployableTemplate(options.template)) {
     return null;
   }
@@ -162,8 +170,46 @@ export async function collectComputeDeployContext(
     return null;
   }
 
-  let wantsDeploy: boolean;
   if (input.deploy === true) {
+    return true;
+  }
+
+  if (options.useDefaults) {
+    return null;
+  }
+
+  const confirmed = await confirm({
+    message: "Deploy to Prisma Compute now?",
+    initialValue: true,
+  });
+  if (isCancel(confirmed)) {
+    cancel("Operation cancelled.");
+    return undefined;
+  }
+
+  return confirmed;
+}
+
+export async function collectComputeDeployContext(
+  input: CreateCommandInput,
+  options: {
+    template: CreateTemplate;
+    packageManager: PackageManager;
+    useDefaults: boolean;
+    defaultServiceName: string;
+    wantsDeploy?: boolean | null;
+  },
+): Promise<ComputeDeployContext | null | undefined> {
+  if (!isComputeDeployableTemplate(options.template)) {
+    return null;
+  }
+
+  if (options.wantsDeploy === false || options.wantsDeploy === null || input.deploy === false) {
+    return null;
+  }
+
+  let wantsDeploy: boolean;
+  if (options.wantsDeploy === true || input.deploy === true) {
     wantsDeploy = true;
   } else if (options.useDefaults) {
     return null;
@@ -276,6 +322,7 @@ function toComputeDeployResult(data: AppDeployJsonResult & { ok: true }): Comput
     projectId: data.result.project.id,
     projectName: data.result.project.name,
     branchName: data.result.branch.name,
+    database: data.result.branchDatabase?.database,
   };
 }
 
@@ -283,6 +330,7 @@ export async function executeComputeDeployContext(params: {
   context: ComputeDeployContext;
   projectDir: string;
   envVars?: Record<string, string>;
+  databaseSetup?: "compute-postgres";
 }): Promise<
   { ok: true; result: ComputeDeployResult } | { ok: false; cancelled: boolean; error?: unknown }
 > {
@@ -298,13 +346,13 @@ export async function executeComputeDeployContext(params: {
     ...getComputeDeployRuntimeArgs(params.context),
   ];
 
+  if (params.databaseSetup === "compute-postgres") {
+    args.push("--db");
+  }
+
   try {
     for (const [key, value] of Object.entries(params.envVars ?? {})) {
       args.push("--env", `${key}=${value}`);
-    }
-
-    if (params.context.httpPort) {
-      args.push("--http-port", String(params.context.httpPort));
     }
 
     const { stdout, exitCode } = await runPrismaCli(params.context.packageManager, args, {

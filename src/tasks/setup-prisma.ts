@@ -31,6 +31,7 @@ type PrismaSetupRunOptions = {
   prependNextSteps?: string[];
   projectDir?: string;
   includeDevNextStep?: boolean;
+  includeMigrationAndSeedNextSteps?: boolean;
 };
 
 type PrismaPostgresProvisionResult = {
@@ -238,6 +239,8 @@ export async function collectPrismaSetupContext(
   options: {
     projectDir?: string;
     defaultSchemaPreset?: SchemaPreset;
+    skipPrismaPostgresProvisioning?: boolean;
+    skipMigrateAndSeedPrompt?: boolean;
   } = {},
 ): Promise<PrismaSetupContext | undefined> {
   const projectDir = path.resolve(options.projectDir ?? process.cwd());
@@ -255,8 +258,12 @@ export async function collectPrismaSetupContext(
 
   const databaseUrl = input.databaseUrl;
   let shouldUsePrismaPostgres = false;
+  const shouldUseComputePostgres =
+    databaseProvider === "postgresql" &&
+    !databaseUrl &&
+    options.skipPrismaPostgresProvisioning === true;
 
-  if (databaseProvider === "postgresql" && !databaseUrl) {
+  if (databaseProvider === "postgresql" && !databaseUrl && !shouldUseComputePostgres) {
     const prismaPostgresChoice =
       input.prismaPostgres ??
       (useDefaults ? DEFAULT_PRISMA_POSTGRES : await promptForPrismaPostgres());
@@ -283,7 +290,10 @@ export async function collectPrismaSetupContext(
   }
 
   // Migrate + seed needs installed deps and a generated client.
-  const canMigrateAndSeed = shouldInstall && shouldGenerate;
+  const canMigrateAndSeed =
+    shouldInstall &&
+    shouldGenerate &&
+    !(shouldUseComputePostgres && options.skipMigrateAndSeedPrompt);
   const shouldMigrateAndSeed = !canMigrateAndSeed
     ? false
     : (input.migrateAndSeed ??
@@ -681,10 +691,10 @@ function buildNextStepsForContext(opts: {
   if (!didGenerateClient || !context.shouldGenerate) {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:generate")}`);
   }
-  if (!didMigrate) {
+  if (options.includeMigrationAndSeedNextSteps !== false && !didMigrate) {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:migrate")}`);
   }
-  if (!didSeed) {
+  if (options.includeMigrationAndSeedNextSteps !== false && !didSeed) {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:seed")}`);
   }
   if (options.includeDevNextStep) {
