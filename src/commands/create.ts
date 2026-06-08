@@ -13,14 +13,17 @@ import {
   type CreateTemplate,
   type SchemaPreset,
 } from "../types";
-import { collectPrismaSetupContext, executePrismaSetupContext } from "../tasks/setup-prisma";
+import {
+  collectPrismaSetupInitialContext,
+  completePrismaSetupContext,
+  executePrismaSetupContext,
+} from "../tasks/setup-prisma";
 import {
   collectCreateAddonSetupContext,
   executeCreateAddonSetupContext,
 } from "../tasks/setup-addons";
 import {
   collectComputeDeployContext,
-  collectComputeDeployIntent,
   executeComputeDeployContext,
   getComputeDeployScriptMap,
   type ComputeDeployContext,
@@ -299,19 +302,36 @@ async function collectCreateContext(
     return;
   }
 
-  const computeDeployIntent = await collectComputeDeployIntent(input, {
-    template,
-    useDefaults,
+  const prismaSetupInitialContext = await collectPrismaSetupInitialContext(input, {
+    projectDir: targetDirectory,
+    defaultSchemaPreset: DEFAULT_SCHEMA_PRESET,
   });
-  if (computeDeployIntent === undefined) {
+  if (!prismaSetupInitialContext) {
     return;
   }
 
-  const prismaSetupContext = await collectPrismaSetupContext(input, {
-    projectDir: targetDirectory,
-    defaultSchemaPreset: DEFAULT_SCHEMA_PRESET,
-    skipPrismaPostgresProvisioning: computeDeployIntent === true && input.prismaPostgres !== false,
-    skipMigrateAndSeedPrompt: computeDeployIntent === true && input.prismaPostgres !== false,
+  const projectPackageName = toPackageName(path.basename(targetDirectory));
+
+  const computeDeployContext = await collectComputeDeployContext(input, {
+    template,
+    packageManager: prismaSetupInitialContext.packageManager,
+    useDefaults,
+    defaultServiceName: projectPackageName,
+  });
+  if (computeDeployContext === undefined) {
+    return;
+  }
+
+  const useComputeDatabase = Boolean(
+    computeDeployContext &&
+    prismaSetupInitialContext.databaseProvider === "postgresql" &&
+    !prismaSetupInitialContext.databaseUrl &&
+    input.prismaPostgres !== false,
+  );
+
+  const prismaSetupContext = await completePrismaSetupContext(input, prismaSetupInitialContext, {
+    useComputePostgres: useComputeDatabase,
+    skipMigrateAndSeedPrompt: useComputeDatabase,
   });
   if (!prismaSetupContext) {
     return;
@@ -325,26 +345,6 @@ async function collectCreateContext(
   if (addonSetupContext === undefined) {
     return;
   }
-
-  const projectPackageName = toPackageName(path.basename(targetDirectory));
-
-  const computeDeployContext = await collectComputeDeployContext(input, {
-    template,
-    packageManager: prismaSetupContext.packageManager,
-    useDefaults,
-    defaultServiceName: projectPackageName,
-    wantsDeploy: computeDeployIntent,
-  });
-  if (computeDeployContext === undefined) {
-    return;
-  }
-
-  const useComputeDatabase = Boolean(
-    computeDeployContext &&
-    prismaSetupContext.databaseProvider === "postgresql" &&
-    !prismaSetupContext.databaseUrl &&
-    input.prismaPostgres !== false,
-  );
 
   return {
     targetDirectory,

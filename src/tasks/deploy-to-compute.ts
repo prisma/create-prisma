@@ -155,13 +155,15 @@ async function ensurePrismaCliAvailable(packageManager: PackageManager): Promise
   }
 }
 
-export async function collectComputeDeployIntent(
+export async function collectComputeDeployContext(
   input: CreateCommandInput,
   options: {
     template: CreateTemplate;
+    packageManager: PackageManager;
     useDefaults: boolean;
+    defaultServiceName: string;
   },
-): Promise<boolean | null | undefined> {
+): Promise<ComputeDeployContext | null | undefined> {
   if (!isComputeDeployableTemplate(options.template)) {
     return null;
   }
@@ -170,46 +172,8 @@ export async function collectComputeDeployIntent(
     return null;
   }
 
-  if (input.deploy === true) {
-    return true;
-  }
-
-  if (options.useDefaults) {
-    return null;
-  }
-
-  const confirmed = await confirm({
-    message: "Deploy to Prisma Compute now?",
-    initialValue: true,
-  });
-  if (isCancel(confirmed)) {
-    cancel("Operation cancelled.");
-    return undefined;
-  }
-
-  return confirmed;
-}
-
-export async function collectComputeDeployContext(
-  input: CreateCommandInput,
-  options: {
-    template: CreateTemplate;
-    packageManager: PackageManager;
-    useDefaults: boolean;
-    defaultServiceName: string;
-    wantsDeploy?: boolean | null;
-  },
-): Promise<ComputeDeployContext | null | undefined> {
-  if (!isComputeDeployableTemplate(options.template)) {
-    return null;
-  }
-
-  if (options.wantsDeploy === false || options.wantsDeploy === null || input.deploy === false) {
-    return null;
-  }
-
   let wantsDeploy: boolean;
-  if (options.wantsDeploy === true || input.deploy === true) {
+  if (input.deploy === true) {
     wantsDeploy = true;
   } else if (options.useDefaults) {
     return null;
