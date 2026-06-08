@@ -13,6 +13,7 @@ Scaffold a new app with Prisma already wired up.
 - adds `db:generate`, `db:migrate`, and `db:seed` scripts
 - creates or updates `.env` with `DATABASE_URL`
 - can install dependencies and run `prisma generate` for you
+- can deploy the finished app to Prisma Compute and return a live URL
 
 ## Quick Start
 
@@ -116,6 +117,7 @@ create-prisma --name my-app --template nest --provider postgresql --prisma-postg
 - `--no-generate` skip `prisma generate`
 - `--prisma-postgres` provision Prisma Postgres for PostgreSQL
 - `--skills --mcp --extension` enable optional add-ons
+- `--deploy` / `--no-deploy` deploy the finished app to Prisma Compute (or skip the prompt)
 - `--force` allow scaffolding into a non-empty directory
 - `--verbose` print full command output
 
@@ -128,6 +130,20 @@ create-prisma --name my-app --template nest --provider postgresql --prisma-postg
 - Prisma IDE extension install
 
 These can be selected interactively or enabled with flags.
+
+## Deploy to Prisma Compute
+
+After scaffolding, `create-prisma` can deploy your app to [Prisma Compute](https://www.prisma.io/docs/compute), the serverless hosting for TypeScript apps that runs next to your Prisma Postgres database. It is offered for the templates the Prisma CLI can deploy today: `hono`, `elysia`, `next`, and `tanstack-start`.
+
+Accept the prompt ("Deploy to Prisma Compute now?") when it appears, or pass the flag:
+
+```bash
+create-prisma --name my-api --template hono --provider postgresql --deploy
+```
+
+The deploy step signs you in with `prisma-cli auth login` if you are not signed in yet, creates or links a Prisma project, then runs `prisma-cli app deploy` to build your app and print its URL. When you scaffold a PostgreSQL app and have not supplied your own `DATABASE_URL`, the deploy provisions a Prisma Postgres database and wires it to the app. A `compute:deploy` script is added so you can redeploy from the project later.
+
+The browser sign-in needs a person at the keyboard, so the deploy step is skipped in non-interactive runs unless a session already exists.
 
 ## Local Development
 
