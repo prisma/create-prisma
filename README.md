@@ -77,6 +77,14 @@ Use Prisma Postgres auto-provisioning:
 create-prisma --name my-app --template nest --provider postgresql --prisma-postgres
 ```
 
+Deploy a supported app to Prisma Compute:
+
+```bash
+create-prisma --name my-api --template hono --provider postgresql --deploy
+```
+
+With PostgreSQL, no `--database-url`, and no `--no-prisma-postgres`, the Compute flow creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to `.env`, and deploys the app with environment variables loaded from `.env`.
+
 ## Supported Templates
 
 - `hono`
@@ -88,6 +96,13 @@ create-prisma --name my-app --template nest --provider postgresql --prisma-postg
 - `nuxt`
 - `tanstack-start`
 - `turborepo`
+
+Prisma Compute deployment is currently supported for:
+
+- `hono`
+- `elysia`
+- `next`
+- `tanstack-start`
 
 ## Supported Databases
 
@@ -112,12 +127,12 @@ create-prisma --name my-app --template nest --provider postgresql --prisma-postg
 - `--provider` choose the database provider
 - `--package-manager` choose the package manager/runtime
 - `--schema-preset empty|basic`
+- `--deploy` deploy supported templates to Prisma Compute
 - `--yes` accept defaults and skip prompts
 - `--no-install` scaffold only
 - `--no-generate` skip `prisma generate`
 - `--prisma-postgres` provision Prisma Postgres for PostgreSQL
 - `--skills --mcp --extension` enable optional add-ons
-- `--deploy` / `--no-deploy` deploy the finished app to Prisma Compute (or skip the prompt)
 - `--force` allow scaffolding into a non-empty directory
 - `--verbose` print full command output
 
@@ -141,9 +156,11 @@ Accept the prompt ("Deploy to Prisma Compute now?") when it appears, or pass the
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-The deploy step signs you in with `prisma-cli auth login` if you are not signed in yet, creates or links a Prisma project, then runs `prisma-cli app deploy` to build your app and print its URL. When you scaffold a PostgreSQL app and have not supplied your own `DATABASE_URL`, the deploy provisions a Prisma Postgres database and wires it to the app. A `compute:deploy` script is added so you can redeploy from the project later.
+The deploy step signs you in with the Prisma CLI if you are not signed in yet. With PostgreSQL, no `--database-url`, and no `--no-prisma-postgres`, setup creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to `.env`, runs the requested Prisma setup, then deploys the app with environment variables loaded from `.env`.
 
-The browser sign-in needs a person at the keyboard, so the deploy step is skipped in non-interactive runs unless a session already exists.
+A `compute:deploy` script is added to the generated project so you can redeploy app changes later. That script only runs `@prisma/cli@latest app deploy` with `.env`; it does not create a new project, create a new database, run migrations, or seed data.
+
+The deploy prompt is skipped in `--yes` runs unless you pass `--deploy`. Browser sign-in may still need a person at the keyboard if no Prisma CLI session exists.
 
 ## Local Development
 

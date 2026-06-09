@@ -24,8 +24,10 @@ import {
 } from "../tasks/setup-addons";
 import {
   collectComputeDeployContext,
+  executeComputeDatabaseSetup,
   executeComputeDeployContext,
   getComputeDeployScriptMap,
+  type ComputeDatabaseResult,
   type ComputeDeployContext,
   type ComputeDeployResult,
 } from "../tasks/deploy-to-compute";
@@ -331,7 +333,6 @@ async function collectCreateContext(
 
   const prismaSetupContext = await completePrismaSetupContext(input, prismaSetupInitialContext, {
     useComputePostgres: useComputeDatabase,
-    skipMigrateAndSeedPrompt: useComputeDatabase,
   });
   if (!prismaSetupContext) {
     return;
@@ -436,11 +437,37 @@ async function executeCreateContext(
     }
   }
 
-  const prismaSetupContext = context.useComputeDatabase
+  let computeDatabaseResult: ComputeDatabaseResult | undefined;
+  if (context.useComputeDatabase && context.computeDeployContext) {
+    try {
+      const result = await executeComputeDatabaseSetup({
+        context: context.computeDeployContext,
+        projectDir: context.targetDirectory,
+      });
+      if (!result.ok && !result.cancelled) {
+        return {
+          ok: false,
+          stage: "compute_deploy",
+          error: result.error,
+        };
+      }
+      if (result.ok) {
+        computeDatabaseResult = result.result;
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        stage: "compute_deploy",
+        error,
+      };
+    }
+  }
+
+  const prismaSetupContext = computeDatabaseResult
     ? {
         ...context.prismaSetupContext,
+        databaseUrl: computeDatabaseResult.databaseUrl,
         shouldUsePrismaPostgres: false,
-        shouldMigrateAndSeed: false,
       }
     : context.prismaSetupContext;
 
@@ -450,7 +477,6 @@ async function executeCreateContext(
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       includeDevNextStep: !context.useComputeDatabase,
-      includeMigrationAndSeedNextSteps: !context.useComputeDatabase,
     });
 
     if (!prismaResult.ok) {
@@ -473,12 +499,7 @@ async function executeCreateContext(
       const result = await executeComputeDeployContext({
         context: context.computeDeployContext,
         projectDir: context.targetDirectory,
-        envVars: prismaResult.databaseUrl
-          ? {
-              DATABASE_URL: prismaResult.databaseUrl,
-            }
-          : undefined,
-        databaseSetup: context.useComputeDatabase ? "compute-postgres" : undefined,
+        createProject: !computeDatabaseResult,
       });
       if (!result.ok && !result.cancelled) {
         return {
@@ -505,15 +526,14 @@ async function executeCreateContext(
   const summaryLines: string[] = [];
   summaryLines.push(`Setup complete.${prismaResult.warningSection}`);
   if (deployResult) {
+    const database = computeDatabaseResult?.database ?? deployResult.database;
     summaryLines.push(
       "",
       "Deployed to Prisma Compute:",
       ...(deployResult.appUrl ? [`- App URL: ${deployResult.appUrl}`] : []),
       `- App: ${deployResult.appName} (${deployResult.appId})`,
       `- Deployment: ${deployResult.deploymentId}`,
-      ...(deployResult.database
-        ? [`- Database: ${deployResult.database.name} (${deployResult.database.id})`]
-        : []),
+      ...(database ? [`- Database: ${database.name} (${database.id})`] : []),
     );
   }
   summaryLines.push("", "Next steps:", prismaResult.nextSteps.join("\n"));

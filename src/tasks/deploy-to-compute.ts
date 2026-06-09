@@ -25,36 +25,57 @@ const DEPLOY_OPTIONS_BY_TEMPLATE: Partial<
   "tanstack-start": { framework: "tanstack-start" },
 };
 
-type AppDeployJsonResult =
+type PrismaCliJsonError = { message?: string; summary?: string; name?: string };
+
+type PrismaCliJsonEnvelope<T> =
   | {
       ok: true;
-      result: {
-        project: {
-          id: string;
-          name: string;
-        };
-        branch: {
-          name: string;
-        };
-        app: {
-          id: string;
-          name: string;
-        };
-        deployment: {
-          id: string;
-          status: string;
-          url: string | null;
-        };
-        branchDatabase?: {
-          status: "created" | "skipped";
-          database?: {
-            id: string;
-            name: string;
-          };
-        };
-      };
+      result: T;
     }
-  | { ok: false; error: { message?: string; summary?: string; name?: string } };
+  | { ok: false; error: PrismaCliJsonError };
+
+type AppDeployJsonPayload = {
+  project: {
+    id: string;
+    name: string;
+  };
+  branch: {
+    name: string;
+  };
+  app: {
+    id: string;
+    name: string;
+  };
+  deployment: {
+    id: string;
+    status: string;
+    url: string | null;
+  };
+  branchDatabase?: {
+    status: "created" | "skipped";
+    database?: {
+      id: string;
+      name: string;
+    };
+  };
+};
+
+type ProjectCreateJsonPayload = {
+  project: {
+    id: string;
+    name: string;
+  };
+};
+
+type DatabaseCreateJsonPayload = {
+  projectId: string;
+  projectName: string;
+  database: {
+    id: string;
+    name: string;
+  };
+  connectionString: string;
+};
 
 export type ComputeDeployContext = {
   template: CreateTemplate;
@@ -79,6 +100,16 @@ export type ComputeDeployResult = {
   };
 };
 
+export type ComputeDatabaseResult = {
+  databaseUrl: string;
+  projectId: string;
+  projectName: string;
+  database: {
+    id: string;
+    name: string;
+  };
+};
+
 function getPrismaCliCommand(packageManager: PackageManager): string {
   return getPackageExecutionCommand(getPrismaCliExecutionPackageManager(packageManager), [
     PRISMA_CLI_PACKAGE,
@@ -94,7 +125,7 @@ function getPrismaCliAppDeployCommand(packageManager: PackageManager): string {
 }
 
 export function getComputeDeployScriptMap(context: ComputeDeployContext): Record<string, string> {
-  const deployArgs = ["--prod", ...getComputeDeployRuntimeArgs(context)];
+  const deployArgs = ["--prod", "--yes", "--env", ".env", ...getComputeDeployRuntimeArgs(context)];
   const deployCommand = [getPrismaCliAppDeployCommand(context.packageManager), ...deployArgs].join(
     " ",
   );
@@ -245,22 +276,19 @@ function redactSecrets(message: string): string {
     );
 }
 
-function parseDeployJson(stdout: unknown): AppDeployJsonResult | null {
+function parseJson<T>(stdout: unknown): T | null {
   if (typeof stdout !== "string" || stdout.trim().length === 0) {
     return null;
   }
 
   try {
-    return JSON.parse(stdout) as AppDeployJsonResult;
+    return JSON.parse(stdout) as T;
   } catch {
     return null;
   }
 }
 
-function getJsonErrorMessage(
-  error: { message?: string; summary?: string; name?: string } | undefined,
-  fallback: string,
-): string {
+function getJsonErrorMessage(error: PrismaCliJsonError | undefined, fallback: string): string {
   return error?.summary ?? error?.message ?? error?.name ?? fallback;
 }
 
@@ -277,24 +305,106 @@ function createExplicitDeployError(reason: string, error?: unknown): Error {
   return new Error(`Deploy requested but ${reason}${detail}`);
 }
 
-function toComputeDeployResult(data: AppDeployJsonResult & { ok: true }): ComputeDeployResult {
+async function runPrismaCliJson<T>(params: {
+  packageManager: PackageManager;
+  args: string[];
+  cwd: string;
+  fallbackError: string;
+  invalidOutputError: string;
+}): Promise<{ ok: true; result: T } | { ok: false; error: Error }> {
+  try {
+    const { stdout, exitCode } = await runPrismaCli(params.packageManager, params.args, {
+      cwd: params.cwd,
+      reject: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const parsed = parseJson<PrismaCliJsonEnvelope<T>>(stdout);
+    if (!parsed) {
+      return { ok: false, error: new Error(params.invalidOutputError) };
+    }
+    if (exitCode !== 0 || !parsed.ok) {
+      return {
+        ok: false,
+        error: createDeployError(
+          parsed.ok
+            ? params.fallbackError
+            : getJsonErrorMessage(parsed.error, params.fallbackError),
+        ),
+      };
+    }
+
+    return { ok: true, result: parsed.result };
+  } catch (error) {
+    return { ok: false, error: new Error(getErrorMessage(error)) };
+  }
+}
+
+function toComputeDeployResult(data: AppDeployJsonPayload): ComputeDeployResult {
   return {
-    appUrl: data.result.deployment.url,
-    appId: data.result.app.id,
-    appName: data.result.app.name,
-    deploymentId: data.result.deployment.id,
-    projectId: data.result.project.id,
-    projectName: data.result.project.name,
-    branchName: data.result.branch.name,
-    database: data.result.branchDatabase?.database,
+    appUrl: data.deployment.url,
+    appId: data.app.id,
+    appName: data.app.name,
+    deploymentId: data.deployment.id,
+    projectId: data.project.id,
+    projectName: data.project.name,
+    branchName: data.branch.name,
+    database: data.branchDatabase?.database,
+  };
+}
+
+export async function executeComputeDatabaseSetup(params: {
+  context: ComputeDeployContext;
+  projectDir: string;
+}): Promise<
+  { ok: true; result: ComputeDatabaseResult } | { ok: false; cancelled: boolean; error?: unknown }
+> {
+  const projectSpinner = spinner();
+  projectSpinner.start("Creating Prisma Compute project...");
+
+  const projectResult = await runPrismaCliJson<ProjectCreateJsonPayload>({
+    packageManager: params.context.packageManager,
+    args: ["project", "create", params.context.createProjectName, "--json"],
+    cwd: params.projectDir,
+    fallbackError: "Prisma project create failed.",
+    invalidOutputError: "Invalid prisma project create output",
+  });
+  if (!projectResult.ok) {
+    projectSpinner.error(`Project creation failed: ${projectResult.error.message}`);
+    return { ok: false, cancelled: false, error: projectResult.error };
+  }
+  projectSpinner.stop("Prisma Compute project created.");
+
+  const databaseSpinner = spinner();
+  databaseSpinner.start("Creating Prisma Postgres database...");
+  const databaseResult = await runPrismaCliJson<DatabaseCreateJsonPayload>({
+    packageManager: params.context.packageManager,
+    args: ["database", "create", "main", "--branch", "main", "--json"],
+    cwd: params.projectDir,
+    fallbackError: "Prisma database create failed.",
+    invalidOutputError: "Invalid prisma database create output",
+  });
+  if (!databaseResult.ok) {
+    databaseSpinner.error(`Database creation failed: ${databaseResult.error.message}`);
+    return { ok: false, cancelled: false, error: databaseResult.error };
+  }
+  databaseSpinner.stop("Prisma Postgres database created.");
+
+  return {
+    ok: true,
+    result: {
+      databaseUrl: databaseResult.result.connectionString,
+      projectId: databaseResult.result.projectId,
+      projectName: databaseResult.result.projectName,
+      database: databaseResult.result.database,
+    },
   };
 }
 
 export async function executeComputeDeployContext(params: {
   context: ComputeDeployContext;
   projectDir: string;
-  envVars?: Record<string, string>;
-  databaseSetup?: "compute-postgres";
+  createProject?: boolean;
 }): Promise<
   { ok: true; result: ComputeDeployResult } | { ok: false; cancelled: boolean; error?: unknown }
 > {
@@ -305,67 +415,30 @@ export async function executeComputeDeployContext(params: {
     "deploy",
     "--json",
     "--yes",
-    "--create-project",
-    params.context.createProjectName,
+    "--prod",
+    "--env",
+    ".env",
+    ...(params.createProject === false
+      ? []
+      : ["--create-project", params.context.createProjectName]),
     ...getComputeDeployRuntimeArgs(params.context),
   ];
 
-  if (params.databaseSetup === "compute-postgres") {
-    args.push("--db");
+  const deployResult = await runPrismaCliJson<AppDeployJsonPayload>({
+    packageManager: params.context.packageManager,
+    args,
+    cwd: params.projectDir,
+    fallbackError: "Prisma app deploy failed.",
+    invalidOutputError: "Invalid prisma app deploy output",
+  });
+  if (!deployResult.ok) {
+    deploySpinner.error(`Deploy failed: ${deployResult.error.message}`);
+    return { ok: false, cancelled: false, error: deployResult.error };
   }
 
-  try {
-    for (const [key, value] of Object.entries(params.envVars ?? {})) {
-      args.push("--env", `${key}=${value}`);
-    }
-
-    const { stdout, exitCode } = await runPrismaCli(params.context.packageManager, args, {
-      cwd: params.projectDir,
-      reject: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    const parsed = parseDeployJson(stdout);
-    if (!parsed) {
-      deploySpinner.error("Deploy failed: could not parse prisma app deploy output.");
-      return { ok: false, cancelled: false, error: new Error("Invalid prisma app deploy output") };
-    }
-
-    if (exitCode !== 0 || !parsed.ok) {
-      const error = createDeployError(
-        parsed.ok
-          ? "Prisma app deploy failed."
-          : getJsonErrorMessage(parsed.error, "Prisma app deploy failed."),
-      );
-      deploySpinner.error(`Deploy failed: ${error.message}`);
-      return { ok: false, cancelled: false, error };
-    }
-
-    deploySpinner.stop("Deployed to Prisma Compute.");
-    return {
-      ok: true,
-      result: toComputeDeployResult(parsed),
-    };
-  } catch (error) {
-    const parsed = parseDeployJson((error as { stdout?: unknown })?.stdout);
-    if (parsed?.ok) {
-      deploySpinner.stop("Deployed to Prisma Compute.");
-      return {
-        ok: true,
-        result: toComputeDeployResult(parsed),
-      };
-    }
-
-    if (parsed && !parsed.ok) {
-      const deployError = createDeployError(
-        getJsonErrorMessage(parsed.error, "Prisma app deploy failed."),
-      );
-      deploySpinner.error(`Deploy failed: ${deployError.message}`);
-      return { ok: false, cancelled: false, error: deployError };
-    }
-
-    const message = getErrorMessage(error);
-    deploySpinner.error(`Deploy failed${message ? `: ${message}` : "."}`);
-    return { ok: false, cancelled: false, error: new Error(message) };
-  }
+  deploySpinner.stop("Deployed to Prisma Compute.");
+  return {
+    ok: true,
+    result: toComputeDeployResult(deployResult.result),
+  };
 }
