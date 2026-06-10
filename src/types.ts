@@ -27,6 +27,7 @@ export const extensionTargets = ["vscode", "cursor", "windsurf"] as const;
 export const prismaSkillNames = [
   "prisma-cli",
   "prisma-client-api",
+  "prisma-compute",
   "prisma-database-setup",
   "prisma-upgrade-v7",
   "prisma-postgres",

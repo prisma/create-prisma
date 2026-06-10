@@ -342,6 +342,7 @@ async function collectCreateContext(
     useDefaults,
     provider: prismaSetupContext.databaseProvider,
     shouldUsePrismaPostgres: prismaSetupContext.shouldUsePrismaPostgres,
+    shouldUseComputeDeploy: Boolean(computeDeployContext),
   });
   if (addonSetupContext === undefined) {
     return;

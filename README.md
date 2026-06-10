@@ -145,6 +145,7 @@ Prisma Compute deployment is currently supported for:
 - Prisma IDE extension install
 
 These can be selected interactively or enabled with flags.
+When Prisma Compute deploy is selected, the skills add-on recommends the `prisma-compute` skill too.
 
 ## Deploy to Prisma Compute
 
