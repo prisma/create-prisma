@@ -113,11 +113,13 @@ type SkillOption = {
 };
 
 function getAvailablePrismaSkills(provider: DatabaseProvider): PrismaSkillName[] {
+  const skills: PrismaSkillName[] = [...SHARED_PRISMA_SKILLS, "prisma-compute"];
+
   if (provider === "postgresql") {
-    return [...SHARED_PRISMA_SKILLS, "prisma-postgres"];
+    return [...skills, "prisma-postgres"];
   }
 
-  return [...SHARED_PRISMA_SKILLS];
+  return skills;
 }
 
 function getSkillOptions(provider: DatabaseProvider): SkillOption[] {
@@ -132,6 +134,11 @@ function getSkillOptions(provider: DatabaseProvider): SkillOption[] {
       value: "prisma-client-api",
       label: "prisma-client-api",
       hint: "Prisma Client query patterns",
+    },
+    "prisma-compute": {
+      value: "prisma-compute",
+      label: "prisma-compute",
+      hint: "Prisma Compute deploy and hosting workflows",
     },
     "prisma-database-setup": {
       value: "prisma-database-setup",
@@ -198,11 +205,16 @@ function uniqueValues<T>(values: T[]): T[] {
 function getRecommendedPrismaSkills(
   provider: DatabaseProvider,
   shouldUsePrismaPostgres: boolean,
+  shouldUseComputeDeploy: boolean,
 ): PrismaSkillName[] {
-  const skills = [...getAvailablePrismaSkills(provider)];
+  const skills = [...SHARED_PRISMA_SKILLS];
 
-  if (!shouldUsePrismaPostgres) {
-    return skills.filter((skill) => skill !== "prisma-postgres");
+  if (provider === "postgresql" && shouldUsePrismaPostgres) {
+    skills.push("prisma-postgres");
+  }
+
+  if (shouldUseComputeDeploy) {
+    skills.push("prisma-compute");
   }
 
   return uniqueValues(skills);
@@ -324,6 +336,7 @@ export async function collectCreateAddonSetupContext(
     useDefaults: boolean;
     provider: DatabaseProvider;
     shouldUsePrismaPostgres: boolean;
+    shouldUseComputeDeploy: boolean;
   },
 ): Promise<CreateAddonSetupContext | null | undefined> {
   const hasExplicitAddonSelection =
@@ -359,6 +372,7 @@ export async function collectCreateAddonSetupContext(
   const recommendedSkills = getRecommendedPrismaSkills(
     options.provider,
     options.shouldUsePrismaPostgres,
+    options.shouldUseComputeDeploy,
   );
   const skills = !addons.includes("skills")
     ? []
