@@ -211,7 +211,7 @@ export async function collectComputeDeployContext(
   } else {
     const confirmed = await confirm({
       message: "Deploy to Prisma Compute now?",
-      initialValue: true,
+      initialValue: false,
     });
     if (isCancel(confirmed)) {
       cancel("Operation cancelled.");
