@@ -64,7 +64,7 @@ export const PrismaSetupOptionsSchema = z.object({
   prismaPostgres: z
     .boolean()
     .optional()
-    .describe("Provision Prisma Postgres with create-db when provider is postgresql"),
+    .describe("Use Prisma Postgres when provider is postgresql"),
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
   generate: z.boolean().optional().describe("Generate Prisma Client after scaffolding"),
@@ -93,8 +93,20 @@ export const CreateScaffoldOptionsSchema = z.object({
   skills: z.boolean().optional().describe("Enable skills addon"),
   mcp: z.boolean().optional().describe("Enable MCP addon"),
   extension: z.boolean().optional().describe("Enable extension addon"),
+  deploy: z.boolean().optional().describe("Deploy the scaffolded project to Prisma Compute"),
   force: z.boolean().optional().describe("Allow scaffolding into a non-empty target directory"),
 });
+
+export const COMPUTE_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set<CreateTemplate>([
+  "hono",
+  "elysia",
+  "next",
+  "tanstack-start",
+]);
+
+export function isComputeDeployableTemplate(template: CreateTemplate): boolean {
+  return COMPUTE_DEPLOYABLE_TEMPLATES.has(template);
+}
 
 export const CreateCommandInputSchema = PrismaSetupCommandInputSchema.extend(
   CreateScaffoldOptionsSchema.shape,

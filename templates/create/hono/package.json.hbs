@@ -5,6 +5,7 @@
   "packageManager": "{{packageManagerManifestValue packageManager}}",
   {{/if}}
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
     "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js"}}",
     "build": "{{runtimeScript packageManager "build" "src/index.ts" "dist/src/index.js"}}",
