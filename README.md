@@ -8,10 +8,10 @@ Scaffold a new app with Prisma already wired up.
 
 - creates a new app from a supported template
 - adds Prisma 7 dependencies for your database
-- scaffolds `prisma/schema.prisma`, `prisma/seed.ts`, and `prisma.config.ts`
+- scaffolds `prisma/schema.prisma`, `prisma/seed.ts`, `prisma.config.ts`, and Compute deploy defaults for Compute-ready templates
 - writes a Prisma client singleton in the right place for the selected template
 - adds `db:generate`, `db:migrate`, and `db:seed` scripts
-- creates or updates `.env` with `DATABASE_URL`
+- creates or updates the template env file with `DATABASE_URL`
 - can install dependencies and run `prisma generate` for you
 - can deploy the finished app to Prisma Compute and return a live URL
 
@@ -83,7 +83,7 @@ Deploy a supported app to Prisma Compute:
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-With PostgreSQL, no `--database-url`, and no `--no-prisma-postgres`, the Compute flow creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to `.env`, and deploys the app with environment variables loaded from `.env`.
+With PostgreSQL and no `--database-url`, the Compute flow asks whether to use Prisma Postgres. If accepted, or if `--prisma-postgres` is passed, it creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to the template env file, and deploys the app with the env file configured in `prisma.compute.ts`. Pass `--no-prisma-postgres` to deploy without provisioning a database.
 
 ## Supported Templates
 
@@ -102,7 +102,10 @@ Prisma Compute deployment is currently supported for:
 - `hono`
 - `elysia`
 - `next`
+- `astro`
+- `nuxt`
 - `tanstack-start`
+- `turborepo`
 
 ## Supported Databases
 
@@ -149,17 +152,17 @@ When Prisma Compute deploy is selected, the skills add-on recommends the `prisma
 
 ## Deploy to Prisma Compute
 
-After scaffolding, `create-prisma` can deploy your app to [Prisma Compute](https://www.prisma.io/docs/compute), the serverless hosting for TypeScript apps that runs next to your Prisma Postgres database. It is offered for the templates the Prisma CLI can deploy today: `hono`, `elysia`, `next`, and `tanstack-start`.
+After scaffolding, `create-prisma` can deploy your app to [Prisma Compute](https://www.prisma.io/docs/compute), the serverless hosting for TypeScript apps that runs next to your Prisma Postgres database. It is offered for the templates the Prisma CLI can deploy today: `hono`, `elysia`, `next`, `astro`, `nuxt`, `tanstack-start`, and `turborepo`.
 
-Accept the prompt ("Deploy to Prisma Compute now?") when it appears, or pass the flag:
+Accept the deploy prompt when it appears, or pass the flag:
 
 ```bash
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-The deploy step signs you in with the Prisma CLI if you are not signed in yet. With PostgreSQL, no `--database-url`, and no `--no-prisma-postgres`, setup creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to `.env`, runs the requested Prisma setup, then deploys the app with environment variables loaded from `.env`.
+The deploy step signs you in with the Prisma CLI if you are not signed in yet. With PostgreSQL and no `--database-url`, create-prisma asks whether to use Prisma Postgres. If accepted, or if `--prisma-postgres` is passed, setup creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to the template env file, runs the requested Prisma setup, then deploys the app with the env file configured in `prisma.compute.ts`. Pass `--no-prisma-postgres` to deploy without provisioning a database.
 
-A `compute:deploy` script is added to the generated project so you can redeploy app changes later. That script only runs `@prisma/cli@latest app deploy` with `.env`; it does not create a new project, create a new database, run migrations, or seed data.
+A `prisma.compute.ts` file is generated with the app framework, runtime port, target, and env-file defaults. When deployment is selected, a `compute:deploy` script is added to the generated project so you can redeploy app changes later. That script runs `@prisma/cli@latest app deploy` using `prisma.compute.ts`; it does not create a new project, create a new database, run migrations, or seed data.
 
 The deploy prompt is skipped in `--yes` runs unless you pass `--deploy`. Browser sign-in may still need a person at the keyboard if no Prisma CLI session exists.
 

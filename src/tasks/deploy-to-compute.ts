@@ -11,18 +11,23 @@ import { getPackageExecutionArgs, getPackageExecutionCommand } from "../utils/pa
 
 const PRISMA_CLI_PACKAGE = "@prisma/cli@latest";
 
-type DeployFramework = "nextjs" | "hono" | "tanstack-start" | "bun";
-
 const DEPLOY_OPTIONS_BY_TEMPLATE: Partial<
   Record<
     CreateTemplate,
-    { framework: DeployFramework; httpPort?: number; requiresExplicitFramework?: boolean }
+    {
+      configTarget?: string;
+    }
   >
 > = {
-  hono: { framework: "hono", httpPort: 8080 },
-  elysia: { framework: "bun", httpPort: 8080, requiresExplicitFramework: true },
-  next: { framework: "nextjs" },
-  "tanstack-start": { framework: "tanstack-start" },
+  hono: {},
+  elysia: {},
+  next: {},
+  astro: {},
+  nuxt: {},
+  "tanstack-start": {},
+  turborepo: {
+    configTarget: "api",
+  },
 };
 
 type PrismaCliJsonError = { message?: string; summary?: string; name?: string };
@@ -81,9 +86,7 @@ export type ComputeDeployContext = {
   template: CreateTemplate;
   packageManager: PackageManager;
   createProjectName: string;
-  framework: DeployFramework;
-  httpPort?: number;
-  requiresExplicitFramework?: boolean;
+  configTarget?: string;
 };
 
 export type ComputeDeployResult = {
@@ -117,15 +120,15 @@ function getPrismaCliCommand(packageManager: PackageManager): string {
 }
 
 function getPrismaCliAppDeployCommand(packageManager: PackageManager): string {
-  return getPackageExecutionCommand(getPrismaCliExecutionPackageManager(packageManager), [
-    PRISMA_CLI_PACKAGE,
-    "app",
-    "deploy",
-  ]);
+  return getPackageExecutionCommand(
+    getPrismaCliExecutionPackageManager(packageManager),
+    [PRISMA_CLI_PACKAGE, "app", "deploy"],
+    { silent: true },
+  );
 }
 
 export function getComputeDeployScriptMap(context: ComputeDeployContext): Record<string, string> {
-  const deployArgs = ["--prod", "--yes", "--env", ".env", ...getComputeDeployRuntimeArgs(context)];
+  const deployArgs = [...getComputeDeployTargetArgs(context), "--prod", "--yes"];
   const deployCommand = [getPrismaCliAppDeployCommand(context.packageManager), ...deployArgs].join(
     " ",
   );
@@ -135,19 +138,22 @@ export function getComputeDeployScriptMap(context: ComputeDeployContext): Record
   };
 }
 
-function getComputeDeployRuntimeArgs(context: ComputeDeployContext): string[] {
-  return [
-    ...(context.requiresExplicitFramework ? ["--framework", context.framework] : []),
-    ...(context.httpPort ? ["--http-port", String(context.httpPort)] : []),
-  ];
+function getComputeDeployTargetArgs(context: ComputeDeployContext): string[] {
+  return context.configTarget ? [context.configTarget] : [];
 }
 
-function runPrismaCli(packageManager: PackageManager, args: string[], options: ExecaOptions = {}) {
-  const execution = getPackageExecutionArgs(getPrismaCliExecutionPackageManager(packageManager), [
-    PRISMA_CLI_PACKAGE,
-    ...args,
-  ]);
-  return execa(execution.command, execution.args, options);
+function runPrismaCli(
+  packageManager: PackageManager,
+  args: string[],
+  options: ExecaOptions & { silentPackageRunner?: boolean } = {},
+) {
+  const { silentPackageRunner, ...execaOptions } = options;
+  const execution = getPackageExecutionArgs(
+    getPrismaCliExecutionPackageManager(packageManager),
+    [PRISMA_CLI_PACKAGE, ...args],
+    { silent: silentPackageRunner },
+  );
+  return execa(execution.command, execution.args, execaOptions);
 }
 
 function getPrismaCliExecutionPackageManager(packageManager: PackageManager): PackageManager {
@@ -258,9 +264,7 @@ export async function collectComputeDeployContext(
     template: options.template,
     packageManager: options.packageManager,
     createProjectName: options.defaultServiceName,
-    framework: deployOptions.framework,
-    httpPort: deployOptions.httpPort,
-    requiresExplicitFramework: deployOptions.requiresExplicitFramework,
+    configTarget: deployOptions.configTarget,
   };
 }
 
@@ -317,6 +321,7 @@ async function runPrismaCliJson<T>(params: {
       cwd: params.cwd,
       reject: false,
       stdio: ["ignore", "pipe", "pipe"],
+      silentPackageRunner: true,
     });
 
     const parsed = parseJson<PrismaCliJsonEnvelope<T>>(stdout);
@@ -413,15 +418,13 @@ export async function executeComputeDeployContext(params: {
   const args = [
     "app",
     "deploy",
+    ...getComputeDeployTargetArgs(params.context),
     "--json",
     "--yes",
     "--prod",
-    "--env",
-    ".env",
     ...(params.createProject === false
       ? []
       : ["--create-project", params.context.createProjectName]),
-    ...getComputeDeployRuntimeArgs(params.context),
   ];
 
   const deployResult = await runPrismaCliJson<AppDeployJsonPayload>({

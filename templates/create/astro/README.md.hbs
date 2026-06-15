@@ -21,6 +21,7 @@ Prisma setup is scaffolded automatically in:
 - `src/lib/prisma.ts`
 - `src/pages/api/users.ts`
 - `prisma.config.ts`
+- `prisma.compute.ts`
 - `src/generated/prisma`
 
 Database helper scripts are added to `package.json`:
@@ -40,7 +41,7 @@ The starter page keeps the official Astro minimal structure and points you to `p
 
 ## Prisma Compute
 
-This project includes a Prisma Compute deploy script. Deploys load environment variables from `.env`; if setup created a Prisma Postgres database, its `DATABASE_URL` is already written there.
+This project includes a Prisma Compute deploy script and deploy defaults in `prisma.compute.ts`. Deploys load environment variables from `.env`; if setup created a Prisma Postgres database, its `DATABASE_URL` is already written there.
 
 After local changes, run `{{runScriptCommand packageManager "compute:deploy"}}` to redeploy.
 {{/if}}

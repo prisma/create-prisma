@@ -102,7 +102,10 @@ export const COMPUTE_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set
   "hono",
   "elysia",
   "next",
+  "astro",
+  "nuxt",
   "tanstack-start",
+  "turborepo",
 ]);
 
 export function isComputeDeployableTemplate(template: CreateTemplate): boolean {

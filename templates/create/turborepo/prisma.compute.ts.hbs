@@ -1,0 +1,14 @@
+import { defineComputeConfig } from "@prisma/compute-sdk/config";
+
+export default defineComputeConfig({
+  apps: {
+    api: {
+      name: "{{projectName}}",
+      root: "apps/api",
+      framework: "hono",
+      entry: "src/index.ts",
+      httpPort: 3000,
+      env: "packages/db/.env",
+    },
+  },
+});

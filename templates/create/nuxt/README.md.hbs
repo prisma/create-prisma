@@ -21,6 +21,7 @@ Prisma setup is scaffolded automatically in:
 - `server/utils/prisma.ts`
 - `server/api/users.get.ts`
 - `prisma.config.ts`
+- `prisma.compute.ts`
 - `server/generated/prisma`
 
 Database helper scripts are added to `package.json`:
@@ -37,7 +38,7 @@ The starter page in `app/pages/index.vue` fetches seeded users from `server/api/
 
 ## Prisma Compute
 
-This project includes a Prisma Compute deploy script. Deploys load environment variables from `.env`; if setup created a Prisma Postgres database, its `DATABASE_URL` is already written there.
+This project includes a Prisma Compute deploy script and deploy defaults in `prisma.compute.ts`. Deploys load environment variables from `.env`; if setup created a Prisma Postgres database, its `DATABASE_URL` is already written there.
 
 After local changes, run `{{runScriptCommand packageManager "compute:deploy"}}` to redeploy.
 {{/if}}

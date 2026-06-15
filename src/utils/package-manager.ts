@@ -264,14 +264,23 @@ export function getInstallArgs(packageManager: PackageManager): CommandAndArgs {
 export function getPackageExecutionArgs(
   packageManager: PackageManager,
   commandArgs: string[],
+  options: {
+    silent?: boolean;
+  } = {},
 ): CommandAndArgs {
   switch (packageManager) {
     case "pnpm":
-      return { command: "pnpm", args: ["dlx", ...commandArgs] };
+      return {
+        command: "pnpm",
+        args: [...(options.silent ? ["--silent"] : []), "dlx", ...commandArgs],
+      };
     case "yarn":
-      return { command: "yarn", args: ["dlx", ...commandArgs] };
+      return {
+        command: "yarn",
+        args: ["dlx", ...(options.silent ? ["--quiet"] : []), ...commandArgs],
+      };
     case "bun":
-      return { command: "bunx", args: [...commandArgs] };
+      return { command: "bunx", args: [...(options.silent ? ["--silent"] : []), ...commandArgs] };
     case "deno": {
       const [packageName, ...args] = commandArgs;
       if (!packageName) {
@@ -285,15 +294,23 @@ export function getPackageExecutionArgs(
     }
     case "npm":
     default:
-      return { command: "npx", args: [...commandArgs] };
+      // npx has no true silent flag. --yes skips prompts, while --no-update-notifier
+      // avoids npm notices around otherwise JSON-only command output.
+      return {
+        command: "npx",
+        args: [...(options.silent ? ["--yes", "--no-update-notifier"] : []), ...commandArgs],
+      };
   }
 }
 
 export function getPackageExecutionCommand(
   packageManager: PackageManager,
   commandArgs: string[],
+  options: {
+    silent?: boolean;
+  } = {},
 ): string {
-  const execution = getPackageExecutionArgs(packageManager, commandArgs);
+  const execution = getPackageExecutionArgs(packageManager, commandArgs, options);
   return [execution.command, ...execution.args].join(" ");
 }
 
@@ -305,6 +322,27 @@ export function getPrismaCliArgs(
     return {
       command: "deno",
       args: ["run", "-A", "--env-file=.env", getDenoPrismaSpecifier(), ...prismaArgs],
+    };
+  }
+
+  if (packageManager === "bun") {
+    return {
+      command: "bun",
+      args: ["--env-file=.env", "./node_modules/.bin/prisma", ...prismaArgs],
+    };
+  }
+
+  if (packageManager === "pnpm") {
+    return {
+      command: "pnpm",
+      args: ["exec", "prisma", ...prismaArgs],
+    };
+  }
+
+  if (packageManager === "yarn") {
+    return {
+      command: "yarn",
+      args: ["exec", "prisma", ...prismaArgs],
     };
   }
 
