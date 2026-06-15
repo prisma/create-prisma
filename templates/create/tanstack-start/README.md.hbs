@@ -20,6 +20,7 @@ Prisma setup is scaffolded automatically in:
 - `prisma/seed.ts`
 - `src/lib/prisma.server.ts`
 - `prisma.config.ts`
+- `prisma.compute.ts`
 - `src/generated/prisma`
 
 Database helper scripts are added to `package.json`:
@@ -36,7 +37,7 @@ The home route uses a TanStack Start server function to load users with the Pris
 
 ## Prisma Compute
 
-This project includes a Prisma Compute deploy script. Deploys load environment variables from `.env`; if setup created a Prisma Postgres database, its `DATABASE_URL` is already written there.
+This project includes a Prisma Compute deploy script and deploy defaults in `prisma.compute.ts`. Deploys load environment variables from `.env`; if setup created a Prisma Postgres database, its `DATABASE_URL` is already written there.
 
 After local changes, run `{{runScriptCommand packageManager "compute:deploy"}}` to redeploy.
 {{/if}}

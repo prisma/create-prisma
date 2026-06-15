@@ -4,7 +4,11 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 {{#if (eq schemaPreset "basic")}}
+{{#if (eq packageManager "deno")}}
+import { prisma } from "../../../packages/db/src/index.ts";
+{{else}}
 import { prisma } from "@repo/db";
+{{/if}}
 {{/if}}
 
 const app = new Hono();

@@ -1,0 +1,9 @@
+import { defineComputeConfig } from "@prisma/compute-sdk/config";
+
+export default defineComputeConfig({
+  app: {
+    name: "{{projectName}}",
+    framework: "astro",
+    env: ".env",
+  },
+});

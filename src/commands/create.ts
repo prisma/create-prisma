@@ -313,7 +313,6 @@ async function collectCreateContext(
   }
 
   const projectPackageName = toPackageName(path.basename(targetDirectory));
-
   const computeDeployContext = await collectComputeDeployContext(input, {
     template,
     packageManager: prismaSetupInitialContext.packageManager,
@@ -324,18 +323,18 @@ async function collectCreateContext(
     return;
   }
 
-  const useComputeDatabase = Boolean(
-    computeDeployContext &&
-    prismaSetupInitialContext.databaseProvider === "postgresql" &&
-    !prismaSetupInitialContext.databaseUrl &&
-    input.prismaPostgres !== false,
-  );
-
-  const prismaSetupContext = await completePrismaSetupContext(input, prismaSetupInitialContext, {
-    useComputePostgres: useComputeDatabase,
-  });
+  const prismaSetupContext = await completePrismaSetupContext(input, prismaSetupInitialContext);
   if (!prismaSetupContext) {
     return;
+  }
+
+  const useComputeDatabase = Boolean(
+    computeDeployContext && prismaSetupContext.shouldUsePrismaPostgres,
+  );
+  if (useComputeDatabase) {
+    log.info(
+      "Prisma Postgres selected: create-prisma will provision a database and write DATABASE_URL to the template env file before deploying.",
+    );
   }
 
   const addonSetupContext = await collectCreateAddonSetupContext(input, {

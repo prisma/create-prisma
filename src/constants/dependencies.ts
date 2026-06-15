@@ -9,6 +9,7 @@ export const dependencyVersionMap = {
   "@prisma/adapter-libsql": "^7.8.0",
   "@prisma/adapter-mariadb": "^7.8.0",
   "@prisma/adapter-mssql": "^7.8.0",
+  "@prisma/compute-sdk": "latest",
   "@types/node": "^24.3.0",
   dotenv: "^17.2.3",
   prisma: "^7.8.0",
@@ -23,6 +24,16 @@ export type CreateTemplateDependencyTarget = {
   devDependencies: AvailableDependency[];
   customDependencies?: Record<string, string>;
 };
+
+const computeConfigTemplates = new Set<CreateTemplate>([
+  "hono",
+  "elysia",
+  "next",
+  "astro",
+  "nuxt",
+  "tanstack-start",
+  "turborepo",
+]);
 
 function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
   return packageManager === "npm" ? "*" : "workspace:*";
@@ -57,11 +68,19 @@ export function getCreateTemplateDependencies(
   if (template === "turborepo") {
     targets.push({
       packageJsonPath: "apps/api/package.json",
-      dependencies: [],
+      dependencies: ["dotenv"],
       devDependencies: ["tsx"],
       customDependencies: {
         "@repo/db": getWorkspaceDependencyVersion(packageManager),
       },
+    });
+  }
+
+  if (computeConfigTemplates.has(template)) {
+    targets.push({
+      packageJsonPath: "package.json",
+      dependencies: [],
+      devDependencies: ["@prisma/compute-sdk"],
     });
   }
 

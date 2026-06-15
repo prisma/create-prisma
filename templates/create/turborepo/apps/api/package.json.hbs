@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     {{#if (eq packageManager "deno")}}
-    "dev": "deno run -A --env-file=.env --watch src/index.ts",
+    "dev": "deno run -A --env-file=../../packages/db/.env --watch src/index.ts",
     "build": "deno check src/index.ts",
-    "start": "deno run -A --env-file=.env src/index.ts",
+    "start": "deno run -A --env-file=../../packages/db/.env src/index.ts",
     "typecheck": "deno check src/index.ts"
     {{else}}
     "dev": "tsx watch src/index.ts",

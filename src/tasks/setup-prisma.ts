@@ -216,7 +216,7 @@ async function promptForMigrateAndSeed(): Promise<boolean | undefined> {
 
 async function promptForPrismaPostgres(): Promise<boolean | undefined> {
   const shouldUsePrismaPostgres = await confirm({
-    message: "Use Prisma Postgres and auto-generate DATABASE_URL with create-db?",
+    message: "Use Prisma Postgres and write DATABASE_URL automatically?",
     initialValue: true,
   });
 
