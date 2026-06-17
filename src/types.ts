@@ -101,6 +101,7 @@ export const CreateScaffoldOptionsSchema = z.object({
 export const COMPUTE_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set<CreateTemplate>([
   "hono",
   "elysia",
+  "nest",
   "next",
   "astro",
   "nuxt",
