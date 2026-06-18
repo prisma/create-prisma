@@ -21,6 +21,7 @@ const DEPLOY_OPTIONS_BY_TEMPLATE: Partial<
 > = {
   hono: {},
   elysia: {},
+  nest: {},
   next: {},
   astro: {},
   nuxt: {},
