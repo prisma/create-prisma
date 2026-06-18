@@ -101,6 +101,7 @@ Prisma Compute deployment is currently supported for:
 
 - `hono`
 - `elysia`
+- `nest`
 - `next`
 - `astro`
 - `nuxt`
@@ -152,7 +153,7 @@ When Prisma Compute deploy is selected, the skills add-on recommends the `prisma
 
 ## Deploy to Prisma Compute
 
-After scaffolding, `create-prisma` can deploy your app to [Prisma Compute](https://www.prisma.io/docs/compute), the serverless hosting for TypeScript apps that runs next to your Prisma Postgres database. It is offered for the templates the Prisma CLI can deploy today: `hono`, `elysia`, `next`, `astro`, `nuxt`, `tanstack-start`, and `turborepo`.
+After scaffolding, `create-prisma` can deploy your app to [Prisma Compute](https://www.prisma.io/docs/compute), the serverless hosting for TypeScript apps that runs next to your Prisma Postgres database. It is offered for the templates the Prisma CLI can deploy today: `hono`, `elysia`, `nest`, `next`, `astro`, `nuxt`, `tanstack-start`, and `turborepo`.
 
 Accept the deploy prompt when it appears, or pass the flag:
 

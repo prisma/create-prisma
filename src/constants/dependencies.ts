@@ -28,6 +28,7 @@ export type CreateTemplateDependencyTarget = {
 const computeConfigTemplates = new Set<CreateTemplate>([
   "hono",
   "elysia",
+  "nest",
   "next",
   "astro",
   "nuxt",
