@@ -14,6 +14,10 @@ type RuntimeScriptOptions = {
   sourceEntrypoint: string;
   builtEntrypoint?: string;
   denoFlags?: string[];
+  // When true, `build` compiles to `dist` instead of only type-checking.
+  // Templates that deploy a compiled artifact (e.g. NestJS) need this; bun and
+  // deno otherwise run TypeScript directly and skip emit.
+  emit?: boolean;
 };
 
 const packageManagerManifestValues = {
@@ -198,7 +202,7 @@ export function getRuntimeScriptCommand(
   kind: RuntimeScriptKind,
   options: RuntimeScriptOptions,
 ): string {
-  const { sourceEntrypoint, builtEntrypoint, denoFlags = [] } = options;
+  const { sourceEntrypoint, builtEntrypoint, denoFlags = [], emit = false } = options;
 
   if (packageManager === "deno") {
     switch (kind) {
@@ -213,6 +217,9 @@ export function getRuntimeScriptCommand(
           sourceEntrypoint,
         ]);
       case "build":
+        // Deno runs TypeScript directly; there is no node-style compiled
+        // artifact to emit here (the Deno nest variant uses Deno APIs and is
+        // not built for the node-based Compute runtime).
         return `deno check ${sourceEntrypoint}`;
       case "start":
         return joinCommandParts([
@@ -231,7 +238,7 @@ export function getRuntimeScriptCommand(
       case "dev":
         return `bun --watch ${sourceEntrypoint}`;
       case "build":
-        return "tsc --noEmit";
+        return emit ? "tsc" : "tsc --noEmit";
       case "start":
         return `bun ${sourceEntrypoint}`;
     }

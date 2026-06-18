@@ -102,6 +102,7 @@ Handlebars.registerHelper(
       sourceEntrypoint,
       builtEntrypoint,
       denoFlags: getOptionalHashStringList(hash, "denoFlags"),
+      emit: hash.emit === true,
     });
   },
 );
