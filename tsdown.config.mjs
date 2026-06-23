@@ -1,5 +1,5 @@
-import { defineConfig } from "tsdown";
 import { readFileSync } from "node:fs";
+import { defineConfig } from "tsdown";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const telemetryApiKey = process.env.CREATE_PRISMA_TELEMETRY_API_KEY ?? "";
