@@ -1,5 +1,5 @@
-import { defineConfig } from "tsdown";
 import { readFileSync } from "node:fs";
+import { defineConfig } from "tsdown";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const telemetryApiKey = process.env.CREATE_PRISMA_TELEMETRY_API_KEY ?? "";
@@ -8,7 +8,9 @@ const telemetryHost = process.env.CREATE_PRISMA_TELEMETRY_HOST || "https://us.i.
 export default defineConfig({
   entry: ["src/index.ts", "src/cli.ts"],
   format: ["esm"],
-  inlineOnly: false,
+  deps: {
+    onlyBundle: false,
+  },
   clean: true,
   shims: true,
   dts: true,
