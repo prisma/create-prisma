@@ -33,8 +33,8 @@
     }
   },
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsdown --config-loader native",
+    "dev": "tsdown --config-loader native --watch",
     "start": "bun run ./dist/cli.mjs",
     "check": "bun run format:check && bun run lint",
     "lint": "oxlint . --deny-warnings",
