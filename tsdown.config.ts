@@ -8,7 +8,9 @@ const telemetryHost = process.env.CREATE_PRISMA_TELEMETRY_HOST || "https://us.i.
 export default defineConfig({
   entry: ["src/index.ts", "src/cli.ts"],
   format: ["esm"],
-  inlineOnly: false,
+  deps: {
+    onlyBundle: false,
+  },
   clean: true,
   shims: true,
   dts: true,

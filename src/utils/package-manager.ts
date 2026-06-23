@@ -21,10 +21,10 @@ type RuntimeScriptOptions = {
 };
 
 const packageManagerManifestValues = {
-  npm: "npm@10.9.0",
-  pnpm: "pnpm@10.16.1",
-  yarn: "yarn@4.13.0",
-  bun: "bun@1.3.9",
+  npm: "npm@11.17.0",
+  pnpm: "pnpm@11.8.0",
+  yarn: "yarn@4.17.0",
+  bun: "bun@1.3.14",
 } as const;
 
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
