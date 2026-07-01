@@ -158,18 +158,41 @@ export function getInstallCommand(packageManager: PackageManager): string {
 }
 
 export function getRunScriptCommand(packageManager: PackageManager, scriptName: string): string {
+  const { command, args } = getRunScriptArgs(packageManager, scriptName);
+  return [command, ...args].join(" ");
+}
+
+export function getRunScriptArgs(
+  packageManager: PackageManager,
+  scriptName: string,
+): CommandAndArgs {
   switch (packageManager) {
     case "deno":
-      return `deno task ${scriptName}`;
+      return {
+        command: "deno",
+        args: ["task", scriptName],
+      };
     case "bun":
-      return `bun run ${scriptName}`;
+      return {
+        command: "bun",
+        args: ["run", scriptName],
+      };
     case "pnpm":
-      return `pnpm run ${scriptName}`;
+      return {
+        command: "pnpm",
+        args: ["run", scriptName],
+      };
     case "yarn":
-      return `yarn run ${scriptName}`;
+      return {
+        command: "yarn",
+        args: ["run", scriptName],
+      };
     case "npm":
     default:
-      return `npm run ${scriptName}`;
+      return {
+        command: "npm",
+        args: ["run", scriptName],
+      };
   }
 }
 

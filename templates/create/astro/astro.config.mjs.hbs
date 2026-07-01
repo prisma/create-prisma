@@ -7,4 +7,15 @@ export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   server: { host: true },
+  vite: {
+    ssr: {
+      // Bundle SSR dependencies into the server entry. Astro's standalone
+      // build emits `import { parse, serialize } from "cookie"`, and the Bun
+      // runtime on Prisma Compute cannot resolve those named exports from
+      // cookie's CommonJS build at runtime (SyntaxError: Export named 'parse'
+      // not found). Bundling resolves the imports at build time. Remove once
+      // the Bun/cookie CJS named-export interop is fixed upstream.
+      noExternal: true,
+    },
+  },
 });

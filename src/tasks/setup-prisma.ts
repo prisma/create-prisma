@@ -3,6 +3,7 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
+import { escapeRegExp } from "../utils/regexp";
 import { installProjectDependencies, writePrismaDependencies } from "./install";
 import {
   getCreateDbCommand,
@@ -21,7 +22,7 @@ import {
   detectPackageManager,
   getInstallCommand,
   getPrismaCliArgs,
-  getPrismaCliCommand,
+  getRunScriptArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
 
@@ -376,11 +377,6 @@ function getDefaultDatabaseUrl(provider: DatabaseProvider): string {
   }
 }
 
-// Escape regex metacharacters before interpolating dynamic values into RegExp.
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function escapeEnvValue(value: string): string {
   if (/[\r\n]/.test(value)) {
     throw new Error("Environment variable values must be single-line.");
@@ -660,7 +656,7 @@ async function generatePrismaClientForContext(
     };
   }
 
-  const generateCommand = getPrismaCliCommand(context.packageManager, ["generate"]);
+  const generateCommand = getRunScriptCommand(context.packageManager, "db:generate");
   if (context.verbose) {
     log.step(`Running ${generateCommand}`);
   }
@@ -668,7 +664,7 @@ async function generatePrismaClientForContext(
   const generateSpinner = context.verbose ? undefined : spinner();
   generateSpinner?.start("Generating Prisma Client...");
   try {
-    const generateArgs = getPrismaCliArgs(context.packageManager, ["generate"]);
+    const generateArgs = getRunScriptArgs(context.packageManager, "db:generate");
     await execa(generateArgs.command, generateArgs.args, {
       cwd: prismaProjectDir,
       stdio: context.verbose ? "inherit" : "pipe",
