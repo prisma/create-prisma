@@ -2,6 +2,7 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import type { CreateTemplate, DatabaseProvider, PackageManager, SchemaPreset } from "../types";
+import { escapeRegExp } from "../utils/regexp";
 import { renderTemplateTree, resolveTemplatesDir } from "./shared";
 
 type CreateTemplateContext = {
@@ -40,10 +41,6 @@ const pnpmAllowedBuilds = [
   "sharp",
   "unrs-resolver",
 ] as const;
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 function renderPnpmAllowBuildLine(packageName: string): string {
   const key = packageName.startsWith("@") ? JSON.stringify(packageName) : packageName;

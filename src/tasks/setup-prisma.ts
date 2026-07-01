@@ -3,6 +3,7 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
+import { escapeRegExp } from "../utils/regexp";
 import { installProjectDependencies, writePrismaDependencies } from "./install";
 import {
   getCreateDbCommand,
@@ -374,11 +375,6 @@ function getDefaultDatabaseUrl(provider: DatabaseProvider): string {
       throw new Error(`Unsupported provider: ${String(exhaustiveCheck)}`);
     }
   }
-}
-
-// Escape regex metacharacters before interpolating dynamic values into RegExp.
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function escapeEnvValue(value: string): string {
