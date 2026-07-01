@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+{{#if (eq schemaPreset "basic")}}
 import { createServerFn } from "@tanstack/react-start";
+{{/if}}
 {{#if (eq schemaPreset "basic")}}
 import { prisma } from "../lib/prisma.server";
 {{/if}}

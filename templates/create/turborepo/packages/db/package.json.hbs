@@ -8,9 +8,17 @@
   "scripts": {
     {{#if (eq packageManager "deno")}}
     "build": "deno check src/index.ts",
+    "db:generate": "{{prismaCommand packageManager "generate"}}",
+    "db:push": "{{prismaCommand packageManager "db push"}}",
+    "db:migrate": "{{prismaCommand packageManager "migrate dev"}}",
+    "db:seed": "{{prismaCommand packageManager "db seed"}}",
     "typecheck": "deno check src/index.ts"
     {{else}}
     "build": "tsc",
+    "db:generate": "{{prismaCommand packageManager "generate"}}",
+    "db:push": "{{prismaCommand packageManager "db push"}}",
+    "db:migrate": "{{prismaCommand packageManager "migrate dev"}}",
+    "db:seed": "{{prismaCommand packageManager "db seed"}}",
     "typecheck": "tsc --noEmit"
     {{/if}}
   },

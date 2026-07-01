@@ -227,8 +227,16 @@ export async function installProjectDependencies(
 ): Promise<void> {
   const verbose = options.verbose === true;
   const installCommand = getInstallArgs(packageManager);
+  const env =
+    packageManager === "yarn"
+      ? {
+          ...process.env,
+          YARN_ENABLE_IMMUTABLE_INSTALLS: "false",
+        }
+      : undefined;
   await execa(installCommand.command, installCommand.args, {
     cwd: projectDir,
+    env,
     stdio: verbose ? "inherit" : "pipe",
   });
 }

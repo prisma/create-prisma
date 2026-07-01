@@ -21,7 +21,7 @@ import {
   detectPackageManager,
   getInstallCommand,
   getPrismaCliArgs,
-  getPrismaCliCommand,
+  getRunScriptArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
 
@@ -660,7 +660,7 @@ async function generatePrismaClientForContext(
     };
   }
 
-  const generateCommand = getPrismaCliCommand(context.packageManager, ["generate"]);
+  const generateCommand = getRunScriptCommand(context.packageManager, "db:generate");
   if (context.verbose) {
     log.step(`Running ${generateCommand}`);
   }
@@ -668,7 +668,7 @@ async function generatePrismaClientForContext(
   const generateSpinner = context.verbose ? undefined : spinner();
   generateSpinner?.start("Generating Prisma Client...");
   try {
-    const generateArgs = getPrismaCliArgs(context.packageManager, ["generate"]);
+    const generateArgs = getRunScriptArgs(context.packageManager, "db:generate");
     await execa(generateArgs.command, generateArgs.args, {
       cwd: prismaProjectDir,
       stdio: context.verbose ? "inherit" : "pipe",

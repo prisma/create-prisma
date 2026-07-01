@@ -203,6 +203,11 @@ export async function collectComputeDeployContext(
   },
 ): Promise<ComputeDeployContext | null | undefined> {
   if (!isComputeDeployableTemplate(options.template)) {
+    if (input.deploy === true) {
+      throw createExplicitDeployError(
+        `${options.template} is not supported by prisma app deploy yet`,
+      );
+    }
     return null;
   }
 

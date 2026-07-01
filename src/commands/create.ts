@@ -223,24 +223,16 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     failureStage = "unknown";
     const executionResult = await executeCreateContext(context);
     if (!executionResult.ok) {
-      if (executionResult.error) {
-        cancel(
-          `Create command failed: ${
-            executionResult.error instanceof Error
-              ? executionResult.error.message
-              : String(executionResult.error)
-          }`,
-        );
-      }
-
-      await trackCreateFailed({
-        input,
-        context,
-        durationMs: Date.now() - startedAt,
-        error: executionResult.error,
-        stage: executionResult.stage,
-      });
-      return;
+      failureStage = executionResult.stage;
+      const error =
+        executionResult.error instanceof Error
+          ? executionResult.error
+          : new Error(
+              executionResult.error === undefined
+                ? `Create command failed during ${executionResult.stage}`
+                : String(executionResult.error),
+            );
+      throw error;
     }
 
     await trackCreateCompleted({
@@ -249,14 +241,20 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
-    cancel(`Create command failed: ${error instanceof Error ? error.message : String(error)}`);
-    await trackCreateFailed({
-      input,
-      context,
-      durationMs: Date.now() - startedAt,
-      error,
-      stage: failureStage,
-    });
+    const commandError = error instanceof Error ? error : new Error(String(error));
+    cancel(`Create command failed: ${commandError.message}`);
+    try {
+      await trackCreateFailed({
+        input,
+        context,
+        durationMs: Date.now() - startedAt,
+        error: commandError,
+        stage: failureStage,
+      });
+    } catch {
+      // Telemetry is best-effort and must not hide the original command error.
+    }
+    throw commandError;
   }
 }
 
