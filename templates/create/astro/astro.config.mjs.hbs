@@ -2,20 +2,23 @@
 import { defineConfig } from "astro/config";
 import node from "@astrojs/node";
 
+// Workaround for cookie CJS imports on Prisma Compute's Bun runtime; build-only because noExternal breaks `astro dev`.
+/** @type {import("astro").AstroIntegration} */
+const bundleSsrDependenciesOnBuild = {
+  name: "bundle-ssr-dependencies-on-build",
+  hooks: {
+    "astro:config:setup": ({ command, updateConfig }) => {
+      if (command === "build") {
+        updateConfig({ vite: { ssr: { noExternal: true } } });
+      }
+    },
+  },
+};
+
 // https://astro.build/config
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   server: { host: true },
-  vite: {
-    ssr: {
-      // Bundle SSR dependencies into the server entry. Astro's standalone
-      // build emits `import { parse, serialize } from "cookie"`, and the Bun
-      // runtime on Prisma Compute cannot resolve those named exports from
-      // cookie's CommonJS build at runtime (SyntaxError: Export named 'parse'
-      // not found). Bundling resolves the imports at build time. Remove once
-      // the Bun/cookie CJS named-export interop is fixed upstream.
-      noExternal: true,
-    },
-  },
+  integrations: [bundleSsrDependenciesOnBuild],
 });

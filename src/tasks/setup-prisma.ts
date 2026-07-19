@@ -77,7 +77,7 @@ const DEFAULT_PRISMA_POSTGRES = true;
 const DEFAULT_INSTALL = true;
 const DEFAULT_GENERATE = true;
 const DEFAULT_MIGRATE_AND_SEED = true;
-const PRISMA_POSTGRES_MIGRATION_DELAY_MS = 2000;
+const PRISMA_POSTGRES_MIGRATION_RETRY_DELAYS_MS = [1000, 2000, 4000];
 
 const requiredPrismaFileGroups = [
   ["prisma/schema.prisma", "packages/db/prisma/schema.prisma"],
@@ -851,15 +851,21 @@ async function migrateAndSeedIfRequested(
   migrateSpinner.start("Creating and applying initial migration...");
   let didMigrate = false;
   try {
-    if (context.shouldUsePrismaPostgres) {
-      // Newly provisioned Prisma Postgres databases can briefly reject the first migration.
-      // TODO(2026-04-26): replace this grace period with an explicit readiness probe.
-      await new Promise((resolve) => setTimeout(resolve, PRISMA_POSTGRES_MIGRATION_DELAY_MS));
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await execa(migrateInvocation.command, migrateInvocation.args, {
+          cwd: prismaProjectDir,
+          stdio: context.verbose ? "inherit" : "pipe",
+        });
+        break;
+      } catch (error) {
+        const retryDelayMs = PRISMA_POSTGRES_MIGRATION_RETRY_DELAYS_MS[attempt];
+        if (!context.shouldUsePrismaPostgres || retryDelayMs === undefined) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      }
     }
-    await execa(migrateInvocation.command, migrateInvocation.args, {
-      cwd: prismaProjectDir,
-      stdio: context.verbose ? "inherit" : "pipe",
-    });
     migrateSpinner.stop("Initial migration applied.");
     didMigrate = true;
   } catch (error) {
