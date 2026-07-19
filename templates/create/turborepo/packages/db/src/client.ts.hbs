@@ -1,6 +1,6 @@
-{{#unless (eq packageManager "deno")}}
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+{{#unless (eq packageManager "deno")}}
 import dotenv from "dotenv";
 {{/unless}}
 import { PrismaClient } from "./generated/prisma/client{{#if (eq packageManager "deno")}}.ts{{/if}}";
@@ -20,14 +20,22 @@ import { {{sqliteAdapterClass packageManager}} } from "{{sqliteAdapterPackage pa
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
-{{#unless (eq packageManager "deno")}}
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+{{#unless (eq packageManager "deno")}}
 dotenv.config({ path: path.resolve(moduleDir, "../.env"), quiet: true });
 {{/unless}}
 
 const rawDatabaseUrl = process.env.DATABASE_URL;
 {{#if (eq provider "sqlite")}}
-const databaseUrl = (rawDatabaseUrl ?? "").trim() || "file:./dev.db";
+function resolveSqliteUrl(url: string): string {
+  const filePath = url.replace(/^file:(?:\/\/)?/, "");
+  if (!url.startsWith("file:") || path.isAbsolute(filePath)) {
+    return url;
+  }
+  return `file:${path.resolve(moduleDir, "..", filePath)}`;
+}
+
+const databaseUrl = resolveSqliteUrl((rawDatabaseUrl ?? "").trim() || "file:./dev.db");
 {{else}}
 const databaseUrl = (rawDatabaseUrl ?? "").trim();
 if (!databaseUrl) {
