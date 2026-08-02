@@ -6,10 +6,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { runCreateCommand } from "../../src/commands/create";
-import type { CreateTemplate, DatabaseProvider } from "../../src/types";
+import {
+  authoringStyles,
+  createTemplates,
+  type AuthoringStyle,
+  type CreateTemplate,
+  type DatabaseProvider,
+} from "../../src/types";
 
 const TEST_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_TIMEOUT_MS ?? 240_000);
 const MONGO_STARTUP_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_MONGO_TIMEOUT_MS ?? 90_000);
+const PRISMA_NEXT_VERSION = process.env.CREATE_PRISMA_E2E_PRISMA_NEXT_VERSION;
 
 type DevDatabase = {
   connectionString: string;
@@ -83,7 +90,7 @@ async function runScript(
   scriptName: string,
   extraEnv: Record<string, string> = {},
 ): Promise<string> {
-  return runCommand(projectDir, ["bun", "run", scriptName], extraEnv);
+  return runCommand(projectDir, ["npm", "run", scriptName], extraEnv);
 }
 
 async function writeDatabaseUrl(projectDir: string, databaseUrl: string): Promise<void> {
@@ -106,13 +113,16 @@ async function readJsonFile(filePath: string): Promise<Record<string, unknown>> 
 async function scaffoldProject(opts: {
   template: CreateTemplate;
   provider: DatabaseProvider;
+  authoring: AuthoringStyle;
   databaseUrl?: string;
 }): Promise<GeneratedProject> {
-  const { template, provider, databaseUrl } = opts;
-  const rootDir = await mkdtemp(path.join(tmpdir(), `create-prisma-e2e-${template}-${provider}-`));
+  const { template, provider, authoring, databaseUrl } = opts;
+  const rootDir = await mkdtemp(
+    path.join(tmpdir(), `create-prisma-e2e-${template}-${provider}-${authoring}-`),
+  );
   tempRoots.push(rootDir);
 
-  const projectName = `${template}-${provider}-app`;
+  const projectName = `${template}-${provider}-${authoring}-app`;
   const previousCwd = process.cwd();
   process.chdir(rootDir);
   try {
@@ -120,12 +130,13 @@ async function scaffoldProject(opts: {
       name: projectName,
       template,
       provider,
-      authoring: "psl",
-      packageManager: "bun",
+      authoring,
+      packageManager: "npm",
       databaseUrl,
       prismaPostgres: false,
       install: false,
       emit: false,
+      prismaNextVersion: PRISMA_NEXT_VERSION,
       yes: true,
     });
   } finally {
@@ -149,13 +160,14 @@ async function writeVerificationScript(
 ): Promise<string> {
   const verifyPath = path.join(projectDir, "verify-seed.ts");
   const modulePath = getPrismaModuleSpecifier(template);
-  const closeCall = provider === "mongo" ? "await db.close();" : "await db.runtime().close();";
+  const closeCall = "await db.close();";
   const aliceQuery =
     provider === "mongo"
       ? 'await db.orm.users.where({ email: "alice@prisma.io" }).first()'
-      : 'await db.orm.User.where({ email: "alice@prisma.io" }).first()';
+      : 'await db.orm.public.User.where({ email: "alice@prisma.io" }).first()';
 
-  const script = `import { db, listUsers } from "${modulePath}";
+  const script = `import "dotenv/config";
+import { db, listUsers } from "${modulePath}";
 
 try {
   const users = await listUsers();
@@ -183,7 +195,7 @@ async function installAndEmit(projectDir: string): Promise<void> {
   expect(await pathExists(path.join(projectDir, "prisma"))).toBe(false);
   expect(await pathExists(path.join(projectDir, ".env.example"))).toBe(true);
 
-  await runCommand(projectDir, ["bun", "install"]);
+  await runCommand(projectDir, ["npm", "install"]);
   await runScript(projectDir, "contract:emit");
 }
 
@@ -193,8 +205,27 @@ async function verifyGeneratedProject(
   provider: DatabaseProvider,
 ): Promise<void> {
   const verifyPath = await writeVerificationScript(projectDir, template, provider);
-  await runCommand(projectDir, ["bun", verifyPath]);
-  await runScript(projectDir, "build");
+  await runCommand(projectDir, [path.join(projectDir, "node_modules/.bin/tsx"), verifyPath]);
+
+  switch (template) {
+    case "minimal":
+      return;
+    case "next":
+      await runScript(projectDir, "lint");
+      await runScript(projectDir, "build");
+      return;
+    case "svelte":
+      await runScript(projectDir, "check");
+      await runScript(projectDir, "build");
+      return;
+    case "nuxt":
+    case "tanstack-start":
+      await runScript(projectDir, "typecheck");
+      await runScript(projectDir, "build");
+      return;
+    default:
+      await runScript(projectDir, "build");
+  }
 }
 
 function getFreePort(): Promise<number> {
@@ -251,8 +282,6 @@ afterEach(async () => {
   }
 });
 
-const templates: CreateTemplate[] = ["hono", "next"];
-
 describe("create-prisma e2e", () => {
   test(
     "accepts a positional project name",
@@ -274,6 +303,7 @@ describe("create-prisma e2e", () => {
         "bun",
         "--no-install",
         "--no-emit",
+        ...(PRISMA_NEXT_VERSION ? ["--prisma-next-version", PRISMA_NEXT_VERSION] : []),
       ]);
 
       const projectDir = path.join(rootDir, projectName);
@@ -284,77 +314,85 @@ describe("create-prisma e2e", () => {
     TEST_TIMEOUT,
   );
 
-  for (const template of templates) {
-    test(
-      `${template} + postgres runs db init, migrations, seed, generated queries, and build`,
-      async () => {
-        const initDb = await createDevDatabase();
-        let project: GeneratedProject | undefined;
-        try {
-          project = await scaffoldProject({
-            template,
-            provider: "postgres",
-            databaseUrl: initDb.connectionString,
-          });
+  for (const template of createTemplates) {
+    for (const authoring of authoringStyles) {
+      test(
+        `${template} + postgres + ${authoring} runs db init, migrations, seed, generated queries, and validation`,
+        async () => {
+          const initDb = await createDevDatabase();
+          let project: GeneratedProject | undefined;
+          try {
+            project = await scaffoldProject({
+              template,
+              provider: "postgres",
+              authoring,
+              databaseUrl: initDb.connectionString,
+            });
+            await installAndEmit(project.projectDir);
+
+            await runScript(project.projectDir, "db:init");
+            await runScript(project.projectDir, "db:verify");
+          } finally {
+            await initDb.close();
+          }
+
+          expect(project).toBeDefined();
+          const migrationDb = await createDevDatabase();
+          try {
+            await writeDatabaseUrl(project!.projectDir, migrationDb.connectionString);
+            await runScript(project!.projectDir, "migration:plan");
+            await runScript(project!.projectDir, "migrate");
+            await runScript(project!.projectDir, "db:seed");
+            await verifyGeneratedProject(project!.projectDir, template, "postgres");
+          } finally {
+            await migrationDb.close();
+          }
+        },
+        TEST_TIMEOUT,
+      );
+
+      test(
+        `${template} + mongo + ${authoring} provisions in-memory mongo and validates the app`,
+        async () => {
+          const project = await scaffoldProject({ template, provider: "mongo", authoring });
+
+          expect(await pathExists(path.join(project.projectDir, "scripts/mongo.mjs"))).toBe(true);
+          const mongoScript = await readFile(
+            path.join(project.projectDir, "scripts/mongo.mjs"),
+            "utf8",
+          );
+          expect(mongoScript).toStartWith('import { spawn } from "node:child_process";');
+          const pkgJson = await readJsonFile(path.join(project.projectDir, "package.json"));
+          const scriptsPkg = pkgJson.scripts as Record<string, string> | undefined;
+          expect(scriptsPkg?.["db:up"]).toBe("node --env-file=.env scripts/mongo.mjs up");
+          expect(scriptsPkg?.["db:down"]).toBe("node --env-file=.env scripts/mongo.mjs down");
+          expect(scriptsPkg?.["db:reset"]).toBe("node --env-file=.env scripts/mongo.mjs reset");
+          const devDeps = pkgJson.devDependencies as Record<string, string> | undefined;
+          expect(devDeps?.["mongodb-memory-server"]).toBeDefined();
+          expect(await pathExists(path.join(project.projectDir, "docker-compose.yml"))).toBe(false);
+
           await installAndEmit(project.projectDir);
 
-          await runScript(project.projectDir, "db:init");
-          await runScript(project.projectDir, "db:verify");
-        } finally {
-          await initDb.close();
-        }
+          const mongo = await startMemoryMongo(project.projectDir);
+          try {
+            expect(await pathExists(path.join(project.projectDir, ".mongo-data", "db"))).toBe(true);
+            expect(
+              await pathExists(path.join(project.projectDir, ".mongo-data", "mongo.log")),
+            ).toBe(true);
+            expect(
+              await pathExists(path.join(project.projectDir, ".mongo-data", "mongo.pid")),
+            ).toBe(true);
 
-        expect(project).toBeDefined();
-        const migrationDb = await createDevDatabase();
-        try {
-          await writeDatabaseUrl(project!.projectDir, migrationDb.connectionString);
-          await runScript(project!.projectDir, "migration:plan");
-          await runScript(project!.projectDir, "migrate");
-          await runScript(project!.projectDir, "db:seed");
-          await verifyGeneratedProject(project!.projectDir, template, "postgres");
-        } finally {
-          await migrationDb.close();
-        }
-      },
-      TEST_TIMEOUT,
-    );
-
-    test(
-      `${template} + mongo provisions in-memory mongo via generated db:up`,
-      async () => {
-        const project = await scaffoldProject({ template, provider: "mongo" });
-
-        expect(await pathExists(path.join(project.projectDir, "scripts/mongo.mjs"))).toBe(true);
-        const pkgJson = await readJsonFile(path.join(project.projectDir, "package.json"));
-        const scriptsPkg = pkgJson.scripts as Record<string, string> | undefined;
-        expect(scriptsPkg?.["db:up"]).toContain("scripts/mongo.mjs up");
-        expect(scriptsPkg?.["db:down"]).toContain("scripts/mongo.mjs down");
-        expect(scriptsPkg?.["db:reset"]).toContain("scripts/mongo.mjs reset");
-        const devDeps = pkgJson.devDependencies as Record<string, string> | undefined;
-        expect(devDeps?.["mongodb-memory-server"]).toBeDefined();
-        expect(await pathExists(path.join(project.projectDir, "docker-compose.yml"))).toBe(false);
-
-        await installAndEmit(project.projectDir);
-
-        const mongo = await startMemoryMongo(project.projectDir);
-        try {
-          expect(await pathExists(path.join(project.projectDir, ".mongo-data", "db"))).toBe(true);
-          expect(await pathExists(path.join(project.projectDir, ".mongo-data", "mongo.log"))).toBe(
-            true,
-          );
-          expect(await pathExists(path.join(project.projectDir, ".mongo-data", "mongo.pid"))).toBe(
-            true,
-          );
-
-          await runScript(project.projectDir, "migration:plan");
-          await runScript(project.projectDir, "migrate");
-          await runScript(project.projectDir, "db:seed");
-          await verifyGeneratedProject(project.projectDir, template, "mongo");
-        } finally {
-          await mongo.stop();
-        }
-      },
-      TEST_TIMEOUT,
-    );
+            await runScript(project.projectDir, "migration:plan");
+            await runScript(project.projectDir, "migrate");
+            await runScript(project.projectDir, "db:seed");
+            await verifyGeneratedProject(project.projectDir, template, "mongo");
+          } finally {
+            await mongo.stop();
+          }
+        },
+        TEST_TIMEOUT,
+      );
+    }
   }
 });

@@ -46,7 +46,7 @@ export async function listUsers(limit = 10) {
 
   return users;
 {{else}}
-  const users = await db.orm.User.select("id", "email", "username", "name", "createdAt").take(limit).all();
+  const users = await db.orm.public.User.select("id", "email", "username", "name", "createdAt").take(limit).all();
 
   return users.map(toStarterUser);
 {{/if}}

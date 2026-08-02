@@ -10,17 +10,17 @@ async function main() {
 {{#if (eq provider "mongo")}}
   const existingUser = await db.orm.users.where({ email: sampleUser.email }).first();
   if (!existingUser) {
-    await db.orm.users.createCount([sampleUser]);
+    await db.orm.users.create(sampleUser);
   }
 
   const user = await db.orm.users.where({ email: sampleUser.email }).first();
 {{else}}
-  const existingUser = await db.orm.User.where({ email: sampleUser.email }).first();
+  const existingUser = await db.orm.public.User.where({ email: sampleUser.email }).first();
   if (!existingUser) {
-    await db.orm.User.createCount([sampleUser]);
+    await db.orm.public.User.create(sampleUser);
   }
 
-  const user = await db.orm.User.where({ email: sampleUser.email }).first();
+  const user = await db.orm.public.User.where({ email: sampleUser.email }).first();
 {{/if}}
   const users = await listUsers();
 
@@ -38,6 +38,6 @@ try {
 {{#if (eq provider "mongo")}}
   await db.close();
 {{else}}
-  await db.runtime().close();
+  await db.close();
 {{/if}}
 }

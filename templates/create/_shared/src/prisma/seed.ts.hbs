@@ -16,7 +16,8 @@ try {
   for (const user of seedUsers) {
     const existingUser = await db.orm.users.where({ email: user.email }).first();
     if (!existingUser) {
-      createdCount += await db.orm.users.createCount([user]);
+      await db.orm.users.create(user);
+      createdCount += 1;
     }
   }
 
@@ -27,14 +28,15 @@ try {
 {{else}}
 try {
   for (const user of seedUsers) {
-    const existingUser = await db.orm.User.where({ email: user.email }).first();
+    const existingUser = await db.orm.public.User.where({ email: user.email }).first();
     if (!existingUser) {
-      createdCount += await db.orm.User.createCount([user]);
+      await db.orm.public.User.create(user);
+      createdCount += 1;
     }
   }
 
   console.log(`Seeded ${createdCount} user${createdCount === 1 ? "" : "s"}.`);
 } finally {
-  await db.runtime().close();
+  await db.close();
 }
 {{/if}}

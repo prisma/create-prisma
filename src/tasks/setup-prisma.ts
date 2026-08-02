@@ -914,6 +914,7 @@ async function runPrismaNextInitForContext(
     "--schema-path",
     getContractPath(context.authoring),
     "--no-install",
+    "--no-skill",
   ];
   const initCommand = getPrismaNextInitCliCommand(
     context.packageManager,
