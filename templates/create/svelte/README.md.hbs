@@ -31,6 +31,6 @@ The starter page loads users in `+page.server.ts`, renders them in `+page.svelte
 
 ## Prisma Composer
 
-The application topology is declared in `module.ts` and `service.ts`, with deploy configuration in `prisma-composer.config.ts`. SvelteKit builds a Node server through `@sveltejs/adapter-node`, then the app build bundles its runtime dependencies into `build/composer.mjs` while preserving the generated client assets. {{#if composerPostgres}}Composer provisions Prisma Postgres and injects its connection into the service.{{else}}The database URL is bound as a secret service input from `.env`.{{/if}}
+The application topology is declared in `module.ts` and `service.ts`, with deploy configuration in `prisma-composer.config.ts`. SvelteKit builds a self-contained Node server through `@sveltejs/adapter-node` and Vite's SSR dependency bundling, and Composer deploys the resulting `build/index.js` artifact. {{#if composerPostgres}}Composer provisions Prisma Postgres and injects its connection into the service.{{else}}The database URL is bound as a secret service input from `.env`.{{/if}}
 
 Run `{{runScriptCommand packageManager "deploy"}}` to deploy later changes.

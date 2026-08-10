@@ -82,9 +82,7 @@ export function getCreateTemplateDependencies(
       ...(template === "turborepo" ? (["dotenv"] as const) : []),
     ],
     devDependencies:
-      template === "hono" || template === "elysia" || template === "nest" || template === "svelte"
-        ? ["esbuild"]
-        : [],
+      template === "hono" || template === "elysia" || template === "nest" ? ["esbuild"] : [],
   });
 
   if (template === "turborepo") {

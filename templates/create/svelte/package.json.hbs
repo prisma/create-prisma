@@ -8,8 +8,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build && esbuild build/index.js --bundle --platform=node --format=esm --banner:js=\"import { createRequire as __composerCreateRequire } from 'node:module'; const require = __composerCreateRequire(import.meta.url);\" --outfile=build/composer.mjs",
-		"start": "node build/composer.mjs",
+		"build": "vite build",
+		"start": "node build/index.js",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
