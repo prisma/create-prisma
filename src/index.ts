@@ -38,5 +38,4 @@ export {
   DatabaseProviderSchema,
   DatabaseUrlSchema,
   PackageManagerSchema,
-  SchemaPresetSchema,
 } from "./types";

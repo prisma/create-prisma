@@ -54,6 +54,7 @@
     "handlebars": "^4.7.9",
     "posthog-node": "^5.38.2",
     "trpc-cli": "^0.15.1",
+    "yaml": "^2.8.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -4,10 +4,12 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { dependencyVersionMap } from "../constants/dependencies";
+import { dependencyVersionMap, prismaPlatformCliPackage } from "../constants/dependencies";
 import type { PackageManager } from "../types";
 import {
+  getPackageExecutionArgs,
   getPackageManagerManifestValue,
+  getPrismaCliArgs,
   getRunScriptInDirectoryCommand,
   getRuntimeScriptCommand,
   getRunScriptCommand,
@@ -47,6 +49,18 @@ function getPrismaCommand(packageManager: PackageManager | undefined, subcommand
 }
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
+Handlebars.registerHelper(
+  "composerPlatformCliInvocation",
+  (packageManager: PackageManager | undefined) =>
+    packageManager
+      ? JSON.stringify(
+          getPackageExecutionArgs(packageManager, [prismaPlatformCliPackage], { silent: true }),
+        )
+      : "{}",
+);
+Handlebars.registerHelper("prismaCliInvocation", (packageManager: PackageManager | undefined) =>
+  packageManager ? JSON.stringify(getPrismaCliArgs(packageManager, [])) : "{}",
+);
 Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>

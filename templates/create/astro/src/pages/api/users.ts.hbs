@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-{{#if (eq schemaPreset "basic")}}
+
 import prisma from "../../lib/prisma";
 
 export const GET: APIRoute = async () => {
@@ -30,13 +30,3 @@ export const GET: APIRoute = async () => {
     },
   });
 };
-{{else}}
-
-export const GET: APIRoute = async () => {
-  return new Response(JSON.stringify([]), {
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-};
-{{/if}}

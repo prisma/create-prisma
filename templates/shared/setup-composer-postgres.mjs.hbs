@@ -1,0 +1,156 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const platformCli = {{composerPlatformCliInvocation packageManager}};
+const prismaCli = {{prismaCliInvocation packageManager}};
+const projectDir = fileURLToPath(new URL("../", import.meta.url));
+const prismaProjectDir = fileURLToPath(
+  new URL("{{#if (eq template "turborepo")}}../packages/db/{{else}}../{{/if}}", import.meta.url),
+);
+
+function redactSecrets(message) {
+  return message
+    .replace(
+      /(['"])([A-Z0-9_]*(?:DATABASE_URL|DIRECT_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*=)(.*?)\1/g,
+      "$1$2<redacted>$1",
+    )
+    .replace(
+      /\b([A-Z0-9_]*(?:DATABASE_URL|DIRECT_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*=)[^\s]+/g,
+      "$1<redacted>",
+    );
+}
+
+function runPlatformCli(args) {
+  const result = spawnSync(
+    platformCli.command,
+    [...platformCli.args, ...args, "--json", "--no-interactive"],
+    {
+      cwd: projectDir,
+      encoding: "utf8",
+      env: process.env,
+    },
+  );
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message ?? result.stderr ?? "Prisma CLI reported an unknown error";
+    throw new Error(redactSecrets(String(detail).trim()));
+  }
+
+  const parsed = JSON.parse(result.stdout);
+  if (!parsed?.ok) {
+    const detail = parsed?.error?.summary ?? parsed?.error?.message ?? "Prisma CLI reported an unknown error";
+    throw new Error(redactSecrets(String(detail)));
+  }
+  return parsed.result;
+}
+
+function findNamedDatabase(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const match = findNamedDatabase(item);
+      if (match) return match;
+    }
+    return undefined;
+  }
+  if (typeof value !== "object" || value === null) return undefined;
+  if (value.name === "database" && typeof value.id === "string") return value;
+  for (const item of Object.values(value)) {
+    const match = findNamedDatabase(item);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function findDatabaseUrl(value) {
+  if (typeof value === "string") {
+    return /^(?:prisma\+)?postgres(?:ql)?:\/\//.test(value) ? value : undefined;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const match = findDatabaseUrl(item);
+      if (match) return match;
+    }
+    return undefined;
+  }
+  if (typeof value !== "object" || value === null) return undefined;
+  for (const item of Object.values(value)) {
+    const match = findDatabaseUrl(item);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function findConnectionId(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const match = findConnectionId(item);
+      if (match) return match;
+    }
+    return undefined;
+  }
+  if (typeof value !== "object" || value === null) return undefined;
+  if (typeof value.id === "string" && value.id.startsWith("conn_")) return value.id;
+  for (const item of Object.values(value)) {
+    const match = findConnectionId(item);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function runPrisma(args, databaseUrl) {
+  const result = spawnSync(prismaCli.command, [...prismaCli.args, ...args], {
+    cwd: prismaProjectDir,
+    env: { ...process.env, DATABASE_URL: databaseUrl },
+    stdio: "inherit",
+  });
+  if (result.error || result.status !== 0) {
+    throw result.error ?? new Error(`Prisma exited with status ${String(result.status)}`);
+  }
+}
+
+const databases = runPlatformCli(["database", "list", "--project", "{{projectName}}"]);
+const database = findNamedDatabase(databases);
+if (!database) {
+  throw new Error('Composer deployed, but the provisioned "database" resource was not found.');
+}
+
+const connection = runPlatformCli([
+  "database",
+  "connection",
+  "create",
+  database.id,
+  "--project",
+  "{{projectName}}",
+  "--name",
+  `create-prisma-deploy-${Date.now()}`,
+]);
+const databaseUrl = findDatabaseUrl(connection);
+const connectionId = findConnectionId(connection);
+if (!databaseUrl) {
+  throw new Error("Composer database connection output did not include a connection URL.");
+}
+
+try {
+  const migrationsDir = path.join(prismaProjectDir, "prisma/migrations");
+  const hasMigrations =
+    existsSync(migrationsDir) && readdirSync(migrationsDir, { withFileTypes: true }).some((entry) => entry.isDirectory());
+  runPrisma(hasMigrations ? ["migrate", "deploy"] : ["migrate", "dev", "--name", "init"], databaseUrl);
+  runPrisma(["db", "seed"], databaseUrl);
+  console.log("Composer-managed Prisma Postgres migrated and seeded.");
+} finally {
+  if (connectionId) {
+    try {
+      runPlatformCli([
+        "database",
+        "connection",
+        "remove",
+        connectionId,
+        "--confirm",
+        connectionId,
+      ]);
+    } catch (error) {
+      console.warn(`Could not remove temporary database connection: ${redactSecrets(String(error))}`);
+    }
+  }
+}

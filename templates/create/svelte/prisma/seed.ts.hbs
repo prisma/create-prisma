@@ -1,7 +1,6 @@
 import prisma from "../src/lib/server/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
 async function main() {
-{{#if (eq schemaPreset "basic")}}
   const users = await Promise.all([
     prisma.user.upsert({
       where: { email: "alice@prisma.io" },
@@ -22,9 +21,6 @@ async function main() {
   ]);
 
   console.log(`Seeded ${users.length} users.`);
-{{else}}
-  console.log("No seed data defined for the empty schema preset.");
-{{/if}}
 }
 
 main()

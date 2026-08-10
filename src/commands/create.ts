@@ -12,7 +12,6 @@ import {
   isComposerDeployableTemplate,
   type CreateCommandInput,
   type CreateTemplate,
-  type SchemaPreset,
 } from "../types";
 import {
   collectPrismaSetupInitialContext,
@@ -42,7 +41,6 @@ import { getRunScriptCommand } from "../utils/package-manager";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "hono";
-const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
 
 export type CreateTargetPathState = {
   exists: boolean;
@@ -58,7 +56,7 @@ export type CreatePromptContext = {
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
   addonSetupContext?: CreateAddonSetupContext;
-  composerContext?: ComposerDeployContext;
+  composerScaffoldContext?: ComposerDeployContext;
   composerDeployContext?: ComposerDeployContext;
   useComposerPostgres: boolean;
 };
@@ -306,7 +304,6 @@ async function collectCreateContext(
 
   const prismaSetupInitialContext = await collectPrismaSetupInitialContext(input, {
     projectDir: targetDirectory,
-    defaultSchemaPreset: DEFAULT_SCHEMA_PRESET,
   });
   if (!prismaSetupInitialContext) {
     return;
@@ -323,32 +320,30 @@ async function collectCreateContext(
     return;
   }
 
-  const prismaSetupContext = await completePrismaSetupContext(input, prismaSetupInitialContext);
+  const prismaSetupContext = await completePrismaSetupContext(prismaSetupInitialContext, {
+    shouldMigrateAndSeed: Boolean(composerDeployContext),
+  });
   if (!prismaSetupContext) {
     return;
   }
 
-  const useComposerPostgres = Boolean(
-    composerDeployContext && prismaSetupContext.shouldUsePrismaPostgres,
-  );
+  const composerEnabled =
+    isComposerDeployableTemplate(template) && prismaSetupContext.packageManager !== "deno";
+  const useComposerPostgres = composerEnabled && prismaSetupContext.shouldUsePrismaPostgres;
   if (composerDeployContext) {
     composerDeployContext.useComposerPostgres = useComposerPostgres;
   }
 
-  if (useComposerPostgres) {
-    log.info(
-      "Prisma Postgres selected: Composer will provision the database and wire it into the application.",
-    );
+  if (composerDeployContext && useComposerPostgres) {
+    log.info("Composer will provision Prisma Postgres and wire it into the application.");
   }
 
-  const composerEnabled =
-    isComposerDeployableTemplate(template) && prismaSetupContext.packageManager !== "deno";
-  const composerContext = composerEnabled
+  const composerScaffoldContext = composerEnabled
     ? (composerDeployContext ?? {
         template,
         packageManager: prismaSetupContext.packageManager,
         projectName: projectPackageName,
-        useComposerPostgres: false,
+        useComposerPostgres,
       })
     : undefined;
 
@@ -370,7 +365,7 @@ async function collectCreateContext(
     projectPackageName,
     prismaSetupContext,
     addonSetupContext: addonSetupContext ?? undefined,
-    composerContext,
+    composerScaffoldContext,
     composerDeployContext: composerDeployContext ?? undefined,
     useComposerPostgres,
   };
@@ -386,10 +381,9 @@ async function executeCreateContext(
       projectDir: context.targetDirectory,
       projectName: context.projectPackageName,
       template: context.template,
-      schemaPreset: context.prismaSetupContext.schemaPreset,
       provider: context.prismaSetupContext.databaseProvider,
       packageManager: context.prismaSetupContext.packageManager,
-      composer: Boolean(context.composerContext),
+      composer: Boolean(context.composerScaffoldContext),
       composerPostgres: context.useComposerPostgres,
     });
     scaffoldSpinner.stop("Project files scaffolded.");
@@ -406,12 +400,12 @@ async function executeCreateContext(
     await writeCreateTemplateDependencies({
       template: context.template,
       packageManager: context.prismaSetupContext.packageManager,
-      composer: Boolean(context.composerContext),
+      composer: Boolean(context.composerScaffoldContext),
       projectDir: context.targetDirectory,
     });
-    if (context.composerContext) {
+    if (context.composerScaffoldContext) {
       await addPackageDependency({
-        scripts: getComposerDeployScriptMap(context.composerContext),
+        scripts: getComposerDeployScriptMap(context.composerScaffoldContext),
         scriptMode: "if-missing",
         projectDir: context.targetDirectory,
       });
@@ -457,7 +451,10 @@ async function executeCreateContext(
 
   let prismaResult: Awaited<ReturnType<typeof executePrismaSetupContext>>;
   try {
-    const initialPrismaContext = context.useComposerPostgres
+    const deploysComposerPostgresNow = Boolean(
+      context.composerDeployContext && context.useComposerPostgres,
+    );
+    const initialPrismaContext = deploysComposerPostgresNow
       ? {
           ...context.prismaSetupContext,
           shouldUsePrismaPostgres: false,
@@ -468,7 +465,7 @@ async function executeCreateContext(
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       includeDevNextStep: true,
-      includeMigrationAndSeedNextSteps: !context.useComposerPostgres,
+      includeMigrationAndSeedNextSteps: !deploysComposerPostgresNow,
     });
 
     if (!prismaResult.ok) {
@@ -502,15 +499,27 @@ async function executeCreateContext(
       if (result.ok) {
         deployResult = result.result;
         if (context.useComposerPostgres) {
-          const databaseUrl = await resolveComposerPostgresDatabaseUrl({
-            context: context.composerDeployContext,
-            projectDir: context.targetDirectory,
-          });
-          const migration = await executePrismaMigrationAndSeed({
-            context: context.prismaSetupContext,
-            projectDir: context.targetDirectory,
-            databaseUrl,
-          });
+          let migration: { didMigrate: boolean; didSeed: boolean; warning?: string };
+          try {
+            const databaseUrl = await resolveComposerPostgresDatabaseUrl({
+              context: context.composerDeployContext,
+              projectDir: context.targetDirectory,
+            });
+            migration = await executePrismaMigrationAndSeed({
+              context: context.prismaSetupContext,
+              projectDir: context.targetDirectory,
+              databaseUrl,
+              didGenerateClient: prismaResult.didGenerateClient,
+            });
+          } catch (error) {
+            migration = {
+              didMigrate: false,
+              didSeed: false,
+              warning: `Could not resolve the Composer-provisioned database URL: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            };
+          }
           if (migration.warning) {
             prismaResult.warningSection += `\n\n- ${migration.warning}`;
           }

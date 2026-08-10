@@ -9,7 +9,6 @@ export const databaseProviders = [
 ] as const;
 
 export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
-export const schemaPresets = ["empty", "basic"] as const;
 export const createTemplates = [
   "hono",
   "elysia",
@@ -37,8 +36,6 @@ export const DatabaseProviderSchema = z.enum(databaseProviders);
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
 export const PackageManagerSchema = z.enum(packageManagers);
 export type PackageManager = z.infer<typeof PackageManagerSchema>;
-export const SchemaPresetSchema = z.enum(schemaPresets);
-export type SchemaPreset = z.infer<typeof SchemaPresetSchema>;
 export const CreateTemplateSchema = z.enum(createTemplates);
 export type CreateTemplate = z.infer<typeof CreateTemplateSchema>;
 export const CreateAddonSchema = z.enum(createAddons);
@@ -62,20 +59,8 @@ export const PrismaSetupOptionsSchema = z.object({
   packageManager: PackageManagerSchema.optional().describe(
     "Package manager used for dependency installation",
   ),
-  prismaPostgres: z
-    .boolean()
-    .optional()
-    .describe("Use Prisma Postgres when provider is postgresql"),
   databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
-  generate: z.boolean().optional().describe("Generate Prisma Client after scaffolding"),
-  migrateAndSeed: z
-    .boolean()
-    .optional()
-    .describe("Run an initial migration and seed after Prisma Client generation"),
-  schemaPreset: SchemaPresetSchema.optional().describe(
-    "Schema preset to scaffold in prisma/schema.prisma",
-  ),
 });
 
 export const PrismaSetupCommandInputSchema = CommonCommandOptionsSchema.extend(
@@ -105,6 +90,7 @@ export const COMPOSER_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Se
   "next",
   "astro",
   "nuxt",
+  "svelte",
   "tanstack-start",
   "turborepo",
 ]);

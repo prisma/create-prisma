@@ -16,7 +16,6 @@ import {
   type DatabaseProvider,
   type PrismaSetupCommandInput,
   type PackageManager,
-  type SchemaPreset,
 } from "../types";
 import {
   detectPackageManager,
@@ -49,9 +48,7 @@ type PrismaGenerateResult = {
 export type PrismaSetupContext = {
   projectDir: string;
   verbose: boolean;
-  shouldGenerate: boolean;
   databaseProvider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
   databaseUrl?: string;
   shouldUsePrismaPostgres: boolean;
   packageManager: PackageManager;
@@ -72,11 +69,7 @@ type FinalizePrismaOptions = {
 };
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgresql";
-const DEFAULT_SCHEMA_PRESET: SchemaPreset = "empty";
-const DEFAULT_PRISMA_POSTGRES = true;
 const DEFAULT_INSTALL = true;
-const DEFAULT_GENERATE = true;
-const DEFAULT_MIGRATE_AND_SEED = true;
 const PRISMA_POSTGRES_MIGRATION_DELAY_MS = 2000;
 
 const requiredPrismaFileGroups = [
@@ -201,34 +194,6 @@ async function promptForDependencyInstall(
   return Boolean(shouldInstall);
 }
 
-async function promptForMigrateAndSeed(): Promise<boolean | undefined> {
-  const shouldMigrateAndSeed = await confirm({
-    message: "Run an initial migration and seed your database now?",
-    initialValue: DEFAULT_MIGRATE_AND_SEED,
-  });
-
-  if (isCancel(shouldMigrateAndSeed)) {
-    cancel("Operation cancelled.");
-    return undefined;
-  }
-
-  return Boolean(shouldMigrateAndSeed);
-}
-
-async function promptForPrismaPostgres(): Promise<boolean | undefined> {
-  const shouldUsePrismaPostgres = await confirm({
-    message: "Use Prisma Postgres and write DATABASE_URL automatically?",
-    initialValue: true,
-  });
-
-  if (isCancel(shouldUsePrismaPostgres)) {
-    cancel("Operation cancelled.");
-    return undefined;
-  }
-
-  return Boolean(shouldUsePrismaPostgres);
-}
-
 function getCommandErrorMessage(error: unknown): string {
   if (error instanceof Error && "stderr" in error) {
     const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
@@ -244,9 +209,7 @@ export async function collectPrismaSetupContext(
   input: PrismaSetupCommandInput,
   options: {
     projectDir?: string;
-    defaultSchemaPreset?: SchemaPreset;
-    skipPrismaPostgresProvisioning?: boolean;
-    skipMigrateAndSeedPrompt?: boolean;
+    shouldMigrateAndSeed?: boolean;
   } = {},
 ): Promise<PrismaSetupContext | undefined> {
   const initialContext = await collectPrismaSetupInitialContext(input, options);
@@ -254,9 +217,8 @@ export async function collectPrismaSetupContext(
     return;
   }
 
-  return completePrismaSetupContext(input, initialContext, {
-    useComputePostgres: options.skipPrismaPostgresProvisioning,
-    skipMigrateAndSeedPrompt: options.skipMigrateAndSeedPrompt,
+  return completePrismaSetupContext(initialContext, {
+    shouldMigrateAndSeed: options.shouldMigrateAndSeed,
   });
 }
 
@@ -264,21 +226,17 @@ export async function collectPrismaSetupInitialContext(
   input: PrismaSetupCommandInput,
   options: {
     projectDir?: string;
-    defaultSchemaPreset?: SchemaPreset;
   } = {},
 ): Promise<PrismaSetupInitialContext | undefined> {
   const projectDir = path.resolve(options.projectDir ?? process.cwd());
   const useDefaults = input.yes === true;
   const verbose = input.verbose === true;
-  const shouldGenerate = input.generate ?? DEFAULT_GENERATE;
 
   const databaseProvider =
     input.provider ?? (useDefaults ? DEFAULT_DATABASE_PROVIDER : await promptForDatabaseProvider());
   if (!databaseProvider) {
     return;
   }
-
-  const schemaPreset = input.schemaPreset ?? options.defaultSchemaPreset ?? DEFAULT_SCHEMA_PRESET;
 
   const databaseUrl = input.databaseUrl;
   const detectedPackageManager = await detectPackageManager(projectDir);
@@ -299,9 +257,7 @@ export async function collectPrismaSetupInitialContext(
   return {
     projectDir,
     verbose,
-    shouldGenerate,
     databaseProvider,
-    schemaPreset,
     databaseUrl,
     packageManager,
     shouldInstall,
@@ -309,52 +265,17 @@ export async function collectPrismaSetupInitialContext(
 }
 
 export async function completePrismaSetupContext(
-  input: PrismaSetupCommandInput,
   context: PrismaSetupInitialContext,
   options: {
-    useComputePostgres?: boolean;
-    skipMigrateAndSeedPrompt?: boolean;
+    shouldMigrateAndSeed?: boolean;
   } = {},
 ): Promise<PrismaSetupContext | undefined> {
-  const useDefaults = input.yes === true;
-  let shouldUsePrismaPostgres = false;
-  const shouldUseComputePostgres =
-    context.databaseProvider === "postgresql" &&
-    !context.databaseUrl &&
-    options.useComputePostgres === true;
-
-  if (
-    context.databaseProvider === "postgresql" &&
-    !context.databaseUrl &&
-    !shouldUseComputePostgres
-  ) {
-    const prismaPostgresChoice =
-      input.prismaPostgres ??
-      (useDefaults ? DEFAULT_PRISMA_POSTGRES : await promptForPrismaPostgres());
-    if (prismaPostgresChoice === undefined) {
-      return;
-    }
-
-    shouldUsePrismaPostgres = prismaPostgresChoice;
-  }
-
-  // Migrate + seed needs installed deps and a generated client.
-  const canMigrateAndSeed =
-    context.shouldInstall &&
-    context.shouldGenerate &&
-    !(shouldUseComputePostgres && options.skipMigrateAndSeedPrompt);
-  const shouldMigrateAndSeed = !canMigrateAndSeed
-    ? false
-    : (input.migrateAndSeed ??
-      (useDefaults ? DEFAULT_MIGRATE_AND_SEED : await promptForMigrateAndSeed()));
-  if (shouldMigrateAndSeed === undefined) {
-    return;
-  }
+  const shouldUsePrismaPostgres = context.databaseProvider === "postgresql" && !context.databaseUrl;
 
   return {
     ...context,
     shouldUsePrismaPostgres,
-    shouldMigrateAndSeed,
+    shouldMigrateAndSeed: options.shouldMigrateAndSeed === true,
   };
 }
 
@@ -650,12 +571,6 @@ async function generatePrismaClientForContext(
   projectDir: string,
 ): Promise<PrismaGenerateResult> {
   const prismaProjectDir = await resolvePrismaProjectDir(projectDir);
-  if (!context.shouldGenerate) {
-    return {
-      didGenerateClient: false,
-    };
-  }
-
   const generateCommand = getRunScriptCommand(context.packageManager, "db:generate");
   if (context.verbose) {
     log.step(`Running ${generateCommand}`);
@@ -725,7 +640,7 @@ function buildNextStepsForContext(opts: {
   if (!context.shouldInstall) {
     nextSteps.push(`- ${getInstallCommand(context.packageManager)}`);
   }
-  if (!didGenerateClient || !context.shouldGenerate) {
+  if (!didGenerateClient) {
     nextSteps.push(`- ${getRunScriptCommand(context.packageManager, "db:generate")}`);
   }
   if (options.includeMigrationAndSeedNextSteps !== false && !didMigrate) {
@@ -747,6 +662,7 @@ export type PrismaSetupResult =
       ok: true;
       nextSteps: string[];
       warningSection: string;
+      didGenerateClient: boolean;
       databaseUrl?: string;
     };
 
@@ -754,6 +670,7 @@ export async function executePrismaMigrationAndSeed(params: {
   context: PrismaSetupContext;
   projectDir: string;
   databaseUrl: string;
+  didGenerateClient: boolean;
 }): Promise<{ didMigrate: boolean; didSeed: boolean; warning?: string }> {
   await finalizePrismaFiles({
     provider: params.context.databaseProvider,
@@ -763,7 +680,7 @@ export async function executePrismaMigrationAndSeed(params: {
 
   return migrateAndSeedIfRequested(params.context, params.projectDir, {
     databaseUrl: params.databaseUrl,
-    didGenerateClient: true,
+    didGenerateClient: params.didGenerateClient,
   });
 }
 
@@ -827,6 +744,7 @@ export async function executePrismaSetupContext(
     ok: true,
     nextSteps,
     warningSection,
+    didGenerateClient: generateResult.didGenerateClient,
     databaseUrl: provisionResult.databaseUrl ?? context.databaseUrl,
   };
 }

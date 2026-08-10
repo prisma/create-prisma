@@ -6,7 +6,7 @@ import { Hono } from "hono";
 {{#if composer}}
 import service from "./service";
 {{/if}}
-{{#if (eq schemaPreset "basic")}}
+
 {{#if composer}}
 let composerDatabaseUrl: string | undefined;
 try {
@@ -25,7 +25,6 @@ import { prisma } from "../../../packages/db/src/index.ts";
 import { prisma } from "@repo/db";
 {{/if}}
 {{/if}}
-{{/if}}
 
 const app = new Hono();
 
@@ -35,7 +34,6 @@ app.get("/", (c) => {
     message: "Turborepo API is running.",
   });
 });
-{{#if (eq schemaPreset "basic")}}
 
 app.get("/users", async (c) => {
   const users = await prisma.user
@@ -61,7 +59,6 @@ app.get("/users", async (c) => {
 
   return c.json(users);
 });
-{{/if}}
 
 const rawPort = (process.env.PORT ?? "").trim();
 const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;

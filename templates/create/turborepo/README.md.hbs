@@ -28,9 +28,11 @@ Prisma is scaffolded inside `packages/db`:
 - `packages/db/prisma/seed.ts`
 - `packages/db/src/client.ts`
 - `packages/db/prisma.config.ts`
+{{#if composer}}
 - `module.ts`
-- `service.ts`
+- `apps/api/src/service.ts`
 - `prisma-composer.config.ts`
+{{/if}}
 - `packages/db/src/generated/prisma`
 
 `apps/api/src/index.ts` imports the shared Prisma client from `@repo/db`.

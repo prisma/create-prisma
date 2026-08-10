@@ -2,6 +2,7 @@ import { cancel, confirm, isCancel, log, spinner } from "@clack/prompts";
 import { execa } from "execa";
 import path from "node:path";
 
+import { prismaPlatformCliPackage } from "../constants/dependencies";
 import {
   isComposerDeployableTemplate,
   type CreateCommandInput,
@@ -13,8 +14,6 @@ import {
   getRunScriptArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
-
-const PRISMA_PLATFORM_CLI = "@prisma/cli@latest";
 
 export type ComposerDeployContext = {
   template: CreateTemplate;
@@ -87,7 +86,7 @@ async function runPlatformCliJson(params: {
 }): Promise<unknown> {
   const execution = getPackageExecutionArgs(
     params.context.packageManager,
-    [PRISMA_PLATFORM_CLI, ...params.args, "--json", "--no-interactive"],
+    [prismaPlatformCliPackage, ...params.args, "--json", "--no-interactive"],
     { silent: true },
   );
   const result = await execa(execution.command, execution.args, {
@@ -106,9 +105,9 @@ async function runPlatformCliJson(params: {
   if (result.exitCode !== 0 || !parsed || !parsed.ok) {
     const detail =
       parsed && !parsed.ok
-        ? (parsed.error?.summary ?? parsed.error?.message)
+        ? (parsed.error?.summary ?? parsed.error?.message ?? result.stderr)
         : result.stderr || "invalid JSON output";
-    throw new Error(getErrorMessage(detail));
+    throw new Error(getErrorMessage(detail || "Prisma CLI reported an unknown error"));
   }
 
   return parsed.result;
@@ -191,15 +190,18 @@ export async function resolveComposerPostgresDatabaseUrl(params: {
 
 export function getComposerDeployScriptMap(context: ComposerDeployContext): Record<string, string> {
   const steps = [
-    ...(context.useComposerPostgres
-      ? [getRunScriptCommand(context.packageManager, "db:migrate:deploy")]
-      : []),
     getRunScriptCommand(context.packageManager, "build"),
     getRunScriptCommand(context.packageManager, "composer:deploy"),
+    ...(context.useComposerPostgres
+      ? [getRunScriptCommand(context.packageManager, "composer:database:setup")]
+      : []),
   ];
 
   return {
     "composer:deploy": "prisma-composer deploy module.ts",
+    ...(context.useComposerPostgres
+      ? { "composer:database:setup": "node scripts/setup-composer-postgres.mjs" }
+      : {}),
     deploy: steps.join(" && "),
   };
 }

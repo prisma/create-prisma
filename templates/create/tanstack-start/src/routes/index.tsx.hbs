@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-{{#if (eq schemaPreset "basic")}}
+
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../lib/prisma.server";
-{{/if}}
 
-{{#if (eq schemaPreset "basic")}}
 function isBootstrapQueryError(error: unknown): error is { code?: string } {
   return (
     typeof error === "object" &&
@@ -30,30 +28,28 @@ const listUsers = createServerFn({ method: "GET" }).handler(async () => {
     throw error;
   }
 });
-{{/if}}
 
 export const Route = createFileRoute("/")({
-{{#if (eq schemaPreset "basic")}}
+
   loader: async () => listUsers(),
-{{/if}}
+
   component: Home,
 });
 
 function Home() {
-{{#if (eq schemaPreset "basic")}}
+
   const formatter = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "UTC",
   });
   const users = Route.useLoaderData();
-{{/if}}
 
   return (
     <main className="shell">
       <div className="hero">
         <p className="eyebrow">TanStack Start + Prisma 7</p>
-{{#if (eq schemaPreset "basic")}}
+
         <h1>Users from your database, loaded through a server function.</h1>
         <p className="lede">
           This route uses TanStack Start&apos;s server function API and the Prisma client in{" "}
@@ -90,42 +86,6 @@ function Home() {
           </ul>
         )}
       </section>
-{{else}}
-        <h1>Your TanStack Start app is ready.</h1>
-        <p className="lede">
-          Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then query your
-          database from server functions or route loaders.
-        </p>
-      </div>
-
-      <section className="panel">
-        <div className="panelHeader">
-          <h2>What&apos;s included</h2>
-          <span>Starter kit</span>
-        </div>
-
-        <ul className="users">
-          <li>
-            <div>
-              <strong>File-based routing</strong>
-              <p>Add new routes in <code>src/routes</code>.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Prisma client</strong>
-              <p>Use the shared instance from <code>src/lib/prisma.server.ts</code>.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Seed script</strong>
-              <p>Run <code>db:seed</code> after your first migration.</p>
-            </div>
-          </li>
-        </ul>
-      </section>
-{{/if}}
 
       <section className="panel">
         <div className="panelHeader">

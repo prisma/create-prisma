@@ -20,6 +20,8 @@ export const dependencyVersionMap = {
   tsx: "^4.22.4",
 } as const;
 
+export const prismaPlatformCliPackage = "@prisma/cli@3.0.0-beta.29";
+
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 
 export type CreateTemplateDependencyTarget = {
@@ -36,6 +38,7 @@ const composerTemplates = new Set<CreateTemplate>([
   "next",
   "astro",
   "nuxt",
+  "svelte",
   "tanstack-start",
   "turborepo",
 ]);
@@ -85,9 +88,17 @@ export function getCreateTemplateDependencies(
   if (composer && composerTemplates.has(template)) {
     targets.push({
       packageJsonPath: "package.json",
-      dependencies: ["@prisma/composer", "@prisma/composer-prisma-cloud", "arktype", "effect"],
+      dependencies: [
+        "@prisma/composer",
+        "@prisma/composer-prisma-cloud",
+        "arktype",
+        "effect",
+        ...(template === "turborepo" ? (["dotenv"] as const) : []),
+      ],
       devDependencies:
-        template === "hono" || template === "elysia" || template === "nest" ? ["esbuild"] : [],
+        template === "hono" || template === "elysia" || template === "nest" || template === "svelte"
+          ? ["esbuild"]
+          : [],
     });
 
     if (template === "turborepo") {

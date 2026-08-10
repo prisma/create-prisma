@@ -20,9 +20,11 @@ Prisma setup is scaffolded automatically in:
 - `prisma/seed.ts`
 - `src/lib/prisma.server.ts`
 - `prisma.config.ts`
+{{#if composer}}
 - `module.ts`
 - `service.ts`
 - `prisma-composer.config.ts`
+{{/if}}
 - `src/generated/prisma`
 
 Database helper scripts are added to `package.json`:
@@ -31,10 +33,9 @@ Database helper scripts are added to `package.json`:
 - `db:push`
 - `db:migrate`
 - `db:seed`
-{{#if (eq schemaPreset "basic")}}
 
 The home route uses a TanStack Start server function to load users with the Prisma client from `src/lib/prisma.server.ts`, so you can verify a real database query without adding an API route first.
-{{/if}}
+
 {{#if composer}}
 
 ## Prisma Composer

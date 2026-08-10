@@ -3,7 +3,6 @@ useHead({
   title: "create-prisma + nuxt",
 });
 
-{{#if (eq schemaPreset "basic")}}
 type User = {
   id: string;
   email: string;
@@ -26,14 +25,14 @@ const { data } = await useFetch<UsersPayload>("/api/users");
 function formatCreatedAt(value: string): string {
   return formatter.format(new Date(value));
 }
-{{/if}}
+
 </script>
 
 <template>
   <main class="shell">
     <div class="hero">
       <p class="eyebrow">Nuxt + Prisma 7</p>
-{{#if (eq schemaPreset "basic")}}
+
       <h1>Users from your database, loaded through Nitro.</h1>
       <p class="lede">
         This page fetches <code>/api/users</code> from <code>server/api/users.get.ts</code> using
@@ -63,42 +62,7 @@ function formatCreatedAt(value: string): string {
         </li>
       </ul>
     </section>
-{{else}}
-      <h1>Your Nuxt app is ready.</h1>
-      <p class="lede">
-        Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then query data in
-        Nitro routes or server utilities with the Prisma instance in <code>server/utils/prisma.ts</code>.
-      </p>
-    </div>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>What's included</h2>
-        <span>Starter kit</span>
-      </div>
-
-      <ul class="users">
-        <li>
-          <div>
-            <strong>Prisma client</strong>
-            <p>Use the shared server instance from <code>server/utils/prisma.ts</code>.</p>
-          </div>
-        </li>
-        <li>
-          <div>
-            <strong>Nitro API route</strong>
-            <p>Start from <code>server/api/users.get.ts</code> for server-side data access.</p>
-          </div>
-        </li>
-        <li>
-          <div>
-            <strong>Generated client output</strong>
-            <p>Prisma Client is generated into <code>server/generated/prisma</code>.</p>
-          </div>
-        </li>
-      </ul>
-    </section>
-{{/if}}
   </main>
 </template>
 

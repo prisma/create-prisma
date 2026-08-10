@@ -21,9 +21,11 @@ Prisma setup is scaffolded automatically in:
 - `server/utils/prisma.ts`
 - `server/api/users.get.ts`
 - `prisma.config.ts`
+{{#if composer}}
 - `module.ts`
 - `service.ts`
 - `prisma-composer.config.ts`
+{{/if}}
 - `server/generated/prisma`
 
 Database helper scripts are added to `package.json`:
@@ -32,10 +34,9 @@ Database helper scripts are added to `package.json`:
 - `db:push`
 - `db:migrate`
 - `db:seed`
-{{#if (eq schemaPreset "basic")}}
 
 The starter page in `app/pages/index.vue` fetches seeded users from `server/api/users.get.ts`, and `prisma/seed.ts` inserts starter users.
-{{/if}}
+
 {{#if composer}}
 
 ## Prisma Composer

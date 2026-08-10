@@ -1,14 +1,15 @@
 import fs from "fs-extra";
 import path from "node:path";
+import { isMap, parseDocument } from "yaml";
 
-import type { CreateTemplate, DatabaseProvider, PackageManager, SchemaPreset } from "../types";
+import type { CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { escapeRegExp } from "../utils/regexp";
-import { renderTemplateTree, resolveTemplatesDir } from "./shared";
+import { renderTemplateFile, renderTemplateTree, resolveTemplatesDir } from "./shared";
 
 type CreateTemplateContext = {
   projectName: string;
+  template: CreateTemplate;
   provider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
   composer: boolean;
   composerPostgres: boolean;
@@ -20,16 +21,16 @@ function getCreateTemplateDir(template: CreateTemplate): string {
 
 function createTemplateContext(
   projectName: string,
+  template: CreateTemplate,
   provider: DatabaseProvider,
-  schemaPreset: SchemaPreset,
   packageManager: PackageManager | undefined,
   composer: boolean,
   composerPostgres: boolean,
 ): CreateTemplateContext {
   return {
     projectName,
+    template,
     provider,
-    schemaPreset,
     packageManager,
     composer,
     composerPostgres,
@@ -92,24 +93,28 @@ function mergePnpmAllowBuilds(content: string): string {
 }
 
 function mergePnpmComposerOverrides(content: string): string {
+  const document = parseDocument(content);
+  if (document.errors.length > 0) {
+    throw new Error(`Could not update pnpm-workspace.yaml: ${document.errors[0]?.message}`);
+  }
+
+  if (!document.has("overrides")) {
+    document.set("overrides", document.createNode({}));
+  }
+  const overrides = document.get("overrides", true);
+  if (!isMap(overrides)) {
+    throw new Error('Could not update pnpm-workspace.yaml: "overrides" must be a mapping.');
+  }
+
   const missingOverrides = Object.entries(composerEffectOverrides).filter(
-    ([packageName]) =>
-      !new RegExp(`^\\s*${escapeRegExp(JSON.stringify(packageName))}\\s*:`, "m").test(content),
+    ([packageName]) => !overrides.has(packageName),
   );
   if (missingOverrides.length === 0) return content;
 
-  const missingLines = missingOverrides.map(
-    ([packageName, version]) => `  ${JSON.stringify(packageName)}: ${version}`,
-  );
-  const trimmedContent = content.trimEnd();
-  const lines = trimmedContent.length > 0 ? trimmedContent.split("\n") : [];
-  const overridesIndex = lines.findIndex((line) => /^overrides:\s*$/.test(line));
-  if (overridesIndex === -1) {
-    return `${trimmedContent}\n\noverrides:\n${missingLines.join("\n")}\n`;
+  for (const [packageName, version] of missingOverrides) {
+    overrides.set(packageName, version);
   }
-
-  lines.splice(overridesIndex + 1, 0, ...missingLines);
-  return `${lines.join("\n")}\n`;
+  return document.toString();
 }
 
 async function ensurePnpmWorkspace(projectDir: string, composer: boolean): Promise<void> {
@@ -138,17 +143,16 @@ export async function scaffoldCreateTemplate(opts: {
   projectName: string;
   template: CreateTemplate;
   provider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
   composer?: boolean;
   composerPostgres?: boolean;
 }): Promise<void> {
-  const { projectDir, projectName, template, provider, schemaPreset, packageManager } = opts;
+  const { projectDir, projectName, template, provider, packageManager } = opts;
   const templateRoot = getCreateTemplateDir(template);
   const context = createTemplateContext(
     projectName,
+    template,
     provider,
-    schemaPreset,
     packageManager,
     opts.composer === true,
     opts.composerPostgres === true,
@@ -158,6 +162,13 @@ export async function scaffoldCreateTemplate(opts: {
     outputDir: projectDir,
     context,
   });
+  if (context.composer && context.composerPostgres) {
+    await renderTemplateFile<CreateTemplateContext>({
+      templateFilePath: resolveTemplatesDir("templates/shared/setup-composer-postgres.mjs.hbs"),
+      outputPath: path.join(projectDir, "scripts/setup-composer-postgres.mjs"),
+      context,
+    });
+  }
   if (packageManager === "pnpm") {
     await ensurePnpmWorkspace(projectDir, opts.composer === true);
   }
