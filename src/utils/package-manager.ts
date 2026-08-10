@@ -1,7 +1,6 @@
 import fs from "fs-extra";
 import path from "node:path";
 
-import { dependencyVersionMap } from "../constants/dependencies";
 import { PackageManagerSchema, type PackageManager } from "../types";
 
 type CommandAndArgs = {
@@ -13,10 +12,8 @@ type RuntimeScriptKind = "dev" | "build" | "start";
 type RuntimeScriptOptions = {
   sourceEntrypoint: string;
   builtEntrypoint?: string;
-  denoFlags?: string[];
-  // When true, `build` compiles to `dist` instead of only type-checking.
-  // Templates that deploy a compiled artifact (e.g. NestJS) need this; bun and
-  // deno otherwise run TypeScript directly and skip emit.
+  // When true, Bun compiles to `dist` instead of only type-checking.
+  // Templates that deploy a compiled artifact (e.g. NestJS) need this.
   emit?: boolean;
 };
 
@@ -38,10 +35,6 @@ function parseUserAgent(userAgent: string | undefined): PackageManager | null {
 
   if (userAgent?.startsWith("bun")) {
     return "bun";
-  }
-
-  if (userAgent?.startsWith("deno")) {
-    return "deno";
   }
 
   if (userAgent?.startsWith("npm")) {
@@ -71,18 +64,6 @@ async function detectFromPackageJson(projectDir: string): Promise<PackageManager
   return parsePackageManagerField(packageJson.packageManager);
 }
 
-async function detectFromDenoConfig(projectDir: string): Promise<PackageManager | null> {
-  const configCandidates = ["deno.json", "deno.jsonc"];
-
-  for (const configFile of configCandidates) {
-    if (await fs.pathExists(path.join(projectDir, configFile))) {
-      return "deno";
-    }
-  }
-
-  return null;
-}
-
 async function detectFromLockfile(projectDir: string): Promise<PackageManager | null> {
   const lockfileChecks: Array<{ manager: PackageManager; lockfile: string }> = [
     { manager: "pnpm", lockfile: "pnpm-lock.yaml" },
@@ -91,7 +72,6 @@ async function detectFromLockfile(projectDir: string): Promise<PackageManager | 
     { manager: "bun", lockfile: "bun.lock" },
     { manager: "npm", lockfile: "package-lock.json" },
     { manager: "npm", lockfile: "npm-shrinkwrap.json" },
-    { manager: "deno", lockfile: "deno.lock" },
   ];
 
   for (const check of lockfileChecks) {
@@ -114,11 +94,6 @@ export async function detectPackageManager(projectDir = process.cwd()): Promise<
     return fromLockfile;
   }
 
-  const fromDenoConfig = await detectFromDenoConfig(projectDir);
-  if (fromDenoConfig) {
-    return fromDenoConfig;
-  }
-
   const fromUserAgent = parseUserAgent(process.env.npm_config_user_agent);
   if (fromUserAgent) {
     return fromUserAgent;
@@ -130,30 +105,14 @@ export async function detectPackageManager(projectDir = process.cwd()): Promise<
 export function getPackageManagerManifestValue(
   packageManager: PackageManager | undefined,
 ): string | undefined {
-  if (!packageManager || packageManager === "deno") {
+  if (!packageManager) {
     return undefined;
   }
 
   return packageManagerManifestValues[packageManager];
 }
 
-export function getDenoPrismaSpecifier(): string {
-  return `npm:prisma@${dependencyVersionMap.prisma}`;
-}
-
-function getDenoAllowedScriptSpecifiers(): string {
-  return [
-    `npm:prisma@${dependencyVersionMap.prisma}`,
-    `npm:@prisma/client@${dependencyVersionMap["@prisma/client"]}`,
-    `npm:@prisma/engines@${dependencyVersionMap.prisma}`,
-  ].join(",");
-}
-
 export function getInstallCommand(packageManager: PackageManager): string {
-  if (packageManager === "deno") {
-    return `deno install --allow-scripts=${getDenoAllowedScriptSpecifiers()}`;
-  }
-
   return `${packageManager} install`;
 }
 
@@ -167,11 +126,6 @@ export function getRunScriptArgs(
   scriptName: string,
 ): CommandAndArgs {
   switch (packageManager) {
-    case "deno":
-      return {
-        command: "deno",
-        args: ["task", scriptName],
-      };
     case "bun":
       return {
         command: "bun",
@@ -202,8 +156,6 @@ export function getRunScriptInDirectoryCommand(
   scriptName: string,
 ): string {
   switch (packageManager) {
-    case "deno":
-      return `deno task --cwd ${directory} ${scriptName}`;
     case "bun":
       return `bun run --cwd ${directory} ${scriptName}`;
     case "pnpm":
@@ -216,45 +168,12 @@ export function getRunScriptInDirectoryCommand(
   }
 }
 
-function joinCommandParts(parts: Array<string | undefined>): string {
-  return parts.filter((part) => typeof part === "string" && part.length > 0).join(" ");
-}
-
 export function getRuntimeScriptCommand(
   packageManager: PackageManager,
   kind: RuntimeScriptKind,
   options: RuntimeScriptOptions,
 ): string {
-  const { sourceEntrypoint, builtEntrypoint, denoFlags = [], emit = false } = options;
-
-  if (packageManager === "deno") {
-    switch (kind) {
-      case "dev":
-        return joinCommandParts([
-          "deno",
-          "run",
-          "-A",
-          "--env-file=.env",
-          ...denoFlags,
-          "--watch",
-          sourceEntrypoint,
-        ]);
-      case "build":
-        // Deno runs TypeScript directly; there is no node-style compiled
-        // artifact to emit here (the Deno nest variant uses Deno APIs and is
-        // not built for the node-based Compute runtime).
-        return `deno check ${sourceEntrypoint}`;
-      case "start":
-        return joinCommandParts([
-          "deno",
-          "run",
-          "-A",
-          "--env-file=.env",
-          ...denoFlags,
-          sourceEntrypoint,
-        ]);
-    }
-  }
+  const { sourceEntrypoint, builtEntrypoint, emit = false } = options;
 
   if (packageManager === "bun") {
     switch (kind) {
@@ -278,13 +197,6 @@ export function getRuntimeScriptCommand(
 }
 
 export function getInstallArgs(packageManager: PackageManager): CommandAndArgs {
-  if (packageManager === "deno") {
-    return {
-      command: "deno",
-      args: ["install", `--allow-scripts=${getDenoAllowedScriptSpecifiers()}`],
-    };
-  }
-
   return {
     command: packageManager,
     args: ["install"],
@@ -311,17 +223,6 @@ export function getPackageExecutionArgs(
       };
     case "bun":
       return { command: "bunx", args: [...(options.silent ? ["--silent"] : []), ...commandArgs] };
-    case "deno": {
-      const [packageName, ...args] = commandArgs;
-      if (!packageName) {
-        throw new Error("Package execution requires a package name.");
-      }
-
-      return {
-        command: "deno",
-        args: ["run", "-A", `npm:${packageName}`, ...args],
-      };
-    }
     case "npm":
     default:
       // npx has no true silent flag. --yes skips prompts, while --no-update-notifier
@@ -348,13 +249,6 @@ export function getPrismaCliArgs(
   packageManager: PackageManager,
   prismaArgs: string[],
 ): CommandAndArgs {
-  if (packageManager === "deno") {
-    return {
-      command: "deno",
-      args: ["run", "-A", "--env-file=.env", getDenoPrismaSpecifier(), ...prismaArgs],
-    };
-  }
-
   if (packageManager === "bun") {
     return {
       command: "bunx",

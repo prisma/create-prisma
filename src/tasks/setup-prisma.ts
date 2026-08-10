@@ -127,10 +127,6 @@ function getPackageManagerHint(
     return "Fast runtime + package manager";
   }
 
-  if (option === "deno") {
-    return "Runtime + package manager";
-  }
-
   return undefined;
 }
 
@@ -160,11 +156,6 @@ async function promptForPackageManager(
         value: "bun",
         label: "bun",
         hint: getPackageManagerHint("bun", detectedPackageManager),
-      },
-      {
-        value: "deno",
-        label: "deno",
-        hint: getPackageManagerHint("deno", detectedPackageManager),
       },
     ],
   });

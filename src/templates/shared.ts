@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { dependencyVersionMap, prismaPlatformCliPackage } from "../constants/dependencies";
+import { prismaPlatformCliPackage } from "../constants/dependencies";
 import type { PackageManager } from "../types";
 import {
   getPackageExecutionArgs,
@@ -16,23 +16,7 @@ import {
 } from "../utils/package-manager";
 import { requiresDotenvConfigImport, requiresPrismaConfigDotenvImport } from "../utils/runtime";
 
-function getOptionalHashString(
-  hash: Handlebars.HelperOptions["hash"],
-  key: string,
-): string | undefined {
-  const value = hash[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function getOptionalHashStringList(hash: Handlebars.HelperOptions["hash"], key: string): string[] {
-  return getOptionalHashString(hash, key)?.split(" ") ?? [];
-}
-
 function getSeedCommand(packageManager: PackageManager | undefined): string {
-  if (packageManager === "deno") {
-    return "deno run -A --env-file=.env ./prisma/seed.ts";
-  }
-
   if (packageManager === "bun") {
     return "bun ./prisma/seed.ts";
   }
@@ -41,10 +25,6 @@ function getSeedCommand(packageManager: PackageManager | undefined): string {
 }
 
 function getPrismaCommand(packageManager: PackageManager | undefined, subcommand: string): string {
-  if (packageManager === "deno") {
-    return `deno run -A --env-file=.env npm:prisma@${dependencyVersionMap.prisma} ${subcommand}`;
-  }
-
   return `prisma ${subcommand}`;
 }
 
@@ -111,7 +91,6 @@ Handlebars.registerHelper(
     return getRuntimeScriptCommand(packageManager, kind, {
       sourceEntrypoint,
       builtEntrypoint,
-      denoFlags: getOptionalHashStringList(hash, "denoFlags"),
       emit: hash.emit === true,
     });
   },

@@ -1,4 +1,3 @@
-{{#if composer}}
 import { module } from "@prisma/composer";
 import { {{#if composerPostgres}}postgres{{else}}envSecret{{/if}} } from "@prisma/composer-prisma-cloud";
 {{#unless composerPostgres}}
@@ -29,4 +28,3 @@ export default module("{{projectName}}", ({ provision }) => {
   });
   {{/if}}
 });
-{{/if}}

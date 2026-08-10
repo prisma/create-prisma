@@ -3,12 +3,7 @@ import { execa } from "execa";
 import path from "node:path";
 
 import { prismaPlatformCliPackage } from "../constants/dependencies";
-import {
-  isComposerDeployableTemplate,
-  type CreateCommandInput,
-  type CreateTemplate,
-  type PackageManager,
-} from "../types";
+import { type CreateCommandInput, type CreateTemplate, type PackageManager } from "../types";
 import {
   getPackageExecutionArgs,
   getRunScriptArgs,
@@ -215,15 +210,6 @@ export async function collectComposerDeployContext(
     useDefaults: boolean;
   },
 ): Promise<ComposerDeployContext | null | undefined> {
-  if (!isComposerDeployableTemplate(options.template)) {
-    if (input.deploy === true) {
-      throw createExplicitDeployError(
-        `${options.template} is not supported by Prisma Composer yet`,
-      );
-    }
-    return null;
-  }
-
   if (input.deploy === false) {
     return null;
   }
@@ -246,16 +232,6 @@ export async function collectComposerDeployContext(
   }
 
   if (!wantsDeploy) return null;
-
-  if (options.packageManager === "deno") {
-    if (input.deploy === true) {
-      throw createExplicitDeployError(
-        "Prisma Composer deploys require a Node.js or Bun package manager",
-      );
-    }
-    log.warn("Prisma Composer deploys are not available for Deno projects yet.");
-    return null;
-  }
 
   const missingCredentials = missingComposerCredentials();
   if (missingCredentials.length > 0) {

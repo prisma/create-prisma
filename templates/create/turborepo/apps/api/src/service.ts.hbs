@@ -1,4 +1,3 @@
-{{#if composer}}
 {{#unless composerPostgres}}
 import { secretString } from "@prisma/composer/arktype";
 {{/unless}}
@@ -18,4 +17,3 @@ export default compute({
   {{/if}}
   build: node({ module: import.meta.url, entry: "../dist/server.mjs" }),
 });
-{{/if}}

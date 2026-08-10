@@ -10,15 +10,9 @@
     "packages/*"
   ],
   "scripts": {
-    {{#if (eq packageManager "deno")}}
-    "build": "deno task --filter=@repo/db build && deno task --filter=@repo/api build",
-    "dev": "deno task --filter=@repo/api dev",
-    "typecheck": "deno task --filter=@repo/db typecheck && deno task --filter=@repo/api typecheck",
-    {{else}}
     "build": "turbo run build",
     "dev": "turbo run dev --filter=@repo/api",
     "typecheck": "turbo run typecheck",
-    {{/if}}
     "db:generate": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:generate"}}",
     "db:push": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:push"}}",
     "db:migrate": "{{runScriptInDirectoryCommand packageManager "packages/db" "db:migrate"}}",

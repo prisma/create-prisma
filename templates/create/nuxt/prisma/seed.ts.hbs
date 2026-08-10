@@ -1,4 +1,4 @@
-import prisma from "../server/utils/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import prisma from "../server/utils/prisma";
 
 async function main() {
   const users = await Promise.all([

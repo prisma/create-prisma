@@ -1,9 +1,8 @@
-{{#unless (eq packageManager "deno")}}
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-{{/unless}}
-import { PrismaClient } from "./generated/prisma/client{{#if (eq packageManager "deno")}}.ts{{/if}}";
+
+import { PrismaClient } from "./generated/prisma/client";
 {{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
 {{/if}}
@@ -20,10 +19,8 @@ import { {{sqliteAdapterClass packageManager}} } from "{{sqliteAdapterPackage pa
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
-{{#unless (eq packageManager "deno")}}
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(moduleDir, "../.env"), quiet: true });
-{{/unless}}
 
 const rawDatabaseUrl = process.env.DATABASE_URL;
 {{#if (eq provider "sqlite")}}

@@ -7,8 +7,8 @@
   "type": "module",
   "scripts": {
     "dev": "{{runtimeScript packageManager "dev" "src/main.ts" "dist/main.js"}}",
-    "build": "{{#if composer}}tsc && esbuild dist/main.js --bundle --platform=node --format=esm --banner:js=\"import { createRequire as __composerCreateRequire } from 'node:module'; const require = __composerCreateRequire(import.meta.url);\" --external:@nestjs/microservices --external:@nestjs/microservices/* --external:@nestjs/websockets/* --external:class-transformer --external:class-validator --outfile=dist-composer/server.mjs{{else}}{{runtimeScript packageManager "build" "src/main.ts" "dist/main.js" emit=true}}{{/if}}",
-    "start": "{{#if composer}}node dist-composer/server.mjs{{else}}{{runtimeScript packageManager "start" "src/main.ts" "dist/main.js"}}{{/if}}"
+    "build": "tsc && esbuild dist/main.js --bundle --platform=node --format=esm --banner:js=\"import { createRequire as __composerCreateRequire } from 'node:module'; const require = __composerCreateRequire(import.meta.url);\" --external:@nestjs/microservices --external:@nestjs/microservices/* --external:@nestjs/websockets/* --external:class-transformer --external:class-validator --outfile=dist-composer/server.mjs",
+    "start": "node dist-composer/server.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.27",

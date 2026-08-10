@@ -35,10 +35,6 @@ yarn dlx create-prisma@latest
 bunx create-prisma@latest
 ```
 
-```bash
-deno run -A npm:create-prisma@latest
-```
-
 If you already have it available locally:
 
 ```bash
@@ -123,9 +119,8 @@ Prisma Composer files are included by default, and deployment is supported for:
 - `pnpm`
 - `yarn`
 - `bun`
-- `deno`
 
-Composer generation and deployment currently apply to the Node-compatible package manager choices (`npm`, `pnpm`, `yarn`, and `bun`). Deno scaffolding remains available without Composer.
+Every package manager receives the same Composer-ready templates and deploy scripts.
 
 ## Useful Flags
 
@@ -163,7 +158,7 @@ create-prisma --name my-api --template hono --provider postgresql --deploy
 
 Deployment requires `PRISMA_SERVICE_TOKEN` and `PRISMA_WORKSPACE_ID`. With PostgreSQL and no `--database-url`, Composer provisions Prisma Postgres and passes its connection through `service.load()`. After the first deployment, create-prisma writes a direct connection to the Prisma env file and automatically runs the starter migration and seed. Other database configurations are passed through a secret Composer service input.
 
-A `deploy` script is generated for npm, pnpm, Yarn, and Bun. It builds and deploys the Composer application, then resolves the Composer-managed Prisma Postgres connection, applies the starter migration, and seeds the database.
+A `deploy` script is generated for every supported package manager. It builds and deploys the Composer application, then resolves the Composer-managed Prisma Postgres connection, applies the starter migration, and seeds the database.
 
 The only Composer-specific prompt asks whether to deploy immediately. It is skipped in `--yes` runs unless you pass `--deploy`; the Composer files are still generated. Prisma Client generation is automatic, and PostgreSQL uses Prisma Postgres by default without additional prompts.
 

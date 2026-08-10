@@ -8,7 +8,7 @@ export const databaseProviders = [
   "cockroachdb",
 ] as const;
 
-export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
+export const packageManagers = ["npm", "pnpm", "yarn", "bun"] as const;
 export const createTemplates = [
   "hono",
   "elysia",
@@ -82,22 +82,6 @@ export const CreateScaffoldOptionsSchema = z.object({
   deploy: z.boolean().optional().describe("Deploy the scaffolded project with Prisma Composer"),
   force: z.boolean().optional().describe("Allow scaffolding into a non-empty target directory"),
 });
-
-export const COMPOSER_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set<CreateTemplate>([
-  "hono",
-  "elysia",
-  "nest",
-  "next",
-  "astro",
-  "nuxt",
-  "svelte",
-  "tanstack-start",
-  "turborepo",
-]);
-
-export function isComposerDeployableTemplate(template: CreateTemplate): boolean {
-  return COMPOSER_DEPLOYABLE_TEMPLATES.has(template);
-}
 
 export const CreateCommandInputSchema = PrismaSetupCommandInputSchema.extend(
   CreateScaffoldOptionsSchema.shape,

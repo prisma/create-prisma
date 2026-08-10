@@ -1,9 +1,6 @@
 generator client {
   provider = "prisma-client"
   output   = "../server/generated/prisma"
-{{#if (eq packageManager "deno")}}
-  runtime  = "deno"
-{{/if}}
 }
 
 datasource db {

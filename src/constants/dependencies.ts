@@ -31,18 +31,6 @@ export type CreateTemplateDependencyTarget = {
   customDependencies?: Record<string, string>;
 };
 
-const composerTemplates = new Set<CreateTemplate>([
-  "hono",
-  "elysia",
-  "nest",
-  "next",
-  "astro",
-  "nuxt",
-  "svelte",
-  "tanstack-start",
-  "turborepo",
-]);
-
 function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
   return packageManager === "npm" ? "*" : "workspace:*";
 }
@@ -50,7 +38,6 @@ function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
 export function getCreateTemplateDependencies(
   template: CreateTemplate,
   packageManager: PackageManager,
-  composer = false,
 ): CreateTemplateDependencyTarget[] {
   const targets: CreateTemplateDependencyTarget[] = [];
 
@@ -59,7 +46,7 @@ export function getCreateTemplateDependencies(
       ? ["tsx"]
       : [];
 
-    if (template === "elysia" && packageManager !== "deno") {
+    if (template === "elysia") {
       targets.push({
         packageJsonPath: "package.json",
         dependencies: ["@elysiajs/node"],
@@ -85,29 +72,27 @@ export function getCreateTemplateDependencies(
     });
   }
 
-  if (composer && composerTemplates.has(template)) {
-    targets.push({
-      packageJsonPath: "package.json",
-      dependencies: [
-        "@prisma/composer",
-        "@prisma/composer-prisma-cloud",
-        "arktype",
-        "effect",
-        ...(template === "turborepo" ? (["dotenv"] as const) : []),
-      ],
-      devDependencies:
-        template === "hono" || template === "elysia" || template === "nest" || template === "svelte"
-          ? ["esbuild"]
-          : [],
-    });
+  targets.push({
+    packageJsonPath: "package.json",
+    dependencies: [
+      "@prisma/composer",
+      "@prisma/composer-prisma-cloud",
+      "arktype",
+      "effect",
+      ...(template === "turborepo" ? (["dotenv"] as const) : []),
+    ],
+    devDependencies:
+      template === "hono" || template === "elysia" || template === "nest" || template === "svelte"
+        ? ["esbuild"]
+        : [],
+  });
 
-    if (template === "turborepo") {
-      targets.push({
-        packageJsonPath: "apps/api/package.json",
-        dependencies: [],
-        devDependencies: ["esbuild"],
-      });
-    }
+  if (template === "turborepo") {
+    targets.push({
+      packageJsonPath: "apps/api/package.json",
+      dependencies: [],
+      devDependencies: ["esbuild"],
+    });
   }
 
   return targets;

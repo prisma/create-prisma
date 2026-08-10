@@ -3,11 +3,9 @@ import "dotenv/config";
 {{/if}}
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-{{#if composer}}
-import service from "./service";
-{{/if}}
 
-{{#if composer}}
+import service from "./service";
+
 let composerDatabaseUrl: string | undefined;
 try {
   composerDatabaseUrl = {{#if composerPostgres}}service.load().database.url{{else}}service.input().databaseUrl.expose(){{/if}};
@@ -18,13 +16,6 @@ if (composerDatabaseUrl) {
   process.env.DATABASE_URL = composerDatabaseUrl;
 }
 const { prisma } = await import("@repo/db");
-{{else}}
-{{#if (eq packageManager "deno")}}
-import { prisma } from "../../../packages/db/src/index.ts";
-{{else}}
-import { prisma } from "@repo/db";
-{{/if}}
-{{/if}}
 
 const app = new Hono();
 
@@ -62,15 +53,15 @@ app.get("/users", async (c) => {
 
 const rawPort = (process.env.PORT ?? "").trim();
 const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;
-{{#if composer}}
+
 let composerPort: number | undefined;
 try {
   composerPort = service.port();
 } catch {
   composerPort = undefined;
 }
-{{/if}}
+
 const port =
-  (Number.isFinite(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : undefined){{#if composer}} ?? composerPort{{/if}} ?? 3000;
+  (Number.isFinite(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : undefined) ?? composerPort ?? 3000;
 console.log(`API listening at http://localhost:${port}`);
 serve({ fetch: app.fetch, port });

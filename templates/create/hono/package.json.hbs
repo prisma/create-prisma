@@ -8,8 +8,8 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js"}}",
-    "build": "{{#if composer}}esbuild src/index.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire as __composerCreateRequire } from 'node:module'; const require = __composerCreateRequire(import.meta.url);\" --outfile=dist/server.mjs{{else}}{{runtimeScript packageManager "build" "src/index.ts" "dist/src/index.js"}}{{/if}}",
-    "start": "{{#if composer}}node dist/server.mjs{{else}}{{runtimeScript packageManager "start" "src/index.ts" "dist/src/index.js"}}{{/if}}"
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire as __composerCreateRequire } from 'node:module'; const require = __composerCreateRequire(import.meta.url);\" --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.6",

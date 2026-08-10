@@ -11,7 +11,6 @@ type CreateTemplateContext = {
   template: CreateTemplate;
   provider: DatabaseProvider;
   packageManager?: PackageManager;
-  composer: boolean;
   composerPostgres: boolean;
 };
 
@@ -24,7 +23,6 @@ function createTemplateContext(
   template: CreateTemplate,
   provider: DatabaseProvider,
   packageManager: PackageManager | undefined,
-  composer: boolean,
   composerPostgres: boolean,
 ): CreateTemplateContext {
   return {
@@ -32,7 +30,6 @@ function createTemplateContext(
     template,
     provider,
     packageManager,
-    composer,
     composerPostgres,
   };
 }
@@ -117,22 +114,18 @@ function mergePnpmComposerOverrides(content: string): string {
   return document.toString();
 }
 
-async function ensurePnpmWorkspace(projectDir: string, composer: boolean): Promise<void> {
+async function ensurePnpmWorkspace(projectDir: string): Promise<void> {
   const workspacePath = path.join(projectDir, "pnpm-workspace.yaml");
 
   if (!(await fs.pathExists(workspacePath))) {
-    const content = composer
-      ? mergePnpmComposerOverrides(`${renderPnpmAllowBuilds()}\n`)
-      : `${renderPnpmAllowBuilds()}\n`;
+    const content = mergePnpmComposerOverrides(`${renderPnpmAllowBuilds()}\n`);
     await fs.writeFile(workspacePath, content, "utf8");
     return;
   }
 
   const existingContent = await fs.readFile(workspacePath, "utf8");
   const allowBuildsContent = mergePnpmAllowBuilds(existingContent);
-  const nextContent = composer
-    ? mergePnpmComposerOverrides(allowBuildsContent)
-    : allowBuildsContent;
+  const nextContent = mergePnpmComposerOverrides(allowBuildsContent);
   if (nextContent !== existingContent) {
     await fs.writeFile(workspacePath, nextContent, "utf8");
   }
@@ -144,7 +137,6 @@ export async function scaffoldCreateTemplate(opts: {
   template: CreateTemplate;
   provider: DatabaseProvider;
   packageManager?: PackageManager;
-  composer?: boolean;
   composerPostgres?: boolean;
 }): Promise<void> {
   const { projectDir, projectName, template, provider, packageManager } = opts;
@@ -154,7 +146,6 @@ export async function scaffoldCreateTemplate(opts: {
     template,
     provider,
     packageManager,
-    opts.composer === true,
     opts.composerPostgres === true,
   );
   await renderTemplateTree<CreateTemplateContext>({
@@ -162,7 +153,7 @@ export async function scaffoldCreateTemplate(opts: {
     outputDir: projectDir,
     context,
   });
-  if (context.composer && context.composerPostgres) {
+  if (context.composerPostgres) {
     await renderTemplateFile<CreateTemplateContext>({
       templateFilePath: resolveTemplatesDir("templates/shared/setup-composer-postgres.mjs.hbs"),
       outputPath: path.join(projectDir, "scripts/setup-composer-postgres.mjs"),
@@ -170,6 +161,6 @@ export async function scaffoldCreateTemplate(opts: {
     });
   }
   if (packageManager === "pnpm") {
-    await ensurePnpmWorkspace(projectDir, opts.composer === true);
+    await ensurePnpmWorkspace(projectDir);
   }
 }

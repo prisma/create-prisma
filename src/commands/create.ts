@@ -9,7 +9,6 @@ import type { PrismaSetupContext } from "../tasks/setup-prisma";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
-  isComposerDeployableTemplate,
   type CreateCommandInput,
   type CreateTemplate,
 } from "../types";
@@ -56,7 +55,7 @@ export type CreatePromptContext = {
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
   addonSetupContext?: CreateAddonSetupContext;
-  composerScaffoldContext?: ComposerDeployContext;
+  composerContext: ComposerDeployContext;
   composerDeployContext?: ComposerDeployContext;
   useComposerPostgres: boolean;
 };
@@ -327,9 +326,7 @@ async function collectCreateContext(
     return;
   }
 
-  const composerEnabled =
-    isComposerDeployableTemplate(template) && prismaSetupContext.packageManager !== "deno";
-  const useComposerPostgres = composerEnabled && prismaSetupContext.shouldUsePrismaPostgres;
+  const useComposerPostgres = prismaSetupContext.shouldUsePrismaPostgres;
   if (composerDeployContext) {
     composerDeployContext.useComposerPostgres = useComposerPostgres;
   }
@@ -338,14 +335,12 @@ async function collectCreateContext(
     log.info("Composer will provision Prisma Postgres and wire it into the application.");
   }
 
-  const composerScaffoldContext = composerEnabled
-    ? (composerDeployContext ?? {
-        template,
-        packageManager: prismaSetupContext.packageManager,
-        projectName: projectPackageName,
-        useComposerPostgres,
-      })
-    : undefined;
+  const composerContext = composerDeployContext ?? {
+    template,
+    packageManager: prismaSetupContext.packageManager,
+    projectName: projectPackageName,
+    useComposerPostgres,
+  };
 
   const addonSetupContext = await collectCreateAddonSetupContext(input, {
     useDefaults,
@@ -365,7 +360,7 @@ async function collectCreateContext(
     projectPackageName,
     prismaSetupContext,
     addonSetupContext: addonSetupContext ?? undefined,
-    composerScaffoldContext,
+    composerContext,
     composerDeployContext: composerDeployContext ?? undefined,
     useComposerPostgres,
   };
@@ -383,7 +378,6 @@ async function executeCreateContext(
       template: context.template,
       provider: context.prismaSetupContext.databaseProvider,
       packageManager: context.prismaSetupContext.packageManager,
-      composer: Boolean(context.composerScaffoldContext),
       composerPostgres: context.useComposerPostgres,
     });
     scaffoldSpinner.stop("Project files scaffolded.");
@@ -400,16 +394,13 @@ async function executeCreateContext(
     await writeCreateTemplateDependencies({
       template: context.template,
       packageManager: context.prismaSetupContext.packageManager,
-      composer: Boolean(context.composerScaffoldContext),
       projectDir: context.targetDirectory,
     });
-    if (context.composerScaffoldContext) {
-      await addPackageDependency({
-        scripts: getComposerDeployScriptMap(context.composerScaffoldContext),
-        scriptMode: "if-missing",
-        projectDir: context.targetDirectory,
-      });
-    }
+    await addPackageDependency({
+      scripts: getComposerDeployScriptMap(context.composerContext),
+      scriptMode: "if-missing",
+      projectDir: context.targetDirectory,
+    });
   } catch (error) {
     return {
       ok: false,

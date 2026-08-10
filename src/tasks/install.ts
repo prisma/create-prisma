@@ -2,7 +2,6 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { getDenoPrismaSpecifier } from "../utils/package-manager";
 import {
   dependencyVersionMap,
   getCreateTemplateDependencies,
@@ -13,20 +12,7 @@ import type { CreateTemplate, DatabaseProvider, PackageManager } from "../types"
 import { getInstallArgs } from "../utils/package-manager";
 import { requiresDotenvConfigImport } from "../utils/runtime";
 
-function getPrismaScriptMap(packageManager: PackageManager) {
-  if (packageManager === "deno") {
-    const prismaSpecifier = getDenoPrismaSpecifier();
-    const prismaCli = `deno run -A --env-file=.env ${prismaSpecifier}`;
-
-    return {
-      "db:generate": `${prismaCli} generate`,
-      "db:push": `${prismaCli} db push`,
-      "db:migrate": `${prismaCli} migrate dev`,
-      "db:migrate:deploy": `${prismaCli} migrate deploy`,
-      "db:seed": `${prismaCli} db seed`,
-    } as const;
-  }
-
+function getPrismaScriptMap() {
   return {
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -178,7 +164,7 @@ export async function writePrismaDependencies(
     dependencies.push("dotenv");
   }
 
-  const prismaScriptMap = getPrismaScriptMap(packageManager);
+  const prismaScriptMap = getPrismaScriptMap();
 
   await addPackageDependency({
     dependencies,
@@ -192,11 +178,10 @@ export async function writePrismaDependencies(
 export async function writeCreateTemplateDependencies(opts: {
   template: CreateTemplate;
   packageManager: PackageManager;
-  composer?: boolean;
   projectDir?: string;
 }): Promise<void> {
-  const { template, packageManager, composer = false, projectDir = process.cwd() } = opts;
-  const targets = getCreateTemplateDependencies(template, packageManager, composer);
+  const { template, packageManager, projectDir = process.cwd() } = opts;
+  const targets = getCreateTemplateDependencies(template, packageManager);
 
   for (const dependencyTarget of targets) {
     const targetDirectory = path.join(projectDir, path.dirname(dependencyTarget.packageJsonPath));
@@ -209,37 +194,35 @@ export async function writeCreateTemplateDependencies(opts: {
     });
   }
 
-  if (composer) {
-    const packageJsonPath = path.join(projectDir, "package.json");
-    const pkgJson = (await fs.readJson(packageJsonPath)) as Record<string, unknown>;
-    const effectVersions = {
-      "@effect/platform-bun": "4.0.0-beta.93",
-      "@effect/platform-node": "4.0.0-beta.93",
-      "@effect/platform-node-shared": "4.0.0-beta.93",
-      "@effect/sql-d1": "4.0.0-beta.93",
-      "@effect/sql-pg": "4.0.0-beta.93",
-      "@effect/vitest": "4.0.0-beta.93",
+  const packageJsonPath = path.join(projectDir, "package.json");
+  const pkgJson = (await fs.readJson(packageJsonPath)) as Record<string, unknown>;
+  const effectVersions = {
+    "@effect/platform-bun": "4.0.0-beta.93",
+    "@effect/platform-node": "4.0.0-beta.93",
+    "@effect/platform-node-shared": "4.0.0-beta.93",
+    "@effect/sql-d1": "4.0.0-beta.93",
+    "@effect/sql-pg": "4.0.0-beta.93",
+    "@effect/vitest": "4.0.0-beta.93",
+  };
+
+  if (packageManager === "yarn") {
+    pkgJson.resolutions = {
+      ...((pkgJson.resolutions ?? {}) as Record<string, string>),
+      ...effectVersions,
     };
-
-    if (packageManager === "yarn") {
-      pkgJson.resolutions = {
-        ...((pkgJson.resolutions ?? {}) as Record<string, string>),
-        ...effectVersions,
-      };
-    } else if (packageManager !== "pnpm") {
-      pkgJson.overrides = {
-        ...((pkgJson.overrides ?? {}) as Record<string, string>),
-        ...effectVersions,
-      };
-    }
-
-    pkgJson.engines = {
-      ...((pkgJson.engines ?? {}) as Record<string, string>),
-      node: ">=24",
+  } else if (packageManager !== "pnpm") {
+    pkgJson.overrides = {
+      ...((pkgJson.overrides ?? {}) as Record<string, string>),
+      ...effectVersions,
     };
-
-    await fs.writeJson(packageJsonPath, pkgJson, { spaces: 2 });
   }
+
+  pkgJson.engines = {
+    ...((pkgJson.engines ?? {}) as Record<string, string>),
+    node: ">=24",
+  };
+
+  await fs.writeJson(packageJsonPath, pkgJson, { spaces: 2 });
 }
 
 export async function installProjectDependencies(
