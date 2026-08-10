@@ -27,18 +27,6 @@ function getPrismaScriptMap(packageManager: PackageManager) {
     } as const;
   }
 
-  if (packageManager === "bun") {
-    const prismaCli = "bun --env-file=.env ./node_modules/.bin/prisma";
-
-    return {
-      "db:generate": `${prismaCli} generate`,
-      "db:push": `${prismaCli} db push`,
-      "db:migrate": `${prismaCli} migrate dev`,
-      "db:migrate:deploy": `${prismaCli} migrate deploy`,
-      "db:seed": `${prismaCli} db seed`,
-    } as const;
-  }
-
   return {
     "db:generate": "prisma generate",
     "db:push": "prisma db push",

@@ -43,10 +43,6 @@ function getPrismaCommand(packageManager: PackageManager | undefined, subcommand
     return `deno run -A --env-file=.env npm:prisma@${dependencyVersionMap.prisma} ${subcommand}`;
   }
 
-  if (packageManager === "bun") {
-    return `bun --env-file=.env ./node_modules/.bin/prisma ${subcommand}`;
-  }
-
   return `prisma ${subcommand}`;
 }
 

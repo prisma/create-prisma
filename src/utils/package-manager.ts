@@ -357,8 +357,8 @@ export function getPrismaCliArgs(
 
   if (packageManager === "bun") {
     return {
-      command: "bun",
-      args: ["--env-file=.env", "./node_modules/.bin/prisma", ...prismaArgs],
+      command: "bunx",
+      args: ["--bun", "prisma", ...prismaArgs],
     };
   }
 
