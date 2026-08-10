@@ -221,7 +221,7 @@ export async function collectComposerDeployContext(
     return null;
   } else {
     const confirmed = await confirm({
-      message: "Deploy with Prisma Composer now?",
+      message: "Deploy to Prisma now?",
       initialValue: false,
     });
     if (isCancel(confirmed)) {
