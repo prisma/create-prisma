@@ -47,8 +47,6 @@ export type ExtensionTarget = z.infer<typeof ExtensionTargetSchema>;
 export const PrismaSkillNameSchema = z.enum(prismaSkillNames);
 export type PrismaSkillName = z.infer<typeof PrismaSkillNameSchema>;
 
-export const DatabaseUrlSchema = z.string().trim().min(1, "Please enter a valid database URL");
-
 export const CommonCommandOptionsSchema = z.object({
   yes: z.boolean().optional().describe("Skip prompts and accept default choices"),
   verbose: z.boolean().optional().describe("Show verbose command output during setup"),
@@ -59,7 +57,6 @@ export const PrismaSetupOptionsSchema = z.object({
   packageManager: PackageManagerSchema.optional().describe(
     "Package manager used for dependency installation",
   ),
-  databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
   install: z.boolean().optional().describe("Install dependencies with selected package manager"),
 });
 

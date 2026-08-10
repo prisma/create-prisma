@@ -15,7 +15,6 @@ import {
 import {
   collectPrismaSetupInitialContext,
   completePrismaSetupContext,
-  executePrismaMigrationAndSeed,
   executePrismaSetupContext,
 } from "../tasks/setup-prisma";
 import {
@@ -26,7 +25,6 @@ import {
   collectComposerDeployContext,
   executeComposerDeployContext,
   getComposerDeployScriptMap,
-  resolveComposerPostgresDatabaseUrl,
   type ComposerDeployContext,
   type ComposerDeployResult,
 } from "../tasks/deploy-with-composer";
@@ -311,6 +309,7 @@ async function collectCreateContext(
   const projectPackageName = toPackageName(path.basename(targetDirectory));
   const composerDeployContext = await collectComposerDeployContext(input, {
     template,
+    databaseProvider: prismaSetupInitialContext.databaseProvider,
     packageManager: prismaSetupInitialContext.packageManager,
     projectName: projectPackageName,
     useDefaults,
@@ -448,7 +447,6 @@ async function executeCreateContext(
     const initialPrismaContext = deploysComposerPostgresNow
       ? {
           ...context.prismaSetupContext,
-          shouldUsePrismaPostgres: false,
           shouldMigrateAndSeed: false,
         }
       : context.prismaSetupContext;
@@ -456,13 +454,25 @@ async function executeCreateContext(
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       includeDevNextStep: true,
-      includeMigrationAndSeedNextSteps: !deploysComposerPostgresNow,
+      includeMigrationAndSeedNextSteps: !context.useComposerPostgres,
     });
 
     if (!prismaResult.ok) {
       return {
         ok: false,
         stage: "prisma_setup",
+      };
+    }
+    if (
+      context.composerDeployContext &&
+      (!prismaResult.didGenerateClient || !prismaResult.didGenerateMigration)
+    ) {
+      return {
+        ok: false,
+        stage: "prisma_setup",
+        error: new Error(
+          "Could not generate Prisma Client and the initial migration required for deployment.",
+        ),
       };
     }
   } catch (error) {
@@ -488,52 +498,10 @@ async function executeCreateContext(
         };
       }
       if (!result.ok) {
-        prismaResult.warningSection += "\n\n- Composer deployment was cancelled.";
-        prismaResult.nextSteps.push(
-          `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "deploy")}`,
-        );
+        prismaResult.warningSection += "\n\n- Prisma deployment was cancelled.";
       }
       if (result.ok) {
         deployResult = result.result;
-        if (context.useComposerPostgres) {
-          let migration: { didMigrate: boolean; didSeed: boolean; warning?: string };
-          try {
-            const databaseUrl = await resolveComposerPostgresDatabaseUrl({
-              context: context.composerDeployContext,
-              projectDir: context.targetDirectory,
-            });
-            migration = await executePrismaMigrationAndSeed({
-              context: context.prismaSetupContext,
-              projectDir: context.targetDirectory,
-              databaseUrl,
-              didGenerateClient: prismaResult.didGenerateClient,
-            });
-          } catch (error) {
-            migration = {
-              didMigrate: false,
-              didSeed: false,
-              warning: `Could not resolve the Composer-provisioned database URL: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            };
-          }
-          if (migration.warning) {
-            prismaResult.warningSection += `\n\n- ${migration.warning}`;
-          }
-          if (!migration.didMigrate) {
-            prismaResult.nextSteps.push(
-              `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "db:migrate")}`,
-            );
-          }
-          if (!migration.didSeed) {
-            prismaResult.nextSteps.push(
-              `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "db:seed")}`,
-            );
-          }
-        }
-        prismaResult.nextSteps.push(
-          `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "deploy")}`,
-        );
       }
     } catch (error) {
       return {
@@ -544,16 +512,26 @@ async function executeCreateContext(
     }
   }
 
+  if (!deployResult) {
+    const deployNextStep = `- ${getRunScriptCommand(
+      context.prismaSetupContext.packageManager,
+      "deploy",
+    )}`;
+    if (!prismaResult.nextSteps.includes(deployNextStep)) {
+      prismaResult.nextSteps.push(deployNextStep);
+    }
+  }
+
   const summaryLines: string[] = [];
   summaryLines.push(`Setup complete.${prismaResult.warningSection}`);
   if (deployResult) {
     summaryLines.push(
       "",
-      "Deployed with Prisma Composer:",
+      "Deployed to Prisma:",
       `- App: ${deployResult.appName}`,
-      ...deployResult.services.map(
-        (service) =>
-          `- Service: ${service.address} (${service.id})${service.url ? `\n  ${service.url}` : ""}`,
+      ...deployResult.entities.map(
+        (entity) =>
+          `- ${entity.address}: ${entity.kind} (${entity.id})${entity.url ? `\n  ${entity.url}` : ""}`,
       ),
     );
   }

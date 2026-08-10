@@ -10,9 +10,9 @@ Scaffold a new app with Prisma already wired up.
 - adds Prisma 7 dependencies for your database
 - scaffolds `prisma/schema.prisma`, `prisma/seed.ts`, `prisma.config.ts`, and a Composer application graph for supported templates
 - writes a Prisma client singleton in the right place for the selected template
-- adds `db:generate`, `db:migrate`, and `db:seed` scripts
-- creates or updates the template env file with `DATABASE_URL`
-- installs dependencies when requested and generates Prisma Client automatically
+- adds `db:generate`, `db:migrate`, `db:migrate:deploy`, and `db:seed` scripts
+- creates an env example for databases managed outside Composer
+- installs dependencies when requested, then generates Prisma Client and an initial migration automatically
 - can deploy the finished app and its Prisma Postgres database with Prisma Composer
 
 ## Quick Start
@@ -79,7 +79,7 @@ Deploy a supported app with Prisma Composer:
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-With PostgreSQL and no `--database-url`, Prisma Postgres is included automatically. When deploying immediately, Composer provisions the database as part of the application graph, injects its connection into the service, then create-prisma applies the starter migration and seed. Pass `--database-url` to bind an existing database instead.
+PostgreSQL always includes Prisma Postgres in the Composer application graph. The generated deploy script provisions it with the app, applies the generated migration with `prisma migrate deploy`, seeds it, and removes the temporary direct connection used for setup.
 
 ## Supported Templates
 
@@ -156,9 +156,9 @@ Accept the deploy prompt when it appears, or pass the flag:
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-Deployment requires `PRISMA_SERVICE_TOKEN` and `PRISMA_WORKSPACE_ID`. With PostgreSQL and no `--database-url`, Composer provisions Prisma Postgres and passes its connection through `service.load()`. After the first deployment, create-prisma writes a direct connection to the Prisma env file and automatically runs the starter migration and seed. Other database configurations are passed through a secret Composer service input.
+Deployment currently requires `PRISMA_SERVICE_TOKEN` and `PRISMA_WORKSPACE_ID`. PostgreSQL always provisions Prisma Postgres and passes its connection through `service.load()`. For other providers, copy `.env.example` to `.env`, set `DATABASE_URL`, and Composer will pass it to the application as a secret input.
 
-A `deploy` script is generated for every supported package manager. It builds and deploys the Composer application, then resolves the Composer-managed Prisma Postgres connection, applies the starter migration, and seeds the database.
+A `deploy` script is generated for every supported package manager. It builds and deploys the Composer application. For PostgreSQL it then resolves the Composer-managed database, applies the committed migration with `prisma migrate deploy`, seeds the database, and removes the temporary direct connection. No database URL is written back to the project.
 
 The only Composer-specific prompt asks whether to deploy immediately. It is skipped in `--yes` runs unless you pass `--deploy`; the Composer files are still generated. Prisma Client generation is automatic, and PostgreSQL uses Prisma Postgres by default without additional prompts.
 

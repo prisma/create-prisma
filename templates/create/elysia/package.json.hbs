@@ -7,7 +7,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js" denoFlags="--unstable-net"}}",
+    "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js"}}",
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire as __composerCreateRequire } from 'node:module'; const require = __composerCreateRequire(import.meta.url);\" --outfile=dist/server.mjs",
     "start": "node dist/server.mjs"
   },

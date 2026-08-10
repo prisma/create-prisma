@@ -1,6 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const platformCli = {{composerPlatformCliInvocation packageManager}};
@@ -132,10 +130,7 @@ if (!databaseUrl) {
 }
 
 try {
-  const migrationsDir = path.join(prismaProjectDir, "prisma/migrations");
-  const hasMigrations =
-    existsSync(migrationsDir) && readdirSync(migrationsDir, { withFileTypes: true }).some((entry) => entry.isDirectory());
-  runPrisma(hasMigrations ? ["migrate", "deploy"] : ["migrate", "dev", "--name", "init"], databaseUrl);
+  runPrisma(["migrate", "deploy"], databaseUrl);
   runPrisma(["db", "seed"], databaseUrl);
   console.log("Composer-managed Prisma Postgres migrated and seeded.");
 } finally {

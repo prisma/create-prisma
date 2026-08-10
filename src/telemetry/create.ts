@@ -58,7 +58,7 @@ function getBaseCreateProperties(
     "should-generate": true,
     "uses-prisma-postgres":
       context?.prismaSetupContext.shouldUsePrismaPostgres ??
-      (input.provider === "postgresql" && !input.databaseUrl ? true : null),
+      (input.provider === undefined ? null : input.provider === "postgresql"),
     addons: resolvedAddons,
     "addon-count": resolvedAddons.length,
     "addon-scope": context?.addonSetupContext?.scope ?? null,

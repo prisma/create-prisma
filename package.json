@@ -41,6 +41,7 @@
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run bump",

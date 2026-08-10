@@ -1,14 +1,16 @@
-import { cancel, confirm, isCancel, log, spinner } from "@clack/prompts";
+import { cancel, confirm, isCancel, log } from "@clack/prompts";
 import { execa } from "execa";
+import fs from "fs-extra";
+import os from "node:os";
 import path from "node:path";
 
-import { prismaPlatformCliPackage } from "../constants/dependencies";
-import { type CreateCommandInput, type CreateTemplate, type PackageManager } from "../types";
 import {
-  getPackageExecutionArgs,
-  getRunScriptArgs,
-  getRunScriptCommand,
-} from "../utils/package-manager";
+  type CreateCommandInput,
+  type CreateTemplate,
+  type DatabaseProvider,
+  type PackageManager,
+} from "../types";
+import { getRunScriptArgs, getRunScriptCommand } from "../utils/package-manager";
 
 export type ComposerDeployContext = {
   template: CreateTemplate;
@@ -17,15 +19,24 @@ export type ComposerDeployContext = {
   useComposerPostgres: boolean;
 };
 
-export type ComposerDeployedService = {
+export type ComposerDeployedEntity = {
   address: string;
+  kind: string;
   id: string;
   url?: string;
 };
 
 export type ComposerDeployResult = {
   appName: string;
-  services: ComposerDeployedService[];
+  entities: ComposerDeployedEntity[];
+};
+
+type ComposerDeploymentSummary = {
+  app: string;
+  nodes: Array<{
+    address: string;
+    entities: Array<{ kind: string; id: string; url?: string }>;
+  }>;
 };
 
 function hasEnvironmentValue(name: string): boolean {
@@ -70,117 +81,42 @@ function createExplicitDeployError(reason: string, error?: unknown): Error {
   return new Error(`Deploy requested but ${reason}${detail}`);
 }
 
-type JsonEnvelope =
-  | { ok: true; result: unknown }
-  | { ok: false; error?: { message?: string; summary?: string } };
+async function readComposerDeploymentSummary(
+  resultFile: string,
+): Promise<ComposerDeploymentSummary | undefined> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(resultFile, "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.app !== "string" || !Array.isArray(record.nodes)) return undefined;
 
-async function runPlatformCliJson(params: {
-  context: ComposerDeployContext;
-  projectDir: string;
-  args: string[];
-}): Promise<unknown> {
-  const execution = getPackageExecutionArgs(
-    params.context.packageManager,
-    [prismaPlatformCliPackage, ...params.args, "--json", "--no-interactive"],
-    { silent: true },
-  );
-  const result = await execa(execution.command, execution.args, {
-    cwd: params.projectDir,
-    reject: false,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const parsed = (() => {
-    try {
-      return JSON.parse(result.stdout) as JsonEnvelope;
-    } catch {
+  const nodes: ComposerDeploymentSummary["nodes"] = [];
+  for (const node of record.nodes) {
+    if (typeof node !== "object" || node === null) return undefined;
+    const nodeRecord = node as Record<string, unknown>;
+    if (typeof nodeRecord.address !== "string" || !Array.isArray(nodeRecord.entities)) {
       return undefined;
     }
-  })();
-
-  if (result.exitCode !== 0 || !parsed || !parsed.ok) {
-    const detail =
-      parsed && !parsed.ok
-        ? (parsed.error?.summary ?? parsed.error?.message ?? result.stderr)
-        : result.stderr || "invalid JSON output";
-    throw new Error(getErrorMessage(detail || "Prisma CLI reported an unknown error"));
-  }
-
-  return parsed.result;
-}
-
-function findNamedDatabase(value: unknown): { id: string; name: string } | undefined {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const match = findNamedDatabase(item);
-      if (match) return match;
+    const entities: ComposerDeploymentSummary["nodes"][number]["entities"] = [];
+    for (const entity of nodeRecord.entities) {
+      if (typeof entity !== "object" || entity === null) return undefined;
+      const entityRecord = entity as Record<string, unknown>;
+      if (typeof entityRecord.kind !== "string" || typeof entityRecord.id !== "string") {
+        return undefined;
+      }
+      entities.push({
+        kind: entityRecord.kind,
+        id: entityRecord.id,
+        ...(typeof entityRecord.url === "string" ? { url: entityRecord.url } : {}),
+      });
     }
-    return undefined;
+    nodes.push({ address: nodeRecord.address, entities });
   }
-  if (typeof value !== "object" || value === null) return undefined;
-
-  const record = value as Record<string, unknown>;
-  if (record.name === "database" && typeof record.id === "string") {
-    return { id: record.id, name: record.name };
-  }
-
-  for (const item of Object.values(record)) {
-    const match = findNamedDatabase(item);
-    if (match) return match;
-  }
-  return undefined;
-}
-
-function findDatabaseUrl(value: unknown): string | undefined {
-  if (typeof value === "string") {
-    return /^(?:prisma\+)?postgres(?:ql)?:\/\//.test(value) ? value : undefined;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const match = findDatabaseUrl(item);
-      if (match) return match;
-    }
-    return undefined;
-  }
-  if (typeof value !== "object" || value === null) return undefined;
-
-  for (const item of Object.values(value)) {
-    const match = findDatabaseUrl(item);
-    if (match) return match;
-  }
-  return undefined;
-}
-
-export async function resolveComposerPostgresDatabaseUrl(params: {
-  context: ComposerDeployContext;
-  projectDir: string;
-}): Promise<string> {
-  const databases = await runPlatformCliJson({
-    ...params,
-    args: ["database", "list", "--project", params.context.projectName],
-  });
-  const database = findNamedDatabase(databases);
-  if (!database) {
-    throw new Error('Composer deployed, but the provisioned "database" resource was not found.');
-  }
-
-  const connection = await runPlatformCliJson({
-    ...params,
-    args: [
-      "database",
-      "connection",
-      "create",
-      database.id,
-      "--project",
-      params.context.projectName,
-      "--name",
-      `create-prisma-${Date.now()}`,
-    ],
-  });
-  const databaseUrl = findDatabaseUrl(connection);
-  if (!databaseUrl) {
-    throw new Error("Composer database connection output did not include a connection URL.");
-  }
-  return databaseUrl;
+  return { app: record.app, nodes };
 }
 
 export function getComposerDeployScriptMap(context: ComposerDeployContext): Record<string, string> {
@@ -205,6 +141,7 @@ export async function collectComposerDeployContext(
   input: CreateCommandInput,
   options: {
     template: CreateTemplate;
+    databaseProvider: DatabaseProvider;
     packageManager: PackageManager;
     projectName: string;
     useDefaults: boolean;
@@ -233,6 +170,21 @@ export async function collectComposerDeployContext(
 
   if (!wantsDeploy) return null;
 
+  if (
+    options.databaseProvider !== "postgresql" &&
+    (process.env.DATABASE_URL ?? "").trim().length === 0
+  ) {
+    const reason = `immediate deployment for ${options.databaseProvider} needs DATABASE_URL`;
+    if (input.deploy === true) {
+      throw createExplicitDeployError(reason);
+    }
+    log.warn(
+      `${reason}. ` +
+        "Scaffolding without deployment; configure the generated .env file and run the deploy script later.",
+    );
+    return null;
+  }
+
   const missingCredentials = missingComposerCredentials();
   if (missingCredentials.length > 0) {
     const reason = `the deploy environment is missing ${missingCredentials.join(" and ")}`;
@@ -257,39 +209,36 @@ export async function executeComposerDeployContext(params: {
 }): Promise<
   { ok: true; result: ComposerDeployResult } | { ok: false; cancelled: boolean; error?: unknown }
 > {
-  const deploySpinner = spinner();
-  deploySpinner.start("Building the Composer deploy artifact...");
-  const build = getRunScriptArgs(params.context.packageManager, "build");
-  try {
-    await execa(build.command, build.args, {
-      cwd: params.projectDir,
-      stdio: "pipe",
-    });
-    deploySpinner.stop("Composer deploy artifact built.");
-  } catch (error) {
-    const buildError = new Error(`Build failed: ${getErrorMessage(error)}`);
-    deploySpinner.error(buildError.message);
-    return { ok: false, cancelled: false, error: buildError };
-  }
-
-  log.step("Composer deploy output follows.");
-  const deploy = getRunScriptArgs(params.context.packageManager, "composer:deploy");
+  log.step("Prisma deployment output follows.");
+  const deploy = getRunScriptArgs(params.context.packageManager, "deploy");
+  const resultDir = await fs.mkdtemp(path.join(os.tmpdir(), "create-prisma-deploy-"));
+  const resultFile = path.join(resultDir, "result.json");
   try {
     await execa(deploy.command, deploy.args, {
       cwd: params.projectDir,
+      env: {
+        ...process.env,
+        PRISMA_COMPOSER_DEPLOYMENT_RESULT_FILE: resultFile,
+      },
       stdio: "inherit",
     });
-    log.success("Deployed with Prisma Composer.");
+    const summary = await readComposerDeploymentSummary(resultFile);
+    log.success("Deployed to Prisma.");
     return {
       ok: true,
       result: {
-        appName: params.context.projectName || path.basename(params.projectDir),
-        services: [],
+        appName: summary?.app ?? (params.context.projectName || path.basename(params.projectDir)),
+        entities:
+          summary?.nodes.flatMap((node) =>
+            node.entities.map((entity) => ({ address: node.address, ...entity })),
+          ) ?? [],
       },
     };
   } catch (error) {
     const deployError = new Error(getErrorMessage(error));
     log.error(`Deploy failed: ${deployError.message}`);
     return { ok: false, cancelled: false, error: deployError };
+  } finally {
+    await fs.remove(resultDir);
   }
 }
