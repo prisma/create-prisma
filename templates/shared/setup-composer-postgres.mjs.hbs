@@ -10,6 +10,7 @@ const prismaProjectDir = fileURLToPath(
 
 function redactSecrets(message) {
   return message
+    .replace(/\b((?:prisma\+)?postgres(?:ql)?:\/\/)[^\s'"]+/gi, "$1<redacted>")
     .replace(
       /(['"])([A-Z0-9_]*(?:DATABASE_URL|DIRECT_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*=)(.*?)\1/g,
       "$1$2<redacted>$1",
@@ -28,6 +29,7 @@ function runPlatformCli(args) {
       cwd: projectDir,
       encoding: "utf8",
       env: process.env,
+      shell: process.platform === "win32",
     },
   );
   if (result.error || result.status !== 0) {
@@ -35,7 +37,12 @@ function runPlatformCli(args) {
     throw new Error(redactSecrets(String(detail).trim()));
   }
 
-  const parsed = JSON.parse(result.stdout);
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw new Error("Prisma CLI returned output that is not valid JSON.");
+  }
   if (!parsed?.ok) {
     const detail = parsed?.error?.summary ?? parsed?.error?.message ?? "Prisma CLI reported an unknown error";
     throw new Error(redactSecrets(String(detail)));
@@ -100,6 +107,7 @@ function runPrisma(args, databaseUrl) {
   const result = spawnSync(prismaCli.command, [...prismaCli.args, ...args], {
     cwd: prismaProjectDir,
     env: { ...process.env, DATABASE_URL: databaseUrl },
+    shell: process.platform === "win32",
     stdio: "inherit",
   });
   if (result.error || result.status !== 0) {
@@ -125,11 +133,11 @@ const connection = runPlatformCli([
 ]);
 const databaseUrl = findDatabaseUrl(connection);
 const connectionId = findConnectionId(connection);
-if (!databaseUrl) {
-  throw new Error("Composer database connection output did not include a connection URL.");
-}
 
 try {
+  if (!databaseUrl) {
+    throw new Error("Composer database connection output did not include a connection URL.");
+  }
   runPrisma(["migrate", "deploy"], databaseUrl);
   runPrisma(["db", "seed"], databaseUrl);
   console.log("Composer-managed Prisma Postgres migrated and seeded.");
@@ -147,5 +155,9 @@ try {
     } catch (error) {
       console.warn(`Could not remove temporary database connection: ${redactSecrets(String(error))}`);
     }
+  } else {
+    console.warn(
+      "Could not determine the temporary database connection id. Remove it manually in the Prisma console.",
+    );
   }
 }

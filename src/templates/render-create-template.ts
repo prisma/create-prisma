@@ -1,6 +1,6 @@
 import fs from "fs-extra";
 import path from "node:path";
-import { isMap, parseDocument } from "yaml";
+import { isMap, isScalar, parseDocument } from "yaml";
 
 import type { CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { escapeRegExp } from "../utils/regexp";
@@ -98,7 +98,11 @@ function mergePnpmComposerOverrides(content: string): string {
   if (!document.has("overrides")) {
     document.set("overrides", document.createNode({}));
   }
-  const overrides = document.get("overrides", true);
+  let overrides = document.get("overrides", true);
+  if (isScalar(overrides) && overrides.value === null) {
+    document.set("overrides", document.createNode({}));
+    overrides = document.get("overrides", true);
+  }
   if (!isMap(overrides)) {
     throw new Error('Could not update pnpm-workspace.yaml: "overrides" must be a mapping.');
   }

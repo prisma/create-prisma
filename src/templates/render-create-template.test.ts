@@ -63,6 +63,11 @@ describe("Composer-ready create templates", () => {
             expect(setupSource).toContain('runPrisma(["migrate", "deploy"], databaseUrl)');
             expect(setupSource).not.toContain('runPrisma(["migrate", "dev"]');
             expect(setupSource).not.toContain("./node_modules/.bin/prisma");
+            expect(setupSource).toContain('shell: process.platform === "win32"');
+            expect(setupSource).toContain("Prisma CLI returned output that is not valid JSON.");
+            expect(setupSource.indexOf("try {\n  if (!databaseUrl)")).toBeGreaterThan(
+              setupSource.indexOf("const connectionId = findConnectionId(connection)"),
+            );
           } else {
             expect(moduleSource).toContain('envSecret("PRISMA_APP_DATABASE_URL")');
             expect(moduleSource).not.toContain("provision(postgres(");
@@ -85,10 +90,34 @@ describe("Composer deploy scripts", () => {
       });
 
       expect(scripts["composer:deploy"]).toBe("prisma-composer deploy module.ts");
-      expect(scripts["composer:database:setup"]).toBe("node scripts/setup-composer-postgres.mjs");
+      expect(scripts["composer:database:setup"]).toBe(
+        `${packageManager === "bun" ? "bun" : "node"} scripts/setup-composer-postgres.mjs`,
+      );
       expect(scripts.deploy).toBe(
         `${packageManager} run build && ${packageManager} run composer:deploy && ${packageManager} run composer:database:setup`,
       );
     });
   }
+});
+
+test("fills an empty pnpm overrides mapping", async () => {
+  const projectDir = path.join(testRoot, "pnpm-null-overrides");
+  await fs.ensureDir(projectDir);
+  await fs.writeFile(
+    path.join(projectDir, "pnpm-workspace.yaml"),
+    'packages:\n  - "."\noverrides:\n',
+    "utf8",
+  );
+
+  await scaffoldCreateTemplate({
+    projectDir,
+    projectName: "matrix-app",
+    template: "hono",
+    provider: "postgresql",
+    packageManager: "pnpm",
+    composerPostgres: true,
+  });
+
+  const workspace = await fs.readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8");
+  expect(workspace).toContain('"@effect/platform-node": 4.0.0-beta.93');
 });

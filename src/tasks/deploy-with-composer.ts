@@ -131,7 +131,11 @@ export function getComposerDeployScriptMap(context: ComposerDeployContext): Reco
   return {
     "composer:deploy": "prisma-composer deploy module.ts",
     ...(context.useComposerPostgres
-      ? { "composer:database:setup": "node scripts/setup-composer-postgres.mjs" }
+      ? {
+          "composer:database:setup": `${
+            context.packageManager === "bun" ? "bun" : "node"
+          } scripts/setup-composer-postgres.mjs`,
+        }
       : {}),
     deploy: steps.join(" && "),
   };
