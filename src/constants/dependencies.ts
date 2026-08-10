@@ -9,9 +9,13 @@ export const dependencyVersionMap = {
   "@prisma/adapter-libsql": "^7.8.0",
   "@prisma/adapter-mariadb": "^7.8.0",
   "@prisma/adapter-mssql": "^7.8.0",
-  "@prisma/compute-sdk": "latest",
+  "@prisma/composer": "0.6.0",
+  "@prisma/composer-prisma-cloud": "0.6.0",
   "@types/node": "^26.0.0",
+  arktype: "^2.2.3",
   dotenv: "^17.4.2",
+  effect: "4.0.0-beta.93",
+  esbuild: "^0.28.2",
   prisma: "^7.8.0",
   tsx: "^4.22.4",
 } as const;
@@ -25,7 +29,7 @@ export type CreateTemplateDependencyTarget = {
   customDependencies?: Record<string, string>;
 };
 
-const computeConfigTemplates = new Set<CreateTemplate>([
+const composerTemplates = new Set<CreateTemplate>([
   "hono",
   "elysia",
   "nest",
@@ -43,6 +47,7 @@ function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
 export function getCreateTemplateDependencies(
   template: CreateTemplate,
   packageManager: PackageManager,
+  composer = false,
 ): CreateTemplateDependencyTarget[] {
   const targets: CreateTemplateDependencyTarget[] = [];
 
@@ -77,12 +82,21 @@ export function getCreateTemplateDependencies(
     });
   }
 
-  if (computeConfigTemplates.has(template)) {
+  if (composer && composerTemplates.has(template)) {
     targets.push({
       packageJsonPath: "package.json",
-      dependencies: [],
-      devDependencies: ["@prisma/compute-sdk"],
+      dependencies: ["@prisma/composer", "@prisma/composer-prisma-cloud", "arktype", "effect"],
+      devDependencies:
+        template === "hono" || template === "elysia" || template === "nest" ? ["esbuild"] : [],
     });
+
+    if (template === "turborepo") {
+      targets.push({
+        packageJsonPath: "apps/api/package.json",
+        dependencies: [],
+        devDependencies: ["esbuild"],
+      });
+    }
   }
 
   return targets;

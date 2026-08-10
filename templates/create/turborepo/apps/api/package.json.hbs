@@ -10,8 +10,8 @@
     "typecheck": "deno check src/index.ts"
     {{else}}
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/src/index.js",
+    "build": "{{#if composer}}esbuild src/index.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire as __composerCreateRequire } from 'node:module'; const require = __composerCreateRequire(import.meta.url);\" --outfile=dist/server.mjs{{else}}tsc{{/if}}",
+    "start": "{{#if composer}}node dist/server.mjs{{else}}node dist/src/index.js{{/if}}",
     "typecheck": "tsc --noEmit"
     {{/if}}
   },

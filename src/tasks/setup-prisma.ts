@@ -750,6 +750,23 @@ export type PrismaSetupResult =
       databaseUrl?: string;
     };
 
+export async function executePrismaMigrationAndSeed(params: {
+  context: PrismaSetupContext;
+  projectDir: string;
+  databaseUrl: string;
+}): Promise<{ didMigrate: boolean; didSeed: boolean; warning?: string }> {
+  await finalizePrismaFiles({
+    provider: params.context.databaseProvider,
+    databaseUrl: params.databaseUrl,
+    projectDir: params.projectDir,
+  });
+
+  return migrateAndSeedIfRequested(params.context, params.projectDir, {
+    databaseUrl: params.databaseUrl,
+    didGenerateClient: true,
+  });
+}
+
 export async function executePrismaSetupContext(
   context: PrismaSetupContext,
   options: PrismaSetupRunOptions = {},

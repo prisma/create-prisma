@@ -8,12 +8,12 @@ Scaffold a new app with Prisma already wired up.
 
 - creates a new app from a supported template
 - adds Prisma 7 dependencies for your database
-- scaffolds `prisma/schema.prisma`, `prisma/seed.ts`, `prisma.config.ts`, and Compute deploy defaults for Compute-ready templates
+- scaffolds `prisma/schema.prisma`, `prisma/seed.ts`, `prisma.config.ts`, and a Composer application graph for supported templates
 - writes a Prisma client singleton in the right place for the selected template
 - adds `db:generate`, `db:migrate`, and `db:seed` scripts
 - creates or updates the template env file with `DATABASE_URL`
 - can install dependencies and run `prisma generate` for you
-- can deploy the finished app to Prisma Compute and return a live URL
+- can deploy the finished app and its Prisma Postgres database with Prisma Composer
 
 ## Quick Start
 
@@ -77,13 +77,13 @@ Use Prisma Postgres auto-provisioning:
 create-prisma --name my-app --template nest --provider postgresql --prisma-postgres
 ```
 
-Deploy a supported app to Prisma Compute:
+Deploy a supported app with Prisma Composer:
 
 ```bash
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-With PostgreSQL and no `--database-url`, the Compute flow asks whether to use Prisma Postgres. If accepted, or if `--prisma-postgres` is passed, it creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to the template env file, and deploys the app with the env file configured in `prisma.compute.ts`. Pass `--no-prisma-postgres` to deploy without provisioning a database.
+With PostgreSQL and no `--database-url`, the deploy flow asks whether to use Prisma Postgres. If accepted, or if `--prisma-postgres` is passed, Composer provisions the database as part of the application graph, injects its connection into the service, and deploys both together. Pass `--no-prisma-postgres` to bind an existing database URL instead.
 
 ## Supported Templates
 
@@ -97,7 +97,7 @@ With PostgreSQL and no `--database-url`, the Compute flow asks whether to use Pr
 - `tanstack-start`
 - `turborepo`
 
-Prisma Compute deployment is currently supported for:
+Prisma Composer files are included by default, and deployment is supported for:
 
 - `hono`
 - `elysia`
@@ -124,6 +124,8 @@ Prisma Compute deployment is currently supported for:
 - `bun`
 - `deno`
 
+Composer generation and deployment currently apply to the Node-compatible package manager choices (`npm`, `pnpm`, `yarn`, and `bun`). Deno scaffolding remains available without Composer.
+
 ## Useful Flags
 
 - `--name` project name or relative path
@@ -131,7 +133,7 @@ Prisma Compute deployment is currently supported for:
 - `--provider` choose the database provider
 - `--package-manager` choose the package manager/runtime
 - `--schema-preset empty|basic`
-- `--deploy` deploy supported templates to Prisma Compute
+- `--deploy` deploy supported templates with Prisma Composer
 - `--yes` accept defaults and skip prompts
 - `--no-install` scaffold only
 - `--no-generate` skip `prisma generate`
@@ -149,11 +151,11 @@ Prisma Compute deployment is currently supported for:
 - Prisma IDE extension install
 
 These can be selected interactively or enabled with flags.
-When Prisma Compute deploy is selected, the skills add-on recommends the `prisma-compute` skill too.
+When Composer deployment is selected, the skills add-on recommends the `prisma-compute` skill too.
 
-## Deploy to Prisma Compute
+## Deploy with Prisma Composer
 
-After scaffolding, `create-prisma` can deploy your app to [Prisma Compute](https://www.prisma.io/docs/compute), the serverless hosting for TypeScript apps that runs next to your Prisma Postgres database. It is offered for the templates the Prisma CLI can deploy today: `hono`, `elysia`, `nest`, `next`, `astro`, `nuxt`, `tanstack-start`, and `turborepo`.
+Supported templates include Composer by default: `module.ts` declares the application graph, `service.ts` declares the Compute service and its dependencies, and `prisma-composer.config.ts` selects the Prisma Cloud target. The generated project is ready to deploy whether or not you deploy during creation.
 
 Accept the deploy prompt when it appears, or pass the flag:
 
@@ -161,11 +163,11 @@ Accept the deploy prompt when it appears, or pass the flag:
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-The deploy step signs you in with the Prisma CLI if you are not signed in yet. With PostgreSQL and no `--database-url`, create-prisma asks whether to use Prisma Postgres. If accepted, or if `--prisma-postgres` is passed, setup creates a Prisma Compute project, creates a `main` Prisma Postgres database on the `main` branch, writes `DATABASE_URL` to the template env file, runs the requested Prisma setup, then deploys the app with the env file configured in `prisma.compute.ts`. Pass `--no-prisma-postgres` to deploy without provisioning a database.
+Deployment requires `PRISMA_SERVICE_TOKEN` and `PRISMA_WORKSPACE_ID`. With PostgreSQL and no `--database-url`, create-prisma asks whether to use Prisma Postgres. If accepted, Composer provisions the database and passes its connection through `service.load()`. After the first deployment, create-prisma writes a direct connection to the Prisma env file and runs the requested migration and seed. Other database configurations are passed through a secret Composer service input.
 
-A `prisma.compute.ts` file is generated with the app framework, runtime port, target, and env-file defaults. When deployment is selected, a `compute:deploy` script is added to the generated project so you can redeploy app changes later. That script runs `@prisma/cli@latest app deploy` using `prisma.compute.ts`; it does not create a new project, create a new database, run migrations, or seed data.
+A `deploy` script is generated for npm, pnpm, Yarn, and Bun. It applies existing migrations for a Composer-managed database, builds the framework artifact, and runs `prisma-composer deploy module.ts`.
 
-The deploy prompt is skipped in `--yes` runs unless you pass `--deploy`. Browser sign-in may still need a person at the keyboard if no Prisma CLI session exists.
+The only Composer-specific prompt asks whether to deploy immediately. It is skipped in `--yes` runs unless you pass `--deploy`; the Composer files are still generated.
 
 ## Local Development
 

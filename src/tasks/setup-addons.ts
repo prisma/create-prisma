@@ -205,7 +205,7 @@ function uniqueValues<T>(values: T[]): T[] {
 function getRecommendedPrismaSkills(
   provider: DatabaseProvider,
   shouldUsePrismaPostgres: boolean,
-  shouldUseComputeDeploy: boolean,
+  shouldUseComposerDeploy: boolean,
 ): PrismaSkillName[] {
   const skills = [...SHARED_PRISMA_SKILLS];
 
@@ -213,7 +213,7 @@ function getRecommendedPrismaSkills(
     skills.push("prisma-postgres");
   }
 
-  if (shouldUseComputeDeploy) {
+  if (shouldUseComposerDeploy) {
     skills.push("prisma-compute");
   }
 
@@ -336,7 +336,7 @@ export async function collectCreateAddonSetupContext(
     useDefaults: boolean;
     provider: DatabaseProvider;
     shouldUsePrismaPostgres: boolean;
-    shouldUseComputeDeploy: boolean;
+    shouldUseComposerDeploy: boolean;
   },
 ): Promise<CreateAddonSetupContext | null | undefined> {
   const hasExplicitAddonSelection =
@@ -372,7 +372,7 @@ export async function collectCreateAddonSetupContext(
   const recommendedSkills = getRecommendedPrismaSkills(
     options.provider,
     options.shouldUsePrismaPostgres,
-    options.shouldUseComputeDeploy,
+    options.shouldUseComposerDeploy,
   );
   const skills = !addons.includes("skills")
     ? []

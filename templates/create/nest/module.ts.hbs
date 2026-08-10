@@ -1,0 +1,32 @@
+{{#if composer}}
+import { module } from "@prisma/composer";
+import { {{#if composerPostgres}}postgres{{else}}envSecret{{/if}} } from "@prisma/composer-prisma-cloud";
+{{#unless composerPostgres}}
+import { config } from "dotenv";
+import { fileURLToPath } from "node:url";
+{{/unless}}
+
+// @ts-ignore Composer loads this TypeScript module directly and requires the extension.
+import app from "./src/service.ts";
+
+{{#unless composerPostgres}}
+config({
+  path: [fileURLToPath(new URL("./.env", import.meta.url)), fileURLToPath(new URL("./packages/db/.env", import.meta.url))],
+  quiet: true,
+});
+process.env.PRISMA_APP_DATABASE_URL ??= process.env.DATABASE_URL;
+{{/unless}}
+
+export default module("{{projectName}}", ({ provision }) => {
+  {{#if composerPostgres}}
+  const database = provision(postgres({ name: "database" }), { id: "database" });
+  provision(app, { deps: { database } });
+  {{else}}
+  provision(app, {
+    input: {
+      databaseUrl: envSecret("PRISMA_APP_DATABASE_URL"),
+    },
+  });
+  {{/if}}
+});
+{{/if}}

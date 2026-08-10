@@ -10,7 +10,8 @@ type CreateTemplateContext = {
   provider: DatabaseProvider;
   schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
-  compute: boolean;
+  composer: boolean;
+  composerPostgres: boolean;
 };
 
 function getCreateTemplateDir(template: CreateTemplate): string {
@@ -22,14 +23,16 @@ function createTemplateContext(
   provider: DatabaseProvider,
   schemaPreset: SchemaPreset,
   packageManager: PackageManager | undefined,
-  compute: boolean,
+  composer: boolean,
+  composerPostgres: boolean,
 ): CreateTemplateContext {
   return {
     projectName,
     provider,
     schemaPreset,
     packageManager,
-    compute,
+    composer,
+    composerPostgres,
   };
 }
 
@@ -37,10 +40,21 @@ const pnpmAllowedBuilds = [
   "@prisma/engines",
   "@parcel/watcher",
   "esbuild",
+  "msgpackr-extract",
   "prisma",
   "sharp",
   "unrs-resolver",
+  "workerd",
 ] as const;
+
+const composerEffectOverrides = {
+  "@effect/platform-bun": "4.0.0-beta.93",
+  "@effect/platform-node": "4.0.0-beta.93",
+  "@effect/platform-node-shared": "4.0.0-beta.93",
+  "@effect/sql-d1": "4.0.0-beta.93",
+  "@effect/sql-pg": "4.0.0-beta.93",
+  "@effect/vitest": "4.0.0-beta.93",
+} as const;
 
 function renderPnpmAllowBuildLine(packageName: string): string {
   const key = packageName.startsWith("@") ? JSON.stringify(packageName) : packageName;
@@ -77,16 +91,43 @@ function mergePnpmAllowBuilds(content: string): string {
   return `${lines.join("\n")}\n`;
 }
 
-async function ensurePnpmWorkspaceAllowBuilds(projectDir: string): Promise<void> {
+function mergePnpmComposerOverrides(content: string): string {
+  const missingOverrides = Object.entries(composerEffectOverrides).filter(
+    ([packageName]) =>
+      !new RegExp(`^\\s*${escapeRegExp(JSON.stringify(packageName))}\\s*:`, "m").test(content),
+  );
+  if (missingOverrides.length === 0) return content;
+
+  const missingLines = missingOverrides.map(
+    ([packageName, version]) => `  ${JSON.stringify(packageName)}: ${version}`,
+  );
+  const trimmedContent = content.trimEnd();
+  const lines = trimmedContent.length > 0 ? trimmedContent.split("\n") : [];
+  const overridesIndex = lines.findIndex((line) => /^overrides:\s*$/.test(line));
+  if (overridesIndex === -1) {
+    return `${trimmedContent}\n\noverrides:\n${missingLines.join("\n")}\n`;
+  }
+
+  lines.splice(overridesIndex + 1, 0, ...missingLines);
+  return `${lines.join("\n")}\n`;
+}
+
+async function ensurePnpmWorkspace(projectDir: string, composer: boolean): Promise<void> {
   const workspacePath = path.join(projectDir, "pnpm-workspace.yaml");
 
   if (!(await fs.pathExists(workspacePath))) {
-    await fs.writeFile(workspacePath, `${renderPnpmAllowBuilds()}\n`, "utf8");
+    const content = composer
+      ? mergePnpmComposerOverrides(`${renderPnpmAllowBuilds()}\n`)
+      : `${renderPnpmAllowBuilds()}\n`;
+    await fs.writeFile(workspacePath, content, "utf8");
     return;
   }
 
   const existingContent = await fs.readFile(workspacePath, "utf8");
-  const nextContent = mergePnpmAllowBuilds(existingContent);
+  const allowBuildsContent = mergePnpmAllowBuilds(existingContent);
+  const nextContent = composer
+    ? mergePnpmComposerOverrides(allowBuildsContent)
+    : allowBuildsContent;
   if (nextContent !== existingContent) {
     await fs.writeFile(workspacePath, nextContent, "utf8");
   }
@@ -99,7 +140,8 @@ export async function scaffoldCreateTemplate(opts: {
   provider: DatabaseProvider;
   schemaPreset: SchemaPreset;
   packageManager?: PackageManager;
-  compute?: boolean;
+  composer?: boolean;
+  composerPostgres?: boolean;
 }): Promise<void> {
   const { projectDir, projectName, template, provider, schemaPreset, packageManager } = opts;
   const templateRoot = getCreateTemplateDir(template);
@@ -108,7 +150,8 @@ export async function scaffoldCreateTemplate(opts: {
     provider,
     schemaPreset,
     packageManager,
-    opts.compute === true,
+    opts.composer === true,
+    opts.composerPostgres === true,
   );
   await renderTemplateTree<CreateTemplateContext>({
     templateRoot,
@@ -116,6 +159,6 @@ export async function scaffoldCreateTemplate(opts: {
     context,
   });
   if (packageManager === "pnpm") {
-    await ensurePnpmWorkspaceAllowBuilds(projectDir);
+    await ensurePnpmWorkspace(projectDir, opts.composer === true);
   }
 }

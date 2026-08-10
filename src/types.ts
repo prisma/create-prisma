@@ -94,11 +94,11 @@ export const CreateScaffoldOptionsSchema = z.object({
   skills: z.boolean().optional().describe("Enable skills addon"),
   mcp: z.boolean().optional().describe("Enable MCP addon"),
   extension: z.boolean().optional().describe("Enable extension addon"),
-  deploy: z.boolean().optional().describe("Deploy the scaffolded project to Prisma Compute"),
+  deploy: z.boolean().optional().describe("Deploy the scaffolded project with Prisma Composer"),
   force: z.boolean().optional().describe("Allow scaffolding into a non-empty target directory"),
 });
 
-export const COMPUTE_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set<CreateTemplate>([
+export const COMPOSER_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set<CreateTemplate>([
   "hono",
   "elysia",
   "nest",
@@ -109,8 +109,8 @@ export const COMPUTE_DEPLOYABLE_TEMPLATES: ReadonlySet<CreateTemplate> = new Set
   "turborepo",
 ]);
 
-export function isComputeDeployableTemplate(template: CreateTemplate): boolean {
-  return COMPUTE_DEPLOYABLE_TEMPLATES.has(template);
+export function isComposerDeployableTemplate(template: CreateTemplate): boolean {
+  return COMPOSER_DEPLOYABLE_TEMPLATES.has(template);
 }
 
 export const CreateCommandInputSchema = PrismaSetupCommandInputSchema.extend(

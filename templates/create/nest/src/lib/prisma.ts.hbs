@@ -1,7 +1,14 @@
+{{#if composer}}
+import "dotenv/config";
+{{else}}
 {{#if (requiresDotenvConfigImport packageManager)}}
 import "dotenv/config";
 {{/if}}
+{{/if}}
 
+{{#if composer}}
+import service from "../service";
+{{/if}}
 import { PrismaClient } from "../generated/prisma/client{{#if (eq packageManager "deno")}}.ts{{/if}}";
 {{#if (eq provider "postgresql")}}
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -19,7 +26,23 @@ import { {{sqliteAdapterClass packageManager}} } from "{{sqliteAdapterPackage pa
 import { PrismaMssql } from "@prisma/adapter-mssql";
 {{/if}}
 
+{{#if composer}}
+function getComposerDatabaseUrl(): string | undefined {
+  try {
+    {{#if composerPostgres}}
+    return service.load().database.url;
+    {{else}}
+    return service.input().databaseUrl.expose();
+    {{/if}}
+  } catch {
+    return undefined;
+  }
+}
+
+const rawDatabaseUrl = getComposerDatabaseUrl() ?? process.env.DATABASE_URL;
+{{else}}
 const rawDatabaseUrl = process.env.DATABASE_URL;
+{{/if}}
 {{#if (eq provider "sqlite")}}
 const databaseUrl = (rawDatabaseUrl ?? "").trim() || "file:./dev.db";
 {{else}}

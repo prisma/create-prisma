@@ -9,6 +9,7 @@ import type { PrismaSetupContext } from "../tasks/setup-prisma";
 import {
   CreateCommandInputSchema,
   CreateTemplateSchema,
+  isComposerDeployableTemplate,
   type CreateCommandInput,
   type CreateTemplate,
   type SchemaPreset,
@@ -16,6 +17,7 @@ import {
 import {
   collectPrismaSetupInitialContext,
   completePrismaSetupContext,
+  executePrismaMigrationAndSeed,
   executePrismaSetupContext,
 } from "../tasks/setup-prisma";
 import {
@@ -23,14 +25,13 @@ import {
   executeCreateAddonSetupContext,
 } from "../tasks/setup-addons";
 import {
-  collectComputeDeployContext,
-  executeComputeDatabaseSetup,
-  executeComputeDeployContext,
-  getComputeDeployScriptMap,
-  type ComputeDatabaseResult,
-  type ComputeDeployContext,
-  type ComputeDeployResult,
-} from "../tasks/deploy-to-compute";
+  collectComposerDeployContext,
+  executeComposerDeployContext,
+  getComposerDeployScriptMap,
+  resolveComposerPostgresDatabaseUrl,
+  type ComposerDeployContext,
+  type ComposerDeployResult,
+} from "../tasks/deploy-with-composer";
 import {
   trackCreateCompleted,
   trackCreateFailed,
@@ -57,8 +58,9 @@ export type CreatePromptContext = {
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
   addonSetupContext?: CreateAddonSetupContext;
-  computeDeployContext?: ComputeDeployContext;
-  useComputeDatabase: boolean;
+  composerContext?: ComposerDeployContext;
+  composerDeployContext?: ComposerDeployContext;
+  useComposerPostgres: boolean;
 };
 
 type ExecuteCreateContextResult =
@@ -311,13 +313,13 @@ async function collectCreateContext(
   }
 
   const projectPackageName = toPackageName(path.basename(targetDirectory));
-  const computeDeployContext = await collectComputeDeployContext(input, {
+  const composerDeployContext = await collectComposerDeployContext(input, {
     template,
     packageManager: prismaSetupInitialContext.packageManager,
+    projectName: projectPackageName,
     useDefaults,
-    defaultServiceName: projectPackageName,
   });
-  if (computeDeployContext === undefined) {
+  if (composerDeployContext === undefined) {
     return;
   }
 
@@ -326,20 +328,35 @@ async function collectCreateContext(
     return;
   }
 
-  const useComputeDatabase = Boolean(
-    computeDeployContext && prismaSetupContext.shouldUsePrismaPostgres,
+  const useComposerPostgres = Boolean(
+    composerDeployContext && prismaSetupContext.shouldUsePrismaPostgres,
   );
-  if (useComputeDatabase) {
+  if (composerDeployContext) {
+    composerDeployContext.useComposerPostgres = useComposerPostgres;
+  }
+
+  if (useComposerPostgres) {
     log.info(
-      "Prisma Postgres selected: create-prisma will provision a database and write DATABASE_URL to the template env file before deploying.",
+      "Prisma Postgres selected: Composer will provision the database and wire it into the application.",
     );
   }
+
+  const composerEnabled =
+    isComposerDeployableTemplate(template) && prismaSetupContext.packageManager !== "deno";
+  const composerContext = composerEnabled
+    ? (composerDeployContext ?? {
+        template,
+        packageManager: prismaSetupContext.packageManager,
+        projectName: projectPackageName,
+        useComposerPostgres: false,
+      })
+    : undefined;
 
   const addonSetupContext = await collectCreateAddonSetupContext(input, {
     useDefaults,
     provider: prismaSetupContext.databaseProvider,
     shouldUsePrismaPostgres: prismaSetupContext.shouldUsePrismaPostgres,
-    shouldUseComputeDeploy: Boolean(computeDeployContext),
+    shouldUseComposerDeploy: Boolean(composerDeployContext),
   });
   if (addonSetupContext === undefined) {
     return;
@@ -353,8 +370,9 @@ async function collectCreateContext(
     projectPackageName,
     prismaSetupContext,
     addonSetupContext: addonSetupContext ?? undefined,
-    computeDeployContext: computeDeployContext ?? undefined,
-    useComputeDatabase,
+    composerContext,
+    composerDeployContext: composerDeployContext ?? undefined,
+    useComposerPostgres,
   };
 }
 
@@ -371,7 +389,8 @@ async function executeCreateContext(
       schemaPreset: context.prismaSetupContext.schemaPreset,
       provider: context.prismaSetupContext.databaseProvider,
       packageManager: context.prismaSetupContext.packageManager,
-      compute: Boolean(context.computeDeployContext),
+      composer: Boolean(context.composerContext),
+      composerPostgres: context.useComposerPostgres,
     });
     scaffoldSpinner.stop("Project files scaffolded.");
   } catch (error) {
@@ -387,11 +406,12 @@ async function executeCreateContext(
     await writeCreateTemplateDependencies({
       template: context.template,
       packageManager: context.prismaSetupContext.packageManager,
+      composer: Boolean(context.composerContext),
       projectDir: context.targetDirectory,
     });
-    if (context.computeDeployContext) {
+    if (context.composerContext) {
       await addPackageDependency({
-        scripts: getComputeDeployScriptMap(context.computeDeployContext),
+        scripts: getComposerDeployScriptMap(context.composerContext),
         scriptMode: "if-missing",
         projectDir: context.targetDirectory,
       });
@@ -435,46 +455,20 @@ async function executeCreateContext(
     }
   }
 
-  let computeDatabaseResult: ComputeDatabaseResult | undefined;
-  if (context.useComputeDatabase && context.computeDeployContext) {
-    try {
-      const result = await executeComputeDatabaseSetup({
-        context: context.computeDeployContext,
-        projectDir: context.targetDirectory,
-      });
-      if (!result.ok && !result.cancelled) {
-        return {
-          ok: false,
-          stage: "compute_deploy",
-          error: result.error,
-        };
-      }
-      if (result.ok) {
-        computeDatabaseResult = result.result;
-      }
-    } catch (error) {
-      return {
-        ok: false,
-        stage: "compute_deploy",
-        error,
-      };
-    }
-  }
-
-  const prismaSetupContext = computeDatabaseResult
-    ? {
-        ...context.prismaSetupContext,
-        databaseUrl: computeDatabaseResult.databaseUrl,
-        shouldUsePrismaPostgres: false,
-      }
-    : context.prismaSetupContext;
-
   let prismaResult: Awaited<ReturnType<typeof executePrismaSetupContext>>;
   try {
-    prismaResult = await executePrismaSetupContext(prismaSetupContext, {
+    const initialPrismaContext = context.useComposerPostgres
+      ? {
+          ...context.prismaSetupContext,
+          shouldUsePrismaPostgres: false,
+          shouldMigrateAndSeed: false,
+        }
+      : context.prismaSetupContext;
+    prismaResult = await executePrismaSetupContext(initialPrismaContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
-      includeDevNextStep: !context.useComputeDatabase,
+      includeDevNextStep: true,
+      includeMigrationAndSeedNextSteps: !context.useComposerPostgres,
     });
 
     if (!prismaResult.ok) {
@@ -491,31 +485,54 @@ async function executeCreateContext(
     };
   }
 
-  let deployResult: ComputeDeployResult | undefined;
-  if (context.computeDeployContext) {
+  let deployResult: ComposerDeployResult | undefined;
+  if (context.composerDeployContext) {
     try {
-      const result = await executeComputeDeployContext({
-        context: context.computeDeployContext,
+      const result = await executeComposerDeployContext({
+        context: context.composerDeployContext,
         projectDir: context.targetDirectory,
-        createProject: !computeDatabaseResult,
       });
       if (!result.ok && !result.cancelled) {
         return {
           ok: false,
-          stage: "compute_deploy",
+          stage: "composer_deploy",
           error: result.error,
         };
       }
       if (result.ok) {
         deployResult = result.result;
+        if (context.useComposerPostgres) {
+          const databaseUrl = await resolveComposerPostgresDatabaseUrl({
+            context: context.composerDeployContext,
+            projectDir: context.targetDirectory,
+          });
+          const migration = await executePrismaMigrationAndSeed({
+            context: context.prismaSetupContext,
+            projectDir: context.targetDirectory,
+            databaseUrl,
+          });
+          if (migration.warning) {
+            prismaResult.warningSection += `\n\n- ${migration.warning}`;
+          }
+          if (!migration.didMigrate) {
+            prismaResult.nextSteps.push(
+              `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "db:migrate")}`,
+            );
+          }
+          if (!migration.didSeed) {
+            prismaResult.nextSteps.push(
+              `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "db:seed")}`,
+            );
+          }
+        }
         prismaResult.nextSteps.push(
-          `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "compute:deploy")}`,
+          `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "deploy")}`,
         );
       }
     } catch (error) {
       return {
         ok: false,
-        stage: "compute_deploy",
+        stage: "composer_deploy",
         error,
       };
     }
@@ -524,14 +541,14 @@ async function executeCreateContext(
   const summaryLines: string[] = [];
   summaryLines.push(`Setup complete.${prismaResult.warningSection}`);
   if (deployResult) {
-    const database = computeDatabaseResult?.database ?? deployResult.database;
     summaryLines.push(
       "",
-      "Deployed to Prisma Compute:",
-      ...(deployResult.appUrl ? [`- App URL: ${deployResult.appUrl}`] : []),
-      `- App: ${deployResult.appName} (${deployResult.appId})`,
-      `- Deployment: ${deployResult.deploymentId}`,
-      ...(database ? [`- Database: ${database.name} (${database.id})`] : []),
+      "Deployed with Prisma Composer:",
+      `- App: ${deployResult.appName}`,
+      ...deployResult.services.map(
+        (service) =>
+          `- Service: ${service.address} (${service.id})${service.url ? `\n  ${service.url}` : ""}`,
+      ),
     );
   }
   summaryLines.push("", "Next steps:", prismaResult.nextSteps.join("\n"));

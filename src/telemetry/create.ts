@@ -9,7 +9,7 @@ export type CreateTelemetryFailureStage =
   | "scaffold_template"
   | "addons"
   | "prisma_setup"
-  | "compute_deploy"
+  | "composer_deploy"
   | "unknown";
 
 function getRequestedAddons(input: CreateCommandInput): string[] {

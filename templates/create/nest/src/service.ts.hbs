@@ -1,0 +1,21 @@
+{{#if composer}}
+{{#unless composerPostgres}}
+import { secretString } from "@prisma/composer/arktype";
+{{/unless}}
+import node from "@prisma/composer/node";
+import { compute{{#if composerPostgres}}, postgres{{/if}} } from "@prisma/composer-prisma-cloud";
+{{#unless composerPostgres}}
+import { type } from "arktype";
+{{/unless}}
+
+export default compute({
+  name: "app",
+  {{#if composerPostgres}}
+  deps: { database: postgres() },
+  {{else}}
+  deps: {},
+  input: type({ databaseUrl: secretString() }),
+  {{/if}}
+  build: node({ module: import.meta.url, entry: "../dist-composer/server.mjs" }),
+});
+{{/if}}

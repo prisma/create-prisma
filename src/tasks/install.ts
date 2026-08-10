@@ -22,6 +22,7 @@ function getPrismaScriptMap(packageManager: PackageManager) {
       "db:generate": `${prismaCli} generate`,
       "db:push": `${prismaCli} db push`,
       "db:migrate": `${prismaCli} migrate dev`,
+      "db:migrate:deploy": `${prismaCli} migrate deploy`,
       "db:seed": `${prismaCli} db seed`,
     } as const;
   }
@@ -33,6 +34,7 @@ function getPrismaScriptMap(packageManager: PackageManager) {
       "db:generate": `${prismaCli} generate`,
       "db:push": `${prismaCli} db push`,
       "db:migrate": `${prismaCli} migrate dev`,
+      "db:migrate:deploy": `${prismaCli} migrate deploy`,
       "db:seed": `${prismaCli} db seed`,
     } as const;
   }
@@ -41,6 +43,7 @@ function getPrismaScriptMap(packageManager: PackageManager) {
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
   } as const;
 }
@@ -201,10 +204,11 @@ export async function writePrismaDependencies(
 export async function writeCreateTemplateDependencies(opts: {
   template: CreateTemplate;
   packageManager: PackageManager;
+  composer?: boolean;
   projectDir?: string;
 }): Promise<void> {
-  const { template, packageManager, projectDir = process.cwd() } = opts;
-  const targets = getCreateTemplateDependencies(template, packageManager);
+  const { template, packageManager, composer = false, projectDir = process.cwd() } = opts;
+  const targets = getCreateTemplateDependencies(template, packageManager, composer);
 
   for (const dependencyTarget of targets) {
     const targetDirectory = path.join(projectDir, path.dirname(dependencyTarget.packageJsonPath));
@@ -215,6 +219,38 @@ export async function writeCreateTemplateDependencies(opts: {
       customDependencies: dependencyTarget.customDependencies,
       projectDir: targetDirectory,
     });
+  }
+
+  if (composer) {
+    const packageJsonPath = path.join(projectDir, "package.json");
+    const pkgJson = (await fs.readJson(packageJsonPath)) as Record<string, unknown>;
+    const effectVersions = {
+      "@effect/platform-bun": "4.0.0-beta.93",
+      "@effect/platform-node": "4.0.0-beta.93",
+      "@effect/platform-node-shared": "4.0.0-beta.93",
+      "@effect/sql-d1": "4.0.0-beta.93",
+      "@effect/sql-pg": "4.0.0-beta.93",
+      "@effect/vitest": "4.0.0-beta.93",
+    };
+
+    if (packageManager === "yarn") {
+      pkgJson.resolutions = {
+        ...((pkgJson.resolutions ?? {}) as Record<string, string>),
+        ...effectVersions,
+      };
+    } else if (packageManager !== "pnpm") {
+      pkgJson.overrides = {
+        ...((pkgJson.overrides ?? {}) as Record<string, string>),
+        ...effectVersions,
+      };
+    }
+
+    pkgJson.engines = {
+      ...((pkgJson.engines ?? {}) as Record<string, string>),
+      node: ">=24",
+    };
+
+    await fs.writeJson(packageJsonPath, pkgJson, { spaces: 2 });
   }
 }
 
