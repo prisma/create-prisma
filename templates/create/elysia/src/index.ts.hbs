@@ -16,7 +16,12 @@ const runtimeAdapter = "Bun" in globalThis ? undefined : node();
 const app = new Elysia({ adapter: runtimeAdapter })
   .get("/", () => {
     return {
-      message: "hello from create-prisma + elysia",
+      name: "{{projectName}}",
+      framework: "Elysia",
+      status: "ready",
+      endpoints: {
+        users: "/users",
+      },
     };
   })
 

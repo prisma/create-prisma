@@ -5,7 +5,12 @@ export class AppController {
   @Get()
   getRoot() {
     return {
-      message: "hello from create-prisma + nest",
+      name: "{{projectName}}",
+      framework: "NestJS",
+      status: "ready",
+      endpoints: {
+        users: "/users",
+      },
     };
   }
 }

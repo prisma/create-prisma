@@ -30,53 +30,57 @@ const listUsers = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const Route = createFileRoute("/")({
-
   loader: async () => listUsers(),
-
   component: Home,
 });
 
 function Home() {
-
   const formatter = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
-    timeStyle: "short",
     timeZone: "UTC",
   });
   const users = Route.useLoaderData();
 
   return (
     <main className="shell">
-      <div className="hero">
-        <p className="eyebrow">TanStack Start + Prisma 7</p>
-
-        <h1>Users from your database, loaded through a server function.</h1>
+      <header className="intro">
+        <div className="product">
+          <span className="product-mark" aria-hidden="true">P</span>
+          <span className="product-name">{{projectName}}</span>
+          <span className="framework">TanStack Start</span>
+        </div>
+        <h1>Start building with Prisma.</h1>
         <p className="lede">
-          This route uses TanStack Start&apos;s server function API and the Prisma client in{" "}
-          <code>src/lib/prisma.server.ts</code>.
+          Your app is connected and ready to query. The latest users from your database are shown
+          below.
         </p>
-      </div>
+      </header>
 
-      <section className="panel">
-        <div className="panelHeader">
-          <h2>Seeded users</h2>
-          <span>{users?.length ?? 0} total</span>
+      <section className="user-panel" aria-labelledby="users-heading">
+        <div className="panel-header">
+          <div className="panel-title">
+            <h2 id="users-heading">Users</h2>
+            <p>Latest records</p>
+          </div>
+          <span className="count">{users?.length ?? 0}</span>
         </div>
 
         {!users ? (
-          <p className="empty">
-            Could not query users yet. Run <code>db:migrate</code>, then <code>db:seed</code>,
-            then refresh.
+          <p className="empty-state">
+            The database is not ready yet. Check the setup steps in <code>README.md</code>.
           </p>
         ) : users.length === 0 ? (
-          <p className="empty">No users yet. Run <code>db:seed</code> after your first migration.</p>
+          <p className="empty-state">No users yet. Run <code>db:seed</code>, then refresh.</p>
         ) : (
-          <ul className="users">
+          <ul className="user-list">
             {users.map((user) => (
-              <li key={user.id}>
-                <div>
-                  <strong>{user.name ?? "Unnamed user"}</strong>
-                  <p>{user.email}</p>
+              <li className="user-row" key={user.id}>
+                <span className="avatar" aria-hidden="true">
+                  {(user.name ?? user.email).charAt(0).toUpperCase()}
+                </span>
+                <div className="user-copy">
+                  <p className="user-name">{user.name ?? "Unnamed user"}</p>
+                  <p className="user-email">{user.email}</p>
                 </div>
                 <time dateTime={user.createdAt.toISOString()}>
                   {formatter.format(user.createdAt)}
@@ -87,17 +91,12 @@ function Home() {
         )}
       </section>
 
-      <section className="panel">
-        <div className="panelHeader">
-          <h2>Next steps</h2>
-        </div>
-
-        <ul className="steps">
-          <li>Run <code>db:generate</code> after schema changes.</li>
-          <li>Use TanStack Start server functions for server-only logic.</li>
-          <li>Preview production output with <code>preview</code>.</li>
-        </ul>
-      </section>
+      <footer className="footer">
+        <p>Start with <code>prisma/schema.prisma</code></p>
+        <a className="docs-link" href="https://pris.ly/d/prisma-schema" target="_blank" rel="noreferrer">
+          Prisma docs <span aria-hidden="true">↗</span>
+        </a>
+      </footer>
     </main>
   );
 }

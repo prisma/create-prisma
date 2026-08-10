@@ -1,0 +1,276 @@
+:root {
+  color-scheme: light;
+  --background: #f7f7f5;
+  --surface: #ffffff;
+  --text: #18181b;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --soft: #f4f4f5;
+  --accent: #0f766e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--background);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+.shell {
+  display: flex;
+  width: min(100%, 44rem);
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: 4.5rem 1.5rem 2rem;
+  flex-direction: column;
+}
+
+.product {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.product-mark {
+  display: inline-grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  background: var(--text);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  place-items: center;
+}
+
+.product-name {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.framework {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.75rem;
+}
+
+.intro {
+  margin-bottom: 2.5rem;
+}
+
+h1 {
+  max-width: 38rem;
+  margin: 1.5rem 0 0.75rem;
+  font-size: clamp(2rem, 7vw, 3.25rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.lede {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.user-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(24 24 27 / 4%);
+}
+
+.panel-header {
+  display: flex;
+  min-height: 4.25rem;
+  padding: 0.875rem 1.125rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-title h2,
+.panel-title p {
+  margin: 0;
+}
+
+.panel-title h2 {
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.panel-title p {
+  margin-top: 0.125rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.count {
+  min-width: 1.75rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.user-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.user-row {
+  display: grid;
+  min-height: 4.5rem;
+  padding: 0.75rem 1.125rem;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.user-row + .user-row {
+  border-top: 1px solid var(--line);
+}
+
+.avatar {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: #e7f3f1;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  place-items: center;
+}
+
+.user-copy {
+  min-width: 0;
+}
+
+.user-name,
+.user-email {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.user-email,
+time {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.user-email {
+  margin-top: 0.15rem;
+}
+
+time {
+  white-space: nowrap;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 2rem 1.125rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.footer {
+  display: flex;
+  margin-top: auto;
+  padding-top: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.footer p {
+  margin: 0;
+}
+
+code {
+  padding: 0.125rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--soft);
+  color: #3f3f46;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+.docs-link {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.docs-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+.docs-link:focus-visible {
+  border-radius: 0.2rem;
+  outline: 2px solid var(--accent);
+  outline-offset: 0.2rem;
+}
+
+@media (max-width: 36rem) {
+  .shell {
+    padding-top: 3rem;
+  }
+
+  .user-row {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+  }
+
+  time {
+    grid-column: 2;
+  }
+
+  .footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

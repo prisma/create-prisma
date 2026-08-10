@@ -21,8 +21,12 @@ const app = new Hono();
 
 app.get("/", (c) => {
   return c.json({
-    ok: true,
-    message: "Turborepo API is running.",
+    name: "{{projectName}}",
+    framework: "Turborepo + Hono",
+    status: "ready",
+    endpoints: {
+      users: "/users",
+    },
   });
 });
 

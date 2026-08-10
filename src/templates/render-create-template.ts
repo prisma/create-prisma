@@ -14,6 +14,14 @@ type CreateTemplateContext = {
   composerPostgres: boolean;
 };
 
+const starterStyleOutputPaths: Partial<Record<CreateTemplate, string>> = {
+  astro: "src/styles.css",
+  next: "src/app/globals.css",
+  nuxt: "app/assets/css/main.css",
+  svelte: "src/app.css",
+  "tanstack-start": "src/styles.css",
+};
+
 function getCreateTemplateDir(template: CreateTemplate): string {
   return resolveTemplatesDir(`templates/create/${template}`);
 }
@@ -157,6 +165,14 @@ export async function scaffoldCreateTemplate(opts: {
     outputDir: projectDir,
     context,
   });
+  const starterStyleOutputPath = starterStyleOutputPaths[template];
+  if (starterStyleOutputPath) {
+    await renderTemplateFile<CreateTemplateContext>({
+      templateFilePath: resolveTemplatesDir("templates/shared/starter.css"),
+      outputPath: path.join(projectDir, starterStyleOutputPath),
+      context,
+    });
+  }
   if (context.composerPostgres) {
     await renderTemplateFile<CreateTemplateContext>({
       templateFilePath: resolveTemplatesDir("templates/shared/setup-composer-postgres.mjs.hbs"),

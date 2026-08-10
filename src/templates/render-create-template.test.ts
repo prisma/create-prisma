@@ -14,6 +14,21 @@ import { scaffoldCreateTemplate } from "./render-create-template";
 
 const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "create-prisma-templates-"));
 
+const uiTemplateFiles: Partial<Record<CreateTemplate, { page: string; stylesheet: string }>> = {
+  astro: { page: "src/pages/index.astro", stylesheet: "src/styles.css" },
+  next: { page: "src/app/page.tsx", stylesheet: "src/app/globals.css" },
+  nuxt: { page: "app/pages/index.vue", stylesheet: "app/assets/css/main.css" },
+  svelte: { page: "src/routes/+page.svelte", stylesheet: "src/app.css" },
+  "tanstack-start": { page: "src/routes/index.tsx", stylesheet: "src/styles.css" },
+};
+
+const apiTemplateEntrypoints: Partial<Record<CreateTemplate, string>> = {
+  elysia: "src/index.ts",
+  hono: "src/index.ts",
+  nest: "src/app.controller.ts",
+  turborepo: "apps/api/src/index.ts",
+};
+
 afterAll(async () => {
   await fs.remove(testRoot);
 });
@@ -54,6 +69,30 @@ describe("Composer-ready create templates", () => {
           ).toBeTrue();
           expect(await fs.pathExists(path.join(projectDir, "prisma.compute.ts"))).toBeFalse();
           expect(await fs.pathExists(path.join(projectDir, "deno.json"))).toBeFalse();
+
+          const uiTemplate = uiTemplateFiles[template];
+          if (uiTemplate) {
+            const pageSource = await fs.readFile(path.join(projectDir, uiTemplate.page), "utf8");
+            const stylesheet = await fs.readFile(
+              path.join(projectDir, uiTemplate.stylesheet),
+              "utf8",
+            );
+            expect(pageSource).toContain("Start building with Prisma.");
+            expect(pageSource).toContain("user-panel");
+            expect(stylesheet).toContain("--background: #f7f7f5");
+            expect(stylesheet).toContain(".user-row");
+          }
+
+          const apiEntrypoint = apiTemplateEntrypoints[template];
+          if (apiEntrypoint) {
+            const entrypointSource = await fs.readFile(
+              path.join(projectDir, apiEntrypoint),
+              "utf8",
+            );
+            expect(entrypointSource).toContain('name: "matrix-app"');
+            expect(entrypointSource).toContain('status: "ready"');
+            expect(entrypointSource).toContain('users: "/users"');
+          }
 
           if (composerPostgres) {
             expect(moduleSource).toContain("provision(postgres(");
