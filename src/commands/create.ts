@@ -487,6 +487,12 @@ async function executeCreateContext(
           error: result.error,
         };
       }
+      if (!result.ok) {
+        prismaResult.warningSection += "\n\n- Composer deployment was cancelled.";
+        prismaResult.nextSteps.push(
+          `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "deploy")}`,
+        );
+      }
       if (result.ok) {
         deployResult = result.result;
         if (context.useComposerPostgres) {
