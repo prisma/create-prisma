@@ -53,7 +53,7 @@ export type CreatePromptContext = {
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
   addonSetupContext?: CreateAddonSetupContext;
-  composerContext: ComposerDeployContext;
+  composerScaffoldContext: ComposerDeployContext;
   composerDeployContext?: ComposerDeployContext;
   useComposerPostgres: boolean;
 };
@@ -334,7 +334,7 @@ async function collectCreateContext(
     log.info("Composer will provision Prisma Postgres and wire it into the application.");
   }
 
-  const composerContext = composerDeployContext ?? {
+  const composerScaffoldContext = composerDeployContext ?? {
     template,
     packageManager: prismaSetupContext.packageManager,
     projectName: projectPackageName,
@@ -345,7 +345,6 @@ async function collectCreateContext(
     useDefaults,
     provider: prismaSetupContext.databaseProvider,
     shouldUsePrismaPostgres: prismaSetupContext.shouldUsePrismaPostgres,
-    shouldUseComposerDeploy: Boolean(composerDeployContext),
   });
   if (addonSetupContext === undefined) {
     return;
@@ -359,7 +358,7 @@ async function collectCreateContext(
     projectPackageName,
     prismaSetupContext,
     addonSetupContext: addonSetupContext ?? undefined,
-    composerContext,
+    composerScaffoldContext,
     composerDeployContext: composerDeployContext ?? undefined,
     useComposerPostgres,
   };
@@ -396,7 +395,7 @@ async function executeCreateContext(
       projectDir: context.targetDirectory,
     });
     await addPackageDependency({
-      scripts: getComposerDeployScriptMap(context.composerContext),
+      scripts: getComposerDeployScriptMap(context.composerScaffoldContext),
       scriptMode: "if-missing",
       projectDir: context.targetDirectory,
     });

@@ -144,7 +144,6 @@ Every package manager receives the same Composer-ready templates and deploy scri
 - Prisma IDE extension install
 
 These can be selected interactively or enabled with flags.
-When Composer deployment is selected, the skills add-on recommends the `prisma-compute` skill too.
 
 ## Deploy with Prisma Composer
 

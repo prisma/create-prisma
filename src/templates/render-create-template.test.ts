@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import fs from "fs-extra";
 import os from "node:os";
 import path from "node:path";
+import { parse } from "yaml";
 
 import {
   createTemplates,
@@ -10,6 +11,7 @@ import {
   type PackageManager,
 } from "../types";
 import { getComposerDeployScriptMap } from "../tasks/deploy-with-composer";
+import { writeCreateTemplateDependencies, writePrismaDependencies } from "../tasks/install";
 import { scaffoldCreateTemplate } from "./render-create-template";
 
 const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "create-prisma-templates-"));
@@ -58,12 +60,23 @@ describe("Composer-ready create templates", () => {
             packageManager,
             composerPostgres,
           });
+          await writeCreateTemplateDependencies({
+            template,
+            packageManager,
+            projectDir,
+          });
+          await writePrismaDependencies(
+            composerPostgres ? "postgresql" : "mysql",
+            packageManager,
+            template === "turborepo" ? path.join(projectDir, "packages/db") : projectDir,
+          );
 
           const packageJson = await fs.readJson(path.join(projectDir, "package.json"));
           const moduleSource = await fs.readFile(path.join(projectDir, "module.ts"), "utf8");
           const databaseSetupPath = path.join(projectDir, "scripts/setup-composer-postgres.mjs");
 
           expect(packageJson.packageManager).toStartWith(`${packageManager}@`);
+          expect(packageJson.dependencies.dotenv).toBe("^17.4.2");
           expect(
             await fs.pathExists(path.join(projectDir, "prisma-composer.config.ts")),
           ).toBeTrue();
@@ -159,4 +172,55 @@ test("fills an empty pnpm overrides mapping", async () => {
 
   const workspace = await fs.readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8");
   expect(workspace).toContain('"@effect/platform-node": 4.0.0-beta.93');
+});
+
+test("preserves an existing pnpm override without creating a duplicate key", async () => {
+  const projectDir = path.join(testRoot, "pnpm-existing-override");
+  await fs.ensureDir(projectDir);
+  await fs.writeFile(
+    path.join(projectDir, "pnpm-workspace.yaml"),
+    "packages:\n  - .\noverrides:\n  '@effect/sql-pg': 4.0.0-beta.90\n",
+    "utf8",
+  );
+
+  await scaffoldCreateTemplate({
+    projectDir,
+    projectName: "matrix-app",
+    template: "hono",
+    provider: "postgresql",
+    packageManager: "pnpm",
+    composerPostgres: true,
+  });
+
+  const workspace = await fs.readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8");
+  const parsed = parse(workspace) as { overrides: Record<string, string> };
+  expect(parsed.overrides["@effect/sql-pg"]).toBe("4.0.0-beta.90");
+  expect(workspace.match(/@effect\/sql-pg/g)).toHaveLength(1);
+});
+
+test("adds a pnpm override when the package only appears in another section", async () => {
+  const projectDir = path.join(testRoot, "pnpm-catalog-only");
+  await fs.ensureDir(projectDir);
+  await fs.writeFile(
+    path.join(projectDir, "pnpm-workspace.yaml"),
+    "packages:\n  - .\ncatalog:\n  '@effect/sql-pg': 4.0.0-beta.90\n",
+    "utf8",
+  );
+
+  await scaffoldCreateTemplate({
+    projectDir,
+    projectName: "matrix-app",
+    template: "hono",
+    provider: "postgresql",
+    packageManager: "pnpm",
+    composerPostgres: true,
+  });
+
+  const workspace = await fs.readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8");
+  const parsed = parse(workspace) as {
+    catalog: Record<string, string>;
+    overrides: Record<string, string>;
+  };
+  expect(parsed.catalog["@effect/sql-pg"]).toBe("4.0.0-beta.90");
+  expect(parsed.overrides["@effect/sql-pg"]).toBe("4.0.0-beta.93");
 });
