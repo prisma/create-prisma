@@ -1,56 +1,35 @@
 import "dotenv/config";
-import { db } from "./db{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
-{{#if (eq provider "mongo")}}
-import type { DefaultModelRow } from "@prisma-next/mongo-orm";
-{{else}}
-import type { DefaultModelRow } from "@prisma-next/sql-orm-client";
-{{/if}}
-
-import type { Contract } from "./contract.d";
+import { db } from "./db.ts";
 
 export { db };
 
-type UserRow = DefaultModelRow<Contract, "User">;
-
-{{#if (eq provider "mongo")}}
-function toStarterUser(user: Pick<UserRow, "_id" | "email" | "username" | "name">) {
-  return {
-    id: String(user._id),
-    email: user.email,
-    username: user.username ?? null,
-    name: user.name ?? null,
-    createdAt: null as Date | null,
-  };
-}
-{{else}}
-function toStarterUser(user: Pick<UserRow, "id" | "email" | "username" | "name" | "createdAt">) {
-  return {
-    id: String(user.id),
-    email: user.email,
-    username: user.username ?? null,
-    name: user.name ?? null,
-    createdAt: user.createdAt,
-  };
-}
-{{/if}}
-
 export async function listUsers(limit = 10) {
-
 {{#if (eq provider "mongo")}}
-  const users: ReturnType<typeof toStarterUser>[] = [];
+  const users = [];
 
   for await (const user of db.orm.users.select("_id", "email", "username", "name").take(limit).all()) {
-    users.push(toStarterUser(user));
+    users.push({
+      id: String(user._id),
+      email: user.email,
+      username: user.username ?? null,
+      name: user.name ?? null,
+      createdAt: null as Date | null,
+    });
   }
 
   return users;
 {{else}}
   const users = await db.orm.public.User.select("id", "email", "username", "name", "createdAt").take(limit).all();
 
-  return users.map(toStarterUser);
+  return users.map((user) => ({
+    id: String(user.id),
+    email: user.email,
+    username: user.username ?? null,
+    name: user.name ?? null,
+    createdAt: user.createdAt,
+  }));
 {{/if}}
-
 }
 
 export type StarterUser = Awaited<ReturnType<typeof listUsers>>[number];

@@ -43,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.14.0"
+          node-version: "22.18.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Compute preview metadata
@@ -201,7 +201,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.14.0"
+          node-version: "22.18.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Extract version from commit message

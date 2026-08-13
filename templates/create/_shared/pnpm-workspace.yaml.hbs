@@ -1,0 +1,11 @@
+{{#if (eq packageManager "pnpm")}}
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - "@prisma/*"
+  - "prisma-next"
+overrides:
+  effect: "4.0.0-beta.103"
+{{/if}}

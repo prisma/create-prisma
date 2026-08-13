@@ -7,7 +7,7 @@ import {
   trackCreateFailed,
   type CreateTelemetryFailureStage,
 } from "../telemetry";
-import { scaffoldCreateTemplate } from "../templates/render-create-template";
+import { scaffoldCreateFrameworkTemplate } from "../templates/render-create-template";
 import { writeCreateTemplateDependencies } from "../tasks/install";
 import type { PrismaSetupContext } from "../tasks/setup-prisma";
 import { collectPrismaSetupContext, executePrismaSetupContext } from "../tasks/setup-prisma";
@@ -18,6 +18,7 @@ import {
   type CreateTemplate,
 } from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
+import { getUnsupportedNodeMessage, supportsPrismaNext } from "../utils/node-version";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "minimal";
@@ -188,6 +189,12 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
   try {
     input = CreateCommandInputSchema.parse(rawInput);
 
+    if (!supportsPrismaNext()) {
+      cancel(getUnsupportedNodeMessage());
+      process.exitCode = 1;
+      return;
+    }
+
     intro(getCreatePrismaIntro());
 
     failureStage = "collect_context";
@@ -308,7 +315,7 @@ async function executeCreateContext(
       log.step(`Scaffolding ${context.template} starter.`);
     }
 
-    await scaffoldCreateTemplate({
+    await scaffoldCreateFrameworkTemplate({
       projectDir: context.targetDirectory,
       projectName: context.projectPackageName,
       template: context.template,
@@ -334,7 +341,6 @@ async function executeCreateContext(
       template: context.template,
       packageManager: context.prismaSetupContext.packageManager,
       projectDir: context.targetDirectory,
-      prismaNextSpec: context.prismaSetupContext.prismaNextSpec,
     });
   } catch (error) {
     createSpinner?.stop("Could not create Prisma Next project.");
@@ -369,6 +375,8 @@ async function executeCreateContext(
     const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
+      projectName: context.projectPackageName,
+      template: context.template,
       createdProjectPath: context.targetDirectory,
       includeDevNextStep: true,
       progressSpinner: createSpinner,

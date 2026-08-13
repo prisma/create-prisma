@@ -33,7 +33,35 @@ function createTemplateContext(
   };
 }
 
+export async function scaffoldCreateSharedTemplates(opts: {
+  projectDir: string;
+  projectName: string;
+  template: CreateTemplate;
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  packageManager?: PackageManager;
+}): Promise<void> {
+  const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
+  await renderTemplateTree<CreateTemplateContext>({
+    templateRoot: getCreateSharedTemplateDir(),
+    outputDir: projectDir,
+    context: createTemplateContext(projectName, template, provider, authoring, packageManager),
+  });
+}
+
 export async function scaffoldCreateTemplate(opts: {
+  projectDir: string;
+  projectName: string;
+  template: CreateTemplate;
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  packageManager?: PackageManager;
+}): Promise<void> {
+  await scaffoldCreateFrameworkTemplate(opts);
+  await scaffoldCreateSharedTemplates(opts);
+}
+
+export async function scaffoldCreateFrameworkTemplate(opts: {
   projectDir: string;
   projectName: string;
   template: CreateTemplate;
@@ -43,13 +71,7 @@ export async function scaffoldCreateTemplate(opts: {
 }): Promise<void> {
   const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
   const templateRoot = getCreateTemplateDir(template);
-  const sharedTemplateRoot = getCreateSharedTemplateDir();
   const context = createTemplateContext(projectName, template, provider, authoring, packageManager);
-  await renderTemplateTree<CreateTemplateContext>({
-    templateRoot: sharedTemplateRoot,
-    outputDir: projectDir,
-    context,
-  });
   await renderTemplateTree<CreateTemplateContext>({
     templateRoot,
     outputDir: projectDir,

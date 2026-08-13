@@ -1,0 +1,38 @@
+# {{projectName}}
+
+A minimal {{template}} app with Prisma Next and Prisma Composer.
+
+## Run locally
+
+```bash
+{{runScriptCommand packageManager "dev:composer"}}
+```
+
+This builds the app and starts it with Composer. PostgreSQL projects get a local Prisma Postgres database and apply the contract automatically.
+
+## Deploy
+
+```bash
+{{runScriptCommand packageManager "deploy"}}
+```
+
+The deploy script builds the framework output, provisions Prisma Postgres when selected, applies migrations, and deploys the app to Prisma Compute.
+
+{{#if (eq provider "mongo")}}
+MongoDB is not provisioned by Composer. Set `MONGODB_URL` before running Composer locally or deploying.
+{{/if}}
+
+## Prisma
+
+- Contract: `src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}`
+- Prisma Next config: `prisma-next.config.ts`
+- Universal CLI config: `prisma.config.ts`
+- Composer app: `module.ts` and `service.ts`
+
+After changing the contract, run:
+
+```bash
+{{runScriptCommand packageManager "contract:emit"}}
+```
+
+To use the framework's development server directly, run `{{runScriptCommand packageManager "dev"}}`. This direct mode requires `DATABASE_URL`.

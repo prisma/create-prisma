@@ -7,7 +7,6 @@ import { collectPrismaSetupContext } from "../src/tasks/setup-prisma";
 
 async function withTempProject<T>(run: (projectDir: string) => Promise<T>): Promise<T> {
   const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-setup-"));
-
   try {
     return await run(projectDir);
   } finally {
@@ -16,52 +15,39 @@ async function withTempProject<T>(run: (projectDir: string) => Promise<T>): Prom
 }
 
 describe("collectPrismaSetupContext", () => {
-  test("--yes provisions Prisma Postgres by default for PostgreSQL", async () => {
+  test("--yes uses Prisma Postgres defaults without deploying", async () => {
     await withTempProject(async (projectDir) => {
       const context = await collectPrismaSetupContext(
-        {
-          yes: true,
-          provider: "postgres",
-          packageManager: "bun",
-          install: false,
-        },
+        { yes: true, packageManager: "bun" },
         { projectDir },
       );
 
-      expect(context?.shouldUsePrismaPostgres).toBe(true);
+      expect(context).toMatchObject({
+        databaseProvider: "postgres",
+        authoring: "psl",
+        packageManager: "bun",
+        shouldDeploy: false,
+      });
     });
   });
 
-  test("--yes does not provision Prisma Postgres when DATABASE_URL is supplied", async () => {
+  test("honors an explicit immediate deployment", async () => {
     await withTempProject(async (projectDir) => {
       const context = await collectPrismaSetupContext(
-        {
-          yes: true,
-          provider: "postgres",
-          databaseUrl: "postgresql://user:password@localhost:5432/mydb",
-          packageManager: "bun",
-          install: false,
-        },
+        { yes: true, packageManager: "pnpm", deploy: true },
         { projectDir },
       );
-
-      expect(context?.shouldUsePrismaPostgres).toBe(false);
+      expect(context?.shouldDeploy).toBe(true);
     });
   });
 
-  test("--yes does not provision Prisma Postgres for MongoDB", async () => {
+  test("keeps MongoDB as an explicit provider option", async () => {
     await withTempProject(async (projectDir) => {
       const context = await collectPrismaSetupContext(
-        {
-          yes: true,
-          provider: "mongo",
-          packageManager: "bun",
-          install: false,
-        },
+        { yes: true, provider: "mongo", packageManager: "npm" },
         { projectDir },
       );
-
-      expect(context?.shouldUsePrismaPostgres).toBe(false);
+      expect(context?.databaseProvider).toBe("mongo");
     });
   });
 });

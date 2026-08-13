@@ -1,0 +1,41 @@
+{{#if (eq provider "postgres")}}
+import postgres from "@prisma/orm-postgres/runtime";
+
+import service from "../../service.ts";
+import type { Contract } from "./contract.d.ts";
+import contractJson from "./contract.json" with { type: "json" };
+
+function loadComposerDatabase() {
+  try {
+    return service.load().database.client;
+  } catch {
+    return undefined;
+  }
+}
+
+export const db =
+  loadComposerDatabase() ??
+  postgres<Contract>({
+    contractJson,
+    url: process.env.DATABASE_URL!,
+  });
+{{else}}
+import mongo from "@prisma/orm-mongo/runtime";
+
+import service from "../../service.ts";
+import type { Contract } from "./contract.d.ts";
+import contractJson from "./contract.json" with { type: "json" };
+
+function getDatabaseUrl(): string {
+  try {
+    return service.input().databaseUrl.expose();
+  } catch {
+    return process.env.DATABASE_URL!;
+  }
+}
+
+export const db = mongo<Contract>({
+  contractJson,
+  url: getDatabaseUrl(),
+});
+{{/if}}

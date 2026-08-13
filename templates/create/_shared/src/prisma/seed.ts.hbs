@@ -1,7 +1,7 @@
 {{#if (requiresDotenvConfigImport packageManager)}}
 import "dotenv/config";
 {{/if}}
-import { db } from "./db{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { db } from "./db.ts";
 
 const seedUsers = [
   { email: "alice@prisma.io", username: "alice", name: "Alice" },

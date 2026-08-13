@@ -3,7 +3,7 @@ import { z } from "zod";
 export const databaseProviders = ["postgres", "mongo"] as const;
 export const databaseProviderInputs = ["postgres", "postgresql", "mongo", "mongodb"] as const;
 
-export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
+export const packageManagers = ["npm", "pnpm", "yarn", "bun"] as const;
 export const authoringStyles = ["psl", "typescript"] as const;
 export const createTemplates = [
   "minimal",
@@ -42,8 +42,6 @@ export type AuthoringStyle = z.infer<typeof AuthoringStyleSchema>;
 export const CreateTemplateSchema = z.enum(createTemplates);
 export type CreateTemplate = z.infer<typeof CreateTemplateSchema>;
 
-export const DatabaseUrlSchema = z.string().trim().min(1, "Please enter a valid database URL");
-
 export const CommonCommandOptionsSchema = z.object({
   yes: z.boolean().optional().describe("Skip prompts and accept default choices"),
   verbose: z.boolean().optional().describe("Show verbose command output during setup"),
@@ -57,21 +55,7 @@ export const PrismaSetupOptionsSchema = z.object({
   packageManager: PackageManagerSchema.optional().describe(
     "Package manager used for dependency installation",
   ),
-  prismaPostgres: z
-    .boolean()
-    .optional()
-    .describe("Provision Prisma Postgres with create-db when target is postgres"),
-  databaseUrl: DatabaseUrlSchema.optional().describe("DATABASE_URL value"),
-  install: z.boolean().optional().describe("Install dependencies with selected package manager"),
-  emit: z.boolean().optional().describe("Emit Prisma Next contract artifacts after scaffolding"),
-  prismaNextVersion: z
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .describe(
-      "Prisma Next version, npm dist-tag, or 'pkg-pr-new:<sha|branch|pr>' (default: latest)",
-    ),
+  deploy: z.boolean().optional().describe("Deploy the generated app to Prisma immediately"),
 });
 
 export const PrismaSetupCommandInputSchema = CommonCommandOptionsSchema.extend(

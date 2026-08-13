@@ -1,43 +1,21 @@
-import { db, listUsers } from "./prisma/users{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import "dotenv/config";
 
-const sampleUser = {
-  email: "first.user@prisma.io",
-  username: "first-user",
-  name: "First User",
-};
+import { createServer } from "node:http";
 
-async function main() {
-{{#if (eq provider "mongo")}}
-  const existingUser = await db.orm.users.where({ email: sampleUser.email }).first();
-  if (!existingUser) {
-    await db.orm.users.create(sampleUser);
+import { listUsers } from "./prisma/users";
+
+const port = Number(process.env.PORT ?? 3000);
+
+createServer(async (_request, response) => {
+  try {
+    const users = await listUsers();
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ users }));
+  } catch (error) {
+    console.error("Failed to query users:", error);
+    response.writeHead(500, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "Could not query users yet." }));
   }
-
-  const user = await db.orm.users.where({ email: sampleUser.email }).first();
-{{else}}
-  const existingUser = await db.orm.public.User.where({ email: sampleUser.email }).first();
-  if (!existingUser) {
-    await db.orm.public.User.create(sampleUser);
-  }
-
-  const user = await db.orm.public.User.where({ email: sampleUser.email }).first();
-{{/if}}
-  const users = await listUsers();
-
-  console.log(`Prisma Next is ready. Found ${users.length} user${users.length === 1 ? "" : "s"}.`);
-  console.log(user);
-}
-
-try {
-  await main();
-} catch (error) {
-  console.error("Prisma Next query failed.");
-  console.error("Emit the contract, set DATABASE_URL, then apply migrations before running this script.");
-  throw error;
-} finally {
-{{#if (eq provider "mongo")}}
-  await db.close();
-{{else}}
-  await db.close();
-{{/if}}
-}
+}).listen(port, "0.0.0.0", () => {
+  console.log(`Server running at http://localhost:${port}`);
+});

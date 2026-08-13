@@ -6,7 +6,9 @@
   {{/if}}
   "type": "module",
   "scripts": {
-    "dev": "{{runtimeScript packageManager "start" "src/index.ts" ""}}"
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs"
   },
   "dependencies": {},
   "devDependencies": {}

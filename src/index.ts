@@ -57,6 +57,5 @@ export {
   CreateCommandInputSchema,
   CreateTemplateSchema,
   DatabaseProviderSchema,
-  DatabaseUrlSchema,
   PackageManagerSchema,
 } from "./types";

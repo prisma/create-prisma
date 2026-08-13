@@ -3,11 +3,15 @@ import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { dependencyVersionMap, PRISMA_NEXT_DEFAULT_VERSION } from "../src/constants/dependencies";
+import { dependencyVersionMap } from "../src/constants/dependencies";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
-import { writeCreateTemplateDependencies, writePrismaDependencies } from "../src/tasks/install";
+import {
+  getComposerScriptMap,
+  writeCreateTemplateDependencies,
+  writePrismaDependencies,
+} from "../src/tasks/install";
 import { authoringStyles, createTemplates, databaseProviders, packageManagers } from "../src/types";
-import { getDenoPrismaSpecifier, getInstallArgs } from "../src/utils/package-manager";
+import { getInstallArgs } from "../src/utils/package-manager";
 
 type PackageJson = {
   dependencies?: Record<string, string>;
@@ -15,14 +19,10 @@ type PackageJson = {
   scripts?: Record<string, string>;
 };
 
-async function withPackageJson<T>(
-  packageJson: Record<string, unknown>,
-  run: (projectDir: string) => Promise<T>,
-): Promise<T> {
+async function withPackageJson<T>(run: (projectDir: string) => Promise<T>): Promise<T> {
   const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-install-"));
-
   try {
-    await writeFile(path.join(projectDir, "package.json"), JSON.stringify(packageJson, null, 2));
+    await writeFile(path.join(projectDir, "package.json"), '{"name":"app"}\n');
     return await run(projectDir);
   } finally {
     await rm(projectDir, { recursive: true, force: true });
@@ -33,7 +33,7 @@ async function readPackageJson(projectDir: string): Promise<PackageJson> {
   return JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8")) as PackageJson;
 }
 
-async function pathExists(filePath: string): Promise<boolean> {
+async function pathExists(filePath: string) {
   try {
     await access(filePath);
     return true;
@@ -42,230 +42,74 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-function expectPrismaNextPackagesUseLatest(packageJson: PackageJson): void {
-  const dependencies = {
-    ...packageJson.dependencies,
-    ...packageJson.devDependencies,
-  };
-
-  for (const [packageName, version] of Object.entries(dependencies)) {
-    if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
-      expect(version).toBe(PRISMA_NEXT_DEFAULT_VERSION);
-    }
-  }
-}
-
 describe("writePrismaDependencies", () => {
-  test("writes Prisma Next dependencies and scripts before any install command runs", async () => {
-    await withPackageJson(
-      {
-        name: "app",
-        scripts: {
-          dev: "bun --watch src/index.ts",
-        },
-        dependencies: {
-          hono: "^4.12.2",
-        },
-        devDependencies: {
-          typescript: "^5.8.3",
-        },
-      },
-      async (projectDir) => {
-        await writePrismaDependencies("mongo", "bun", "typescript", projectDir);
+  test("writes the Prisma Next Postgres runtime and Composer-ready scripts", async () => {
+    await withPackageJson(async (projectDir) => {
+      await writePrismaDependencies("postgres", "pnpm", "psl", projectDir);
+      const packageJson = await readPackageJson(projectDir);
 
-        const packageJson = await readPackageJson(projectDir);
-        expectPrismaNextPackagesUseLatest(packageJson);
-
-        expect(packageJson.dependencies).toMatchObject({
-          "@prisma-next/mongo": PRISMA_NEXT_DEFAULT_VERSION,
-          dotenv: dependencyVersionMap.dotenv,
-          hono: "^4.12.2",
-        });
-        expect(packageJson.devDependencies).toMatchObject({
-          "@prisma-next/cli": PRISMA_NEXT_DEFAULT_VERSION,
-          "@prisma-next/mongo-contract-ts": PRISMA_NEXT_DEFAULT_VERSION,
-          "@prisma-next/mongo-orm": PRISMA_NEXT_DEFAULT_VERSION,
-          "@prisma-next/target-mongo": PRISMA_NEXT_DEFAULT_VERSION,
-          "@types/node": dependencyVersionMap["@types/node"],
-          "prisma-next": PRISMA_NEXT_DEFAULT_VERSION,
-          typescript: "^5.8.3",
-        });
-        expect(packageJson.scripts).toMatchObject({
-          dev: "bun --watch src/index.ts",
-          "contract:emit": "bun prisma-next contract emit",
-          "db:seed": "bun src/prisma/seed.ts",
-          "migration:plan": "bun prisma-next migration plan",
-          migrate: "bun prisma-next migrate",
-        });
-      },
-    );
+      expect(packageJson.dependencies).toMatchObject({
+        "@prisma/orm-postgres": dependencyVersionMap["@prisma/orm-postgres"],
+        dotenv: dependencyVersionMap.dotenv,
+      });
+      expect(packageJson.devDependencies).toMatchObject({
+        "prisma-next": dependencyVersionMap["prisma-next"],
+      });
+      expect(packageJson.scripts).toMatchObject({
+        "contract:emit": "prisma-next contract emit",
+        "db:seed": "tsx src/prisma/seed.ts",
+      });
+    });
   });
 
-  test("pins every Prisma Next package to a non-default spec when one is provided", async () => {
-    await withPackageJson(
-      {
-        name: "app",
-        dependencies: {},
-        devDependencies: {},
-      },
-      async (projectDir) => {
-        await writePrismaDependencies("postgres", "bun", "psl", projectDir, {
-          kind: "npm",
-          spec: "0.10.0",
-        });
-
-        const packageJson = await readPackageJson(projectDir);
-        const allDependencies = {
-          ...packageJson.dependencies,
-          ...packageJson.devDependencies,
-        };
-
-        for (const [packageName, version] of Object.entries(allDependencies)) {
-          if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
-            expect(version).toBe("0.10.0");
-          }
-        }
-      },
-    );
-  });
-
-  test("writes pkg.pr.new URL specifiers for every Prisma Next dependency", async () => {
-    await withPackageJson(
-      {
-        name: "app",
-        dependencies: {},
-        devDependencies: {},
-      },
-      async (projectDir) => {
-        await writePrismaDependencies("postgres", "bun", "psl", projectDir, {
-          kind: "pkg-pr-new",
-          ref: "bad6795",
-        });
-
-        const packageJson = await readPackageJson(projectDir);
-        const allDependencies = {
-          ...packageJson.dependencies,
-          ...packageJson.devDependencies,
-        };
-
-        for (const [packageName, version] of Object.entries(allDependencies)) {
-          if (packageName === "prisma-next" || packageName.startsWith("@prisma-next/")) {
-            expect(version).toBe(`https://pkg.pr.new/prisma/prisma-next/${packageName}@bad6795`);
-          }
-        }
-      },
-    );
-  });
-
-  test("normalizes Prisma Next scripts after prisma-next init writes package-manager defaults", async () => {
-    await withPackageJson(
-      {
-        name: "app",
-        scripts: {
-          "contract:emit": "prisma-next contract emit",
-        },
-        dependencies: {},
-        devDependencies: {},
-      },
-      async (projectDir) => {
-        await writePrismaDependencies("mongo", "deno", "psl", projectDir);
-
-        const packageJson = await readPackageJson(projectDir);
-
-        expect(packageJson.scripts).toMatchObject({
-          "contract:emit": "deno run -A --env-file=.env npm:prisma-next contract emit",
-          "migration:plan": "deno run -A --env-file=.env npm:prisma-next migration plan",
-        });
-      },
-    );
+  test("adds the MongoDB runtime and direct peer dependencies", async () => {
+    await withPackageJson(async (projectDir) => {
+      await writePrismaDependencies("mongo", "bun", "typescript", projectDir);
+      const packageJson = await readPackageJson(projectDir);
+      expect(packageJson.dependencies).toMatchObject({
+        "@prisma/orm-mongo": dependencyVersionMap["@prisma/orm-mongo"],
+        arktype: dependencyVersionMap.arktype,
+        mongodb: dependencyVersionMap.mongodb,
+      });
+      expect(packageJson.dependencies?.["@prisma/orm-postgres"]).toBeUndefined();
+      expect(packageJson.scripts?.["db:seed"]).toBe("bun src/prisma/seed.ts");
+    });
   });
 });
 
-describe("writeCreateTemplateDependencies", () => {
-  test("adds Prisma Next Vite auto-emit plugin to Vite-backed templates", async () => {
-    await withPackageJson(
-      {
-        name: "app",
-        dependencies: {},
-        devDependencies: {
-          vite: "^7.3.3",
-        },
-      },
-      async (projectDir) => {
-        await writeCreateTemplateDependencies({
-          template: "svelte",
-          packageManager: "bun",
-          projectDir,
-        });
-
-        const packageJson = await readPackageJson(projectDir);
-
-        expect(packageJson.devDependencies).toMatchObject({
-          "@prisma-next/vite-plugin-contract-emit": PRISMA_NEXT_DEFAULT_VERSION,
-          vite: "^7.3.3",
-        });
-      },
+describe("Composer package-manager commands", () => {
+  test("uses each selected package manager for Prisma CLI execution", () => {
+    expect(getComposerScriptMap("npm")["composer:deploy"]).toBe(
+      "npx --yes @prisma/cli@next composer deploy module.ts",
+    );
+    expect(getComposerScriptMap("pnpm")["composer:deploy"]).toBe(
+      "pnpm dlx @prisma/cli@next composer deploy module.ts",
+    );
+    expect(getComposerScriptMap("yarn")["composer:deploy"]).toBe(
+      "yarn dlx @prisma/cli@next composer deploy module.ts",
+    );
+    expect(getComposerScriptMap("bun")["composer:deploy"]).toBe(
+      "bunx @prisma/cli@next composer deploy module.ts",
     );
   });
 
-  test("does not add the Vite plugin to non-Vite API templates", async () => {
-    await withPackageJson(
-      {
-        name: "app",
-        dependencies: {},
-        devDependencies: {},
-      },
-      async (projectDir) => {
-        await writeCreateTemplateDependencies({
-          template: "hono",
-          packageManager: "bun",
-          projectDir,
-        });
-
-        const packageJson = await readPackageJson(projectDir);
-
-        expect(packageJson.devDependencies).not.toHaveProperty(
-          "@prisma-next/vite-plugin-contract-emit",
-        );
-      },
-    );
-  });
-
-  test("adds tsx to Minimal projects for Node-style package managers", async () => {
-    await withPackageJson(
-      {
-        name: "app",
-        dependencies: {},
-        devDependencies: {},
-      },
-      async (projectDir) => {
-        await writeCreateTemplateDependencies({
-          template: "minimal",
-          packageManager: "npm",
-          projectDir,
-        });
-
-        const packageJson = await readPackageJson(projectDir);
-
-        expect(packageJson.devDependencies).toMatchObject({
-          tsx: dependencyVersionMap.tsx,
-        });
-        expect(packageJson.devDependencies).not.toHaveProperty(
-          "@prisma-next/vite-plugin-contract-emit",
-        );
-      },
-    );
+  test("keeps installs package-manager native", () => {
+    for (const packageManager of packageManagers) {
+      expect(getInstallArgs(packageManager)).toEqual({
+        command: packageManager,
+        args: ["install"],
+      });
+    }
   });
 });
 
-describe("scaffoldCreateTemplate", () => {
-  test("renders every template, provider, authoring style, and package manager combination", async () => {
+describe("generated templates", () => {
+  test("renders Composer into every supported combination", async () => {
     for (const template of createTemplates) {
       for (const provider of databaseProviders) {
         for (const authoring of authoringStyles) {
           for (const packageManager of packageManagers) {
-            const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-template-matrix-"));
-
+            const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-matrix-"));
             try {
               await scaffoldCreateTemplate({
                 projectDir,
@@ -275,32 +119,46 @@ describe("scaffoldCreateTemplate", () => {
                 authoring,
                 packageManager,
               });
+              await writeCreateTemplateDependencies({ template, packageManager, projectDir });
 
               const packageJson = await readPackageJson(projectDir);
-              const readme = await readFile(path.join(projectDir, "README.md"), "utf8");
-              const seed = await readFile(path.join(projectDir, "src/prisma/seed.ts"), "utf8");
-              const users = await readFile(path.join(projectDir, "src/prisma/users.ts"), "utf8");
-              const accessor = provider === "postgres" ? "db.orm.public.User" : "db.orm.users";
-              const contractExtension = authoring === "typescript" ? ".ts" : ".prisma";
+              const moduleSource = await readFile(path.join(projectDir, "module.ts"), "utf8");
+              const serviceSource = await readFile(path.join(projectDir, "service.ts"), "utf8");
+              const prismaConfig = await readFile(
+                path.join(projectDir, "prisma.config.ts"),
+                "utf8",
+              );
 
-              expect(packageJson.scripts?.dev).toBeDefined();
-              expect(readme).toContain(`src/prisma/contract${contractExtension}`);
-              expect(seed).toContain(`${accessor}.create(user)`);
-              expect(seed).not.toContain("createCount");
-              expect(users).toContain(`${accessor}.select`);
-              if (template === "hono" || template === "next") {
-                expect(packageJson.devDependencies?.typescript).toBe("^5.9.3");
+              expect(packageJson.scripts?.deploy).toBeDefined();
+              expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
+              expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
+              expect(serviceSource).toContain("compute({");
+              if (provider === "postgres") {
+                expect(moduleSource).toContain("pnPostgres({");
+              } else {
+                expect(moduleSource).toContain('envSecret("MONGODB_URL")');
               }
-              if (provider === "mongo") {
-                expect(readme).toContain("requires Node.js 24+");
-              }
-              if (template === "next") {
-                const eslintConfig = await readFile(
-                  path.join(projectDir, "eslint.config.mjs"),
-                  "utf8",
+              expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(false);
+              if (packageManager === "pnpm") {
+                expect(packageJson.pnpm).toBeUndefined();
+                expect(await readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8")).toBe(
+                  [
+                    "allowBuilds:",
+                    "  esbuild: true",
+                    "  msgpackr-extract: true",
+                    "  workerd: true",
+                    "minimumReleaseAgeExclude:",
+                    '  - "@prisma/*"',
+                    '  - "prisma-next"',
+                    "overrides:",
+                    '  effect: "4.0.0-beta.103"',
+                    "",
+                  ].join("\n"),
                 );
-                expect(eslintConfig).toContain('"migrations/**"');
-                expect(eslintConfig).toContain('"src/prisma/**/*.d.ts"');
+              } else if (packageManager === "yarn") {
+                expect(packageJson.resolutions?.effect).toBe("4.0.0-beta.103");
+              } else {
+                expect(packageJson.overrides?.effect).toBe("4.0.0-beta.103");
               }
             } finally {
               await rm(projectDir, { recursive: true, force: true });
@@ -309,151 +167,5 @@ describe("scaffoldCreateTemplate", () => {
         }
       }
     }
-  });
-
-  test("loads dotenv in seed scripts for Node package managers", async () => {
-    const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-template-"));
-
-    try {
-      await scaffoldCreateTemplate({
-        projectDir,
-        projectName: "app",
-        template: "hono",
-        provider: "postgres",
-        authoring: "psl",
-        packageManager: "npm",
-      });
-
-      const seed = await readFile(path.join(projectDir, "src/prisma/seed.ts"), "utf8");
-      expect(seed).toContain('import "dotenv/config";');
-    } finally {
-      await rm(projectDir, { recursive: true, force: true });
-    }
-  });
-
-  test("does not add dotenv imports to Bun or Deno seed scripts", async () => {
-    for (const packageManager of ["bun", "deno"] as const) {
-      const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-template-"));
-
-      try {
-        await scaffoldCreateTemplate({
-          projectDir,
-          projectName: "app",
-          template: "hono",
-          provider: "postgres",
-          authoring: "psl",
-          packageManager,
-        });
-
-        const seed = await readFile(path.join(projectDir, "src/prisma/seed.ts"), "utf8");
-        expect(seed).not.toContain('import "dotenv/config";');
-      } finally {
-        await rm(projectDir, { recursive: true, force: true });
-      }
-    }
-  });
-
-  test("renders Minimal as a script-first template without a build pipeline", async () => {
-    const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-template-"));
-
-    try {
-      await scaffoldCreateTemplate({
-        projectDir,
-        projectName: "app",
-        template: "minimal",
-        provider: "mongo",
-        authoring: "psl",
-        packageManager: "bun",
-      });
-
-      const packageJson = await readPackageJson(projectDir);
-      const index = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
-
-      expect(packageJson.scripts).toEqual({
-        dev: "bun src/index.ts",
-      });
-      expect(index).toContain("db.orm.users");
-      expect(index).toContain("db.orm.users.create(sampleUser)");
-      expect(index).not.toContain("createCount");
-      expect(index).toContain('username: "first-user"');
-      expect(index).toContain("Prisma Next is ready");
-      expect(await readFile(path.join(projectDir, "src/prisma/users.ts"), "utf8")).toContain(
-        'from "./db',
-      );
-      expect(await pathExists(path.join(projectDir, "prisma"))).toBe(false);
-    } finally {
-      await rm(projectDir, { recursive: true, force: true });
-    }
-  });
-
-  test("renders current Prisma Next ORM accessors for both database targets", async () => {
-    for (const provider of ["postgres", "mongo"] as const) {
-      const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-template-"));
-
-      try {
-        await scaffoldCreateTemplate({
-          projectDir,
-          projectName: "app",
-          template: "hono",
-          provider,
-          authoring: "psl",
-          packageManager: "bun",
-        });
-
-        const seed = await readFile(path.join(projectDir, "src/prisma/seed.ts"), "utf8");
-        const users = await readFile(path.join(projectDir, "src/prisma/users.ts"), "utf8");
-        const accessor = provider === "postgres" ? "db.orm.public.User" : "db.orm.users";
-
-        expect(seed).toContain(`${accessor}.where`);
-        expect(seed).toContain(`${accessor}.create(user)`);
-        expect(seed).not.toContain("createCount");
-        expect(seed).toContain("await db.close()");
-        expect(users).toContain(`${accessor}.select`);
-      } finally {
-        await rm(projectDir, { recursive: true, force: true });
-      }
-    }
-  });
-
-  test("renders the Nuxt typecheck dependency", async () => {
-    const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-template-"));
-
-    try {
-      await scaffoldCreateTemplate({
-        projectDir,
-        projectName: "app",
-        template: "nuxt",
-        provider: "mongo",
-        authoring: "psl",
-        packageManager: "bun",
-      });
-
-      const packageJson = await readPackageJson(projectDir);
-      expect(packageJson.scripts?.typecheck).toBe("nuxt typecheck");
-      expect(packageJson.devDependencies?.["vue-tsc"]).toBe("^3.3.9");
-    } finally {
-      await rm(projectDir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe("getInstallArgs", () => {
-  test("keeps non-Deno installs as plain package-manager install commands", () => {
-    expect(getInstallArgs("npm")).toEqual({ command: "npm", args: ["install"] });
-    expect(getInstallArgs("pnpm")).toEqual({ command: "pnpm", args: ["install"] });
-    expect(getInstallArgs("yarn")).toEqual({ command: "yarn", args: ["install"] });
-    expect(getInstallArgs("bun")).toEqual({ command: "bun", args: ["install"] });
-  });
-
-  test("uses Deno-compatible npm specifiers for Deno installs", () => {
-    expect(PRISMA_NEXT_DEFAULT_VERSION).toBe("latest");
-    expect(getDenoPrismaSpecifier()).toBe("npm:prisma-next");
-    expect(getInstallArgs("deno")).toEqual({
-      command: "deno",
-      args: [
-        "install",
-        "--allow-scripts=npm:prisma-next,npm:@prisma-next/postgres,npm:@prisma-next/mongo,npm:mongodb-memory-server",
-      ],
-    });
   });
 });

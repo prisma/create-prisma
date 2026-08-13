@@ -12,18 +12,6 @@ import {
 } from "../utils/package-manager";
 import { requiresDotenvConfigImport } from "../utils/runtime";
 
-function getOptionalHashString(
-  hash: Handlebars.HelperOptions["hash"],
-  key: string,
-): string | undefined {
-  const value = hash[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function getOptionalHashStringList(hash: Handlebars.HelperOptions["hash"], key: string): string[] {
-  return getOptionalHashString(hash, key)?.split(" ") ?? [];
-}
-
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
 Handlebars.registerHelper(
   "runScriptCommand",
@@ -46,17 +34,14 @@ Handlebars.registerHelper(
     kind: "dev" | "build" | "start",
     sourceEntrypoint: string,
     builtEntrypoint: string | undefined,
-    options: Handlebars.HelperOptions,
+    _options: Handlebars.HelperOptions,
   ) => {
     if (!packageManager) {
       return "";
     }
-    const hash = options.hash;
-
     return getRuntimeScriptCommand(packageManager, kind, {
       sourceEntrypoint,
       builtEntrypoint,
-      denoFlags: getOptionalHashStringList(hash, "denoFlags"),
     });
   },
 );
