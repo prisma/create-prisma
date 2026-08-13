@@ -313,6 +313,7 @@ async function collectCreateContext(
     packageManager: prismaSetupInitialContext.packageManager,
     projectName: projectPackageName,
     useDefaults,
+    verbose: prismaSetupInitialContext.verbose,
   });
   if (composerDeployContext === undefined) {
     return;
@@ -339,6 +340,7 @@ async function collectCreateContext(
     packageManager: prismaSetupContext.packageManager,
     projectName: projectPackageName,
     useComposerPostgres,
+    verbose: prismaSetupContext.verbose,
   };
 
   const addonSetupContext = await collectCreateAddonSetupContext(input, {

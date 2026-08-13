@@ -140,6 +140,8 @@ describe("Composer-ready create templates", () => {
             );
             expect(setupSource).toContain('"postgres",\n  "connection",\n  "create"');
             expect(setupSource).toContain('"postgres",\n        "connection",\n        "remove"');
+            expect(setupSource).toContain('value.id.startsWith("con_")');
+            expect(setupSource).not.toContain('value.id.startsWith("conn_")');
             expect(setupSource).not.toContain('"database",\n  "connection"');
             expect(setupSource.indexOf("try {\n  if (!databaseUrl)")).toBeGreaterThan(
               setupSource.indexOf("const connectionId = findConnectionId(connection)"),
@@ -163,6 +165,7 @@ describe("Composer deploy scripts", () => {
         packageManager,
         projectName: "matrix-app",
         useComposerPostgres: true,
+        verbose: false,
       });
 
       expect(scripts["composer:deploy"]).toBe(platformDeployCommands[packageManager]);

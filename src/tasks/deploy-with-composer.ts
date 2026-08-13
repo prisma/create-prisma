@@ -1,4 +1,4 @@
-import { cancel, confirm, isCancel, log } from "@clack/prompts";
+import { cancel, confirm, isCancel, log, spinner } from "@clack/prompts";
 import { execa } from "execa";
 
 import {
@@ -20,6 +20,7 @@ export type ComposerDeployContext = {
   packageManager: PackageManager;
   projectName: string;
   useComposerPostgres: boolean;
+  verbose: boolean;
 };
 
 export type ComposerDeployResult = {
@@ -34,6 +35,7 @@ export type PrismaCliEnvelope = {
 
 function redactSecrets(message: string): string {
   return message
+    .replace(/\b((?:prisma\+)?postgres(?:ql)?:\/\/)[^\s'"]+/gi, "$1<redacted>")
     .replace(
       /(['"])([A-Z0-9_]*(?:DATABASE_URL|DIRECT_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*=)(.*?)\1/g,
       "$1$2<redacted>$1",
@@ -203,6 +205,7 @@ export async function collectComposerDeployContext(
     packageManager: PackageManager;
     projectName: string;
     useDefaults: boolean;
+    verbose: boolean;
   },
 ): Promise<ComposerDeployContext | null | undefined> {
   if (input.deploy === false) {
@@ -248,6 +251,7 @@ export async function collectComposerDeployContext(
     packageManager: options.packageManager,
     projectName: options.projectName,
     useComposerPostgres: false,
+    verbose: options.verbose,
   };
 }
 
@@ -258,15 +262,26 @@ export async function executeComposerDeployContext(params: {
   { ok: true; result: ComposerDeployResult } | { ok: false; cancelled: boolean; error?: unknown }
 > {
   const deploy = getRunScriptArgs(params.context.packageManager, "deploy");
+  const deploySpinner = params.context.verbose ? undefined : spinner();
+  let deployStarted = false;
   try {
     await ensurePrismaAuthentication(params.context.packageManager, params.projectDir);
-    log.step("Prisma deployment output follows.");
+    if (params.context.verbose) {
+      log.step("Prisma deployment output follows.");
+    } else {
+      deploySpinner?.start("Deploying to Prisma...");
+      deployStarted = true;
+    }
     await execa(deploy.command, deploy.args, {
       cwd: params.projectDir,
       env: process.env,
-      stdio: "inherit",
+      stdio: params.context.verbose ? "inherit" : "pipe",
     });
-    log.success("Deployed to Prisma.");
+    if (params.context.verbose) {
+      log.success("Deployed to Prisma.");
+    } else {
+      deploySpinner?.stop("Deployed to Prisma.");
+    }
     return {
       ok: true,
       result: {
@@ -274,6 +289,9 @@ export async function executeComposerDeployContext(params: {
       },
     };
   } catch (error) {
+    if (deployStarted) {
+      deploySpinner?.stop("Deployment failed.");
+    }
     const deployError = new Error(getErrorMessage(error));
     log.error(`Deploy failed: ${deployError.message}`);
     return { ok: false, cancelled: false, error: deployError };
