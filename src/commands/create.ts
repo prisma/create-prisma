@@ -524,15 +524,7 @@ async function executeCreateContext(
   const summaryLines: string[] = [];
   summaryLines.push(`Setup complete.${prismaResult.warningSection}`);
   if (deployResult) {
-    summaryLines.push(
-      "",
-      "Deployed to Prisma:",
-      `- App: ${deployResult.appName}`,
-      ...deployResult.entities.map(
-        (entity) =>
-          `- ${entity.address}: ${entity.kind} (${entity.id})${entity.url ? `\n  ${entity.url}` : ""}`,
-      ),
-    );
+    summaryLines.push("", "Deployed to Prisma:", `- App: ${deployResult.appName}`);
   }
   summaryLines.push("", "Next steps:", prismaResult.nextSteps.join("\n"));
   outro(summaryLines.join("\n"));

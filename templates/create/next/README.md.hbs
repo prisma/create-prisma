@@ -35,4 +35,4 @@ The starter page in `src/app/page.tsx` reads from a basic `User` model so you ca
 
 The application topology is declared in `module.ts` and `service.ts`, with deploy configuration in `prisma-composer.config.ts`. {{#if composerPostgres}}Composer provisions Prisma Postgres and injects its connection into the service.{{else}}The database URL is bound as a secret service input from `.env`.{{/if}}
 
-Run `{{runScriptCommand packageManager "deploy"}}` to deploy later changes.
+If needed, sign in with `{{prismaAuthLoginCommand packageManager}}`. Run `{{runScriptCommand packageManager "deploy"}}` to deploy later changes.

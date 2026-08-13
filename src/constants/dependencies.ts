@@ -20,7 +20,7 @@ export const dependencyVersionMap = {
   tsx: "^4.22.4",
 } as const;
 
-export const prismaPlatformCliPackage = "@prisma/cli@3.0.0-beta.29";
+export const prismaPlatformCliPackage = "@prisma/cli@next";
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 

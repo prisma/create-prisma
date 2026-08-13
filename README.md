@@ -155,7 +155,7 @@ Accept the deploy prompt when it appears, or pass the flag:
 create-prisma --name my-api --template hono --provider postgresql --deploy
 ```
 
-Deployment currently requires `PRISMA_SERVICE_TOKEN` and `PRISMA_WORKSPACE_ID`. PostgreSQL always provisions Prisma Postgres and passes its connection through `service.load()`. For other providers, copy `.env.example` to `.env`, set `DATABASE_URL`, and Composer will pass it to the application as a secret input.
+Deployment runs through `@prisma/cli@next` and reuses either your active Prisma browser-login session or `PRISMA_SERVICE_TOKEN` in CI. If you are not signed in, create-prisma opens the Prisma login flow before deploying from an interactive terminal. You can also sign in ahead of time with `npx @prisma/cli@next auth login`. PostgreSQL always provisions Prisma Postgres and passes its connection through `service.load()`. For other providers, copy `.env.example` to `.env`, set `DATABASE_URL`, and Composer will pass it to the application as a secret input.
 
 A `deploy` script is generated for every supported package manager. It builds and deploys the Composer application. For PostgreSQL it then resolves the Composer-managed database, applies the committed migration with `prisma migrate deploy`, seeds the database, and removes the temporary direct connection. No database URL is written back to the project.
 

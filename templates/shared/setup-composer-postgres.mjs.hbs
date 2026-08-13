@@ -32,22 +32,38 @@ function runPlatformCli(args) {
       shell: process.platform === "win32",
     },
   );
+  let envelope;
+  const lines = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines.reverse()) {
+    try {
+      const parsed = JSON.parse(line);
+      const candidate = parsed?.kind === "result" ? parsed.envelope : parsed;
+      if (typeof candidate?.ok === "boolean") {
+        envelope = candidate;
+        break;
+      }
+    } catch {
+      // Ignore non-JSON commentary and continue looking for the result event.
+    }
+  }
   if (result.error || result.status !== 0) {
-    const detail = result.error?.message ?? result.stderr ?? "Prisma CLI reported an unknown error";
+    const detail =
+      result.error?.message ??
+      envelope?.error?.summary ??
+      envelope?.error?.message ??
+      result.stderr ??
+      result.stdout ??
+      "Prisma CLI reported an unknown error";
     throw new Error(redactSecrets(String(detail).trim()));
   }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(result.stdout);
-  } catch {
-    throw new Error("Prisma CLI returned output that is not valid JSON.");
+  if (!envelope) {
+    throw new Error("Prisma CLI returned output that is not a valid result envelope.");
   }
-  if (!parsed?.ok) {
-    const detail = parsed?.error?.summary ?? parsed?.error?.message ?? "Prisma CLI reported an unknown error";
+  if (!envelope.ok) {
+    const detail = envelope.error?.summary ?? envelope.error?.message ?? "Prisma CLI reported an unknown error";
     throw new Error(redactSecrets(String(detail)));
   }
-  return parsed.result;
+  return envelope.result;
 }
 
 function findNamedDatabase(value) {
@@ -115,14 +131,14 @@ function runPrisma(args, databaseUrl) {
   }
 }
 
-const databases = runPlatformCli(["database", "list", "--project", "{{projectName}}"]);
+const databases = runPlatformCli(["postgres", "list", "--project", "{{projectName}}"]);
 const database = findNamedDatabase(databases);
 if (!database) {
   throw new Error('Composer deployed, but the provisioned "database" resource was not found.');
 }
 
 const connection = runPlatformCli([
-  "database",
+  "postgres",
   "connection",
   "create",
   database.id,
@@ -145,7 +161,7 @@ try {
   if (connectionId) {
     try {
       runPlatformCli([
-        "database",
+        "postgres",
         "connection",
         "remove",
         connectionId,

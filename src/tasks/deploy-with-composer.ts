@@ -1,8 +1,5 @@
 import { cancel, confirm, isCancel, log } from "@clack/prompts";
 import { execa } from "execa";
-import fs from "fs-extra";
-import os from "node:os";
-import path from "node:path";
 
 import {
   type CreateCommandInput,
@@ -10,7 +7,13 @@ import {
   type DatabaseProvider,
   type PackageManager,
 } from "../types";
-import { getRunScriptArgs, getRunScriptCommand } from "../utils/package-manager";
+import { prismaPlatformCliPackage } from "../constants/dependencies";
+import {
+  getPackageExecutionArgs,
+  getPackageExecutionCommand,
+  getRunScriptArgs,
+  getRunScriptCommand,
+} from "../utils/package-manager";
 
 export type ComposerDeployContext = {
   template: CreateTemplate;
@@ -19,35 +22,15 @@ export type ComposerDeployContext = {
   useComposerPostgres: boolean;
 };
 
-export type ComposerDeployedEntity = {
-  address: string;
-  kind: string;
-  id: string;
-  url?: string;
-};
-
 export type ComposerDeployResult = {
   appName: string;
-  entities: ComposerDeployedEntity[];
 };
 
-type ComposerDeploymentSummary = {
-  app: string;
-  nodes: Array<{
-    address: string;
-    entities: Array<{ kind: string; id: string; url?: string }>;
-  }>;
+export type PrismaCliEnvelope = {
+  ok: boolean;
+  result?: unknown;
+  error?: { summary?: string; message?: string };
 };
-
-function hasEnvironmentValue(name: string): boolean {
-  return (process.env[name] ?? "").trim().length > 0;
-}
-
-function missingComposerCredentials(): string[] {
-  return ["PRISMA_SERVICE_TOKEN", "PRISMA_WORKSPACE_ID"].filter(
-    (name) => !hasEnvironmentValue(name),
-  );
-}
 
 function redactSecrets(message: string): string {
   return message
@@ -81,42 +64,109 @@ function createExplicitDeployError(reason: string, error?: unknown): Error {
   return new Error(`Deploy requested but ${reason}${detail}`);
 }
 
-async function readComposerDeploymentSummary(
-  resultFile: string,
-): Promise<ComposerDeploymentSummary | undefined> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(await fs.readFile(resultFile, "utf8"));
-  } catch {
-    return undefined;
-  }
-  if (typeof parsed !== "object" || parsed === null) return undefined;
-  const record = parsed as Record<string, unknown>;
-  if (typeof record.app !== "string" || !Array.isArray(record.nodes)) return undefined;
+export function parsePrismaCliEnvelope(output: string): PrismaCliEnvelope {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-  const nodes: ComposerDeploymentSummary["nodes"] = [];
-  for (const node of record.nodes) {
-    if (typeof node !== "object" || node === null) return undefined;
-    const nodeRecord = node as Record<string, unknown>;
-    if (typeof nodeRecord.address !== "string" || !Array.isArray(nodeRecord.entities)) {
-      return undefined;
+  for (const line of lines.reverse()) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
     }
-    const entities: ComposerDeploymentSummary["nodes"][number]["entities"] = [];
-    for (const entity of nodeRecord.entities) {
-      if (typeof entity !== "object" || entity === null) return undefined;
-      const entityRecord = entity as Record<string, unknown>;
-      if (typeof entityRecord.kind !== "string" || typeof entityRecord.id !== "string") {
-        return undefined;
-      }
-      entities.push({
-        kind: entityRecord.kind,
-        id: entityRecord.id,
-        ...(typeof entityRecord.url === "string" ? { url: entityRecord.url } : {}),
-      });
-    }
-    nodes.push({ address: nodeRecord.address, entities });
+
+    if (typeof parsed !== "object" || parsed === null) continue;
+    const record = parsed as Record<string, unknown>;
+    const candidate = record.kind === "result" ? record.envelope : parsed;
+    if (typeof candidate !== "object" || candidate === null) continue;
+    const envelope = candidate as Record<string, unknown>;
+    if (typeof envelope.ok !== "boolean") continue;
+    return envelope as PrismaCliEnvelope;
   }
-  return { app: record.app, nodes };
+
+  throw new Error("Prisma CLI returned output that is not a valid result envelope.");
+}
+
+function getPrismaPlatformCliArgs(
+  packageManager: PackageManager,
+  args: string[],
+): { command: string; args: string[] } {
+  return getPackageExecutionArgs(packageManager, [prismaPlatformCliPackage, ...args], {
+    silent: true,
+  });
+}
+
+function getPrismaAuthLoginCommand(packageManager: PackageManager): string {
+  return getPackageExecutionCommand(packageManager, [prismaPlatformCliPackage, "auth", "login"], {
+    silent: true,
+  });
+}
+
+async function isAuthenticatedWithPrisma(
+  packageManager: PackageManager,
+  projectDir: string,
+): Promise<boolean> {
+  const invocation = getPrismaPlatformCliArgs(packageManager, [
+    "auth",
+    "whoami",
+    "--json",
+    "--no-interactive",
+  ]);
+  const result = await execa(invocation.command, invocation.args, {
+    cwd: projectDir,
+    env: process.env,
+    reject: false,
+  });
+  let envelope: PrismaCliEnvelope;
+  try {
+    envelope = parsePrismaCliEnvelope(result.stdout);
+  } catch (error) {
+    const detail = result.stderr.trim() || result.stdout.trim() || getErrorMessage(error);
+    throw new Error(redactSecrets(detail));
+  }
+  if (result.exitCode !== 0 || !envelope.ok) {
+    throw new Error(
+      envelope.error?.summary ??
+        envelope.error?.message ??
+        (result.stderr.trim() || "Prisma authentication check failed."),
+    );
+  }
+  if (typeof envelope.result !== "object" || envelope.result === null) {
+    throw new Error("Prisma CLI authentication output did not include a result.");
+  }
+  const authenticated = Reflect.get(envelope.result, "authenticated");
+  if (typeof authenticated !== "boolean") {
+    throw new Error("Prisma CLI authentication output did not include an authentication status.");
+  }
+  return authenticated;
+}
+
+async function ensurePrismaAuthentication(
+  packageManager: PackageManager,
+  projectDir: string,
+): Promise<void> {
+  if (await isAuthenticatedWithPrisma(packageManager, projectDir)) return;
+
+  if (process.stdin.isTTY !== true) {
+    throw new Error(
+      `Prisma authentication is required. Run ${getPrismaAuthLoginCommand(packageManager)} in an interactive terminal, then ${getRunScriptCommand(packageManager, "deploy")}. For CI, set PRISMA_SERVICE_TOKEN.`,
+    );
+  }
+
+  log.info("Sign in to Prisma to deploy.");
+  const login = getPrismaPlatformCliArgs(packageManager, ["auth", "login"]);
+  await execa(login.command, login.args, {
+    cwd: projectDir,
+    env: process.env,
+    stdio: "inherit",
+  });
+
+  if (!(await isAuthenticatedWithPrisma(packageManager, projectDir))) {
+    throw new Error("Prisma sign-in completed without an active workspace session.");
+  }
 }
 
 export function getComposerDeployScriptMap(context: ComposerDeployContext): Record<string, string> {
@@ -129,7 +179,11 @@ export function getComposerDeployScriptMap(context: ComposerDeployContext): Reco
   ];
 
   return {
-    "composer:deploy": "prisma-composer deploy module.ts",
+    "composer:deploy": getPackageExecutionCommand(
+      context.packageManager,
+      [prismaPlatformCliPackage, "composer", "deploy", "module.ts"],
+      { silent: true },
+    ),
     ...(context.useComposerPostgres
       ? {
           "composer:database:setup": `${
@@ -189,16 +243,6 @@ export async function collectComposerDeployContext(
     return null;
   }
 
-  const missingCredentials = missingComposerCredentials();
-  if (missingCredentials.length > 0) {
-    const reason = `the deploy environment is missing ${missingCredentials.join(" and ")}`;
-    if (input.deploy === true) {
-      throw createExplicitDeployError(reason);
-    }
-    log.warn(`${reason}. Skipping deployment.`);
-    return null;
-  }
-
   return {
     template: options.template,
     packageManager: options.packageManager,
@@ -213,36 +257,25 @@ export async function executeComposerDeployContext(params: {
 }): Promise<
   { ok: true; result: ComposerDeployResult } | { ok: false; cancelled: boolean; error?: unknown }
 > {
-  log.step("Prisma deployment output follows.");
   const deploy = getRunScriptArgs(params.context.packageManager, "deploy");
-  const resultDir = await fs.mkdtemp(path.join(os.tmpdir(), "create-prisma-deploy-"));
-  const resultFile = path.join(resultDir, "result.json");
   try {
+    await ensurePrismaAuthentication(params.context.packageManager, params.projectDir);
+    log.step("Prisma deployment output follows.");
     await execa(deploy.command, deploy.args, {
       cwd: params.projectDir,
-      env: {
-        ...process.env,
-        PRISMA_COMPOSER_DEPLOYMENT_RESULT_FILE: resultFile,
-      },
+      env: process.env,
       stdio: "inherit",
     });
-    const summary = await readComposerDeploymentSummary(resultFile);
     log.success("Deployed to Prisma.");
     return {
       ok: true,
       result: {
-        appName: summary?.app ?? (params.context.projectName || path.basename(params.projectDir)),
-        entities:
-          summary?.nodes.flatMap((node) =>
-            node.entities.map((entity) => ({ address: node.address, ...entity })),
-          ) ?? [],
+        appName: params.context.projectName,
       },
     };
   } catch (error) {
     const deployError = new Error(getErrorMessage(error));
     log.error(`Deploy failed: ${deployError.message}`);
     return { ok: false, cancelled: false, error: deployError };
-  } finally {
-    await fs.remove(resultDir);
   }
 }

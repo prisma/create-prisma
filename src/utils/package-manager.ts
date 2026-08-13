@@ -225,11 +225,10 @@ export function getPackageExecutionArgs(
       return { command: "bunx", args: [...(options.silent ? ["--silent"] : []), ...commandArgs] };
     case "npm":
     default:
-      // npx has no true silent flag. --yes skips prompts, while --no-update-notifier
-      // avoids npm notices around otherwise JSON-only command output.
+      // npx has no true silent flag. --yes skips package-install prompts.
       return {
         command: "npx",
-        args: [...(options.silent ? ["--yes", "--no-update-notifier"] : []), ...commandArgs],
+        args: [...(options.silent ? ["--yes"] : []), ...commandArgs],
       };
   }
 }

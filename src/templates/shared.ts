@@ -8,6 +8,7 @@ import { prismaPlatformCliPackage } from "../constants/dependencies";
 import type { PackageManager } from "../types";
 import {
   getPackageExecutionArgs,
+  getPackageExecutionCommand,
   getPackageManagerManifestValue,
   getPrismaCliArgs,
   getRunScriptInDirectoryCommand,
@@ -37,6 +38,13 @@ Handlebars.registerHelper(
           getPackageExecutionArgs(packageManager, [prismaPlatformCliPackage], { silent: true }),
         )
       : "{}",
+);
+Handlebars.registerHelper("prismaAuthLoginCommand", (packageManager: PackageManager | undefined) =>
+  packageManager
+    ? getPackageExecutionCommand(packageManager, [prismaPlatformCliPackage, "auth", "login"], {
+        silent: true,
+      })
+    : "",
 );
 Handlebars.registerHelper("prismaCliInvocation", (packageManager: PackageManager | undefined) =>
   packageManager ? JSON.stringify(getPrismaCliArgs(packageManager, [])) : "{}",

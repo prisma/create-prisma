@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { getPrismaCliCommand } from "./package-manager";
+import { getPackageExecutionCommand, getPrismaCliCommand } from "./package-manager";
 
 describe("Prisma CLI commands", () => {
   test.each([
@@ -13,5 +13,23 @@ describe("Prisma CLI commands", () => {
 
     expect(command).toBe(expected);
     expect(command).not.toContain("./node_modules/.bin/prisma");
+  });
+});
+
+describe("package execution commands", () => {
+  test.each([
+    ["npm", "npx --yes @prisma/cli@next auth whoami"],
+    ["pnpm", "pnpm --silent dlx @prisma/cli@next auth whoami"],
+    ["yarn", "yarn dlx --quiet @prisma/cli@next auth whoami"],
+    ["bun", "bunx --silent @prisma/cli@next auth whoami"],
+  ] as const)("uses the native %s package runner", (packageManager, expected) => {
+    const command = getPackageExecutionCommand(
+      packageManager,
+      ["@prisma/cli@next", "auth", "whoami"],
+      { silent: true },
+    );
+
+    expect(command).toBe(expected);
+    expect(command).not.toContain("--no-update-notifier");
   });
 });

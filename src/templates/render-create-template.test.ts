@@ -10,7 +10,7 @@ import {
   type CreateTemplate,
   type PackageManager,
 } from "../types";
-import { getComposerDeployScriptMap } from "../tasks/deploy-with-composer";
+import { getComposerDeployScriptMap, parsePrismaCliEnvelope } from "../tasks/deploy-with-composer";
 import { writeCreateTemplateDependencies, writePrismaDependencies } from "../tasks/install";
 import { scaffoldCreateTemplate } from "./render-create-template";
 
@@ -29,6 +29,20 @@ const apiTemplateEntrypoints: Partial<Record<CreateTemplate, string>> = {
   hono: "src/index.ts",
   nest: "src/app.controller.ts",
   turborepo: "apps/api/src/index.ts",
+};
+
+const platformDeployCommands: Record<PackageManager, string> = {
+  npm: "npx --yes @prisma/cli@next composer deploy module.ts",
+  pnpm: "pnpm --silent dlx @prisma/cli@next composer deploy module.ts",
+  yarn: "yarn dlx --quiet @prisma/cli@next composer deploy module.ts",
+  bun: "bunx --silent @prisma/cli@next composer deploy module.ts",
+};
+
+const platformAuthLoginCommands: Record<PackageManager, string> = {
+  npm: "npx --yes @prisma/cli@next auth login",
+  pnpm: "pnpm --silent dlx @prisma/cli@next auth login",
+  yarn: "yarn dlx --quiet @prisma/cli@next auth login",
+  bun: "bunx --silent @prisma/cli@next auth login",
 };
 
 afterAll(async () => {
@@ -73,6 +87,7 @@ describe("Composer-ready create templates", () => {
 
           const packageJson = await fs.readJson(path.join(projectDir, "package.json"));
           const moduleSource = await fs.readFile(path.join(projectDir, "module.ts"), "utf8");
+          const readmeSource = await fs.readFile(path.join(projectDir, "README.md"), "utf8");
           const databaseSetupPath = path.join(projectDir, "scripts/setup-composer-postgres.mjs");
 
           expect(packageJson.packageManager).toStartWith(`${packageManager}@`);
@@ -82,6 +97,7 @@ describe("Composer-ready create templates", () => {
           ).toBeTrue();
           expect(await fs.pathExists(path.join(projectDir, "prisma.compute.ts"))).toBeFalse();
           expect(await fs.pathExists(path.join(projectDir, "deno.json"))).toBeFalse();
+          expect(readmeSource).toContain(platformAuthLoginCommands[packageManager]);
 
           const uiTemplate = uiTemplateFiles[template];
           if (uiTemplate) {
@@ -116,7 +132,15 @@ describe("Composer-ready create templates", () => {
             expect(setupSource).not.toContain('runPrisma(["migrate", "dev"]');
             expect(setupSource).not.toContain("./node_modules/.bin/prisma");
             expect(setupSource).toContain('shell: process.platform === "win32"');
-            expect(setupSource).toContain("Prisma CLI returned output that is not valid JSON.");
+            expect(setupSource).toContain(
+              "Prisma CLI returned output that is not a valid result envelope.",
+            );
+            expect(setupSource).toContain(
+              'runPlatformCli(["postgres", "list", "--project", "matrix-app"])',
+            );
+            expect(setupSource).toContain('"postgres",\n  "connection",\n  "create"');
+            expect(setupSource).toContain('"postgres",\n        "connection",\n        "remove"');
+            expect(setupSource).not.toContain('"database",\n  "connection"');
             expect(setupSource.indexOf("try {\n  if (!databaseUrl)")).toBeGreaterThan(
               setupSource.indexOf("const connectionId = findConnectionId(connection)"),
             );
@@ -141,7 +165,7 @@ describe("Composer deploy scripts", () => {
         useComposerPostgres: true,
       });
 
-      expect(scripts["composer:deploy"]).toBe("prisma-composer deploy module.ts");
+      expect(scripts["composer:deploy"]).toBe(platformDeployCommands[packageManager]);
       expect(scripts["composer:database:setup"]).toBe(
         `${packageManager === "bun" ? "bun" : "node"} scripts/setup-composer-postgres.mjs`,
       );
@@ -150,6 +174,39 @@ describe("Composer deploy scripts", () => {
       );
     });
   }
+});
+
+describe("Prisma CLI JSON output", () => {
+  test("reads the consolidated CLI result event", () => {
+    const output = [
+      JSON.stringify({ kind: "message", text: "Checking authentication" }),
+      JSON.stringify({
+        kind: "result",
+        envelope: {
+          ok: true,
+          result: { authenticated: true },
+        },
+      }),
+    ].join("\n");
+
+    expect(parsePrismaCliEnvelope(output)).toEqual({
+      ok: true,
+      result: { authenticated: true },
+    });
+  });
+
+  test("keeps compatibility with the previous direct envelope", () => {
+    expect(parsePrismaCliEnvelope('{"ok":true,"result":{"id":"db_123"}}')).toEqual({
+      ok: true,
+      result: { id: "db_123" },
+    });
+  });
+
+  test("rejects output without a result envelope", () => {
+    expect(() => parsePrismaCliEnvelope("not json")).toThrow(
+      "Prisma CLI returned output that is not a valid result envelope.",
+    );
+  });
 });
 
 test("fills an empty pnpm overrides mapping", async () => {
