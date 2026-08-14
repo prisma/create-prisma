@@ -11,7 +11,7 @@ const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;
 const port =
   Number.isInteger(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 3000;
 
-const app = new Elysia({ adapter: node() })
+const app = new Elysia({ adapter: "Bun" in globalThis ? undefined : node() })
   .get("/", () => {
     return {
       message: "hello from create-prisma + elysia",

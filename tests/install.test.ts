@@ -136,6 +136,7 @@ describe("generated templates", () => {
               expect(serviceSource).toContain("compute({");
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
+                expect(serverSource).toContain('adapter: "Bun" in globalThis ? undefined : node()');
                 expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
               }
               if (provider === "postgres") {
