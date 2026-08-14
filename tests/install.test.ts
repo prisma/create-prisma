@@ -153,6 +153,12 @@ describe("generated templates", () => {
                 expect(usersServiceSource).toContain("@Inject(PrismaService)");
                 expect(usersControllerSource).toContain("@Inject(UsersService)");
               }
+              if (template === "svelte") {
+                const viteConfig = await readFile(path.join(projectDir, "vite.config.ts"), "utf8");
+                expect(viteConfig).toContain(
+                  'noExternal: [/^@prisma\\//, "arktype", "dotenv", "mongodb"]',
+                );
+              }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
                 const composerSource = await readFile(
