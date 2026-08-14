@@ -132,12 +132,26 @@ describe("generated templates", () => {
 
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
+              expect(packageJson.dependencies?.alchemy).toBeUndefined();
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
               expect(serviceSource).toContain("compute({");
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
                 expect(serverSource).toContain('adapter: "Bun" in globalThis ? undefined : node()');
                 expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
+              }
+              if (template === "nest") {
+                expect(packageJson.scripts?.build).toContain("--external:'@nestjs/websockets/*'");
+                const usersServiceSource = await readFile(
+                  path.join(projectDir, "src/users.service.ts"),
+                  "utf8",
+                );
+                const usersControllerSource = await readFile(
+                  path.join(projectDir, "src/users.controller.ts"),
+                  "utf8",
+                );
+                expect(usersServiceSource).toContain("@Inject(PrismaService)");
+                expect(usersControllerSource).toContain("@Inject(UsersService)");
               }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
@@ -182,11 +196,18 @@ describe("generated templates", () => {
               expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(false);
               if (packageManager === "pnpm") {
                 expect(packageJson.pnpm).toBeUndefined();
+                const frameworkBuildAllowances =
+                  template === "next"
+                    ? ["  sharp: true", "  unrs-resolver: true"]
+                    : template === "astro"
+                      ? ["  sharp: true"]
+                      : [];
                 expect(await readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8")).toBe(
                   [
                     "allowBuilds:",
                     "  esbuild: true",
                     "  msgpackr-extract: true",
+                    ...frameworkBuildAllowances,
                     "  workerd: true",
                     "minimumReleaseAgeExclude:",
                     '  - "@prisma/*"',

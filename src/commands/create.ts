@@ -206,6 +206,7 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     failureStage = "unknown";
     const executionResult = await executeCreateContext(context);
     if (!executionResult.ok) {
+      process.exitCode = 1;
       if (executionResult.error) {
         cancel(
           `Create command failed: ${
@@ -232,6 +233,7 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
+    process.exitCode = 1;
     cancel(`Create command failed: ${error instanceof Error ? error.message : String(error)}`);
     await trackCreateFailed({
       input,

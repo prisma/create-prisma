@@ -50,7 +50,7 @@ export function getCreateTemplateDependencies(
   template: CreateTemplate,
   _packageManager: PackageManager,
 ): CreateTemplateDependencyTarget[] {
-  const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud", "alchemy"];
+  const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud"];
   const devDependencies = ["@prisma/cli-engine"];
 
   if (usesEsbuild(template)) {
