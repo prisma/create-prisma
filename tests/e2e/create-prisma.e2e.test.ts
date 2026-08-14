@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -97,6 +97,45 @@ afterEach(async () => {
 });
 
 describe("create-prisma e2e", () => {
+  test("returns a non-zero exit code when project setup fails", async () => {
+    const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-exit-code-e2e-"));
+    tempRoots.push(rootDir);
+    const emptyBinDir = path.join(rootDir, "empty-bin");
+    await mkdir(emptyBinDir);
+
+    const child = Bun.spawn({
+      cmd: [
+        process.execPath,
+        path.join(import.meta.dir, "../../src/cli.ts"),
+        "create",
+        "failed-app",
+        "--template",
+        "minimal",
+        "--provider",
+        "postgres",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "npm",
+        "--no-deploy",
+        "--yes",
+      ],
+      cwd: rootDir,
+      env: {
+        ...Bun.env,
+        PATH: emptyBinDir,
+        CI: "1",
+        CREATE_PRISMA_DISABLE_TELEMETRY: "1",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const exitCode = await child.exited;
+    expect(exitCode).toBe(1);
+    expect(await pathExists(path.join(rootDir, "failed-app", "package.json"))).toBe(true);
+  });
+
   test(
     "generates, builds, and runs a Composer-backed Prisma Postgres app",
     async () => {

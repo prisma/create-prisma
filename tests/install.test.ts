@@ -132,7 +132,7 @@ describe("generated templates", () => {
 
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
-              expect(packageJson.dependencies?.alchemy).toBeUndefined();
+              expect(packageJson.dependencies).toHaveProperty("alchemy");
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
               expect(serviceSource).toContain("compute({");
               if (template === "elysia") {
