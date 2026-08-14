@@ -3,6 +3,7 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
+import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import { scaffoldCreateSharedTemplates } from "../templates/render-create-template";
 import {
   AuthoringStyleSchema,
@@ -25,7 +26,6 @@ import {
 import { deployWithComposer } from "./deploy-with-composer";
 import { installProjectDependencies, writePrismaDependencies } from "./install";
 
-const PRISMA_CLI_PACKAGE = "@prisma/cli@next";
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgres";
 const DEFAULT_AUTHORING: AuthoringStyle = "psl";
 
@@ -177,7 +177,7 @@ function getInitTarget(provider: DatabaseProvider): "postgres" | "mongodb" {
 }
 
 function getPrismaCliInvocation(packageManager: PackageManager, args: string[]) {
-  return getPackageExecutionArgs(packageManager, [PRISMA_CLI_PACKAGE, ...args]);
+  return getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
 }
 
 async function runPrismaInit(context: PrismaSetupContext, projectDir: string): Promise<void> {

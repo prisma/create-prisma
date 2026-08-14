@@ -2,7 +2,11 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { getCreateTemplateDependencies, getDependencyVersion } from "../constants/dependencies";
+import {
+  getCreateTemplateDependencies,
+  getDependencyVersion,
+  PRISMA_PLATFORM_CLI_PACKAGE,
+} from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import {
@@ -10,8 +14,6 @@ import {
   getPackageExecutionCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
-
-const PRISMA_CLI_PACKAGE = "@prisma/cli@next";
 
 function getPrismaNextScriptMap(packageManager: PackageManager): Record<string, string> {
   return {
@@ -30,7 +32,7 @@ function getPrismaNextScriptMap(packageManager: PackageManager): Record<string, 
 export function getComposerScriptMap(packageManager: PackageManager): Record<string, string> {
   const composerCommand = (subcommand: string, extraArgs: string[] = []) =>
     getPackageExecutionCommand(packageManager, [
-      PRISMA_CLI_PACKAGE,
+      PRISMA_PLATFORM_CLI_PACKAGE,
       "composer",
       subcommand,
       "module.ts",

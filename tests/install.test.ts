@@ -3,7 +3,7 @@ import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { dependencyVersionMap } from "../src/constants/dependencies";
+import { dependencyVersionMap, PRISMA_PLATFORM_CLI_PACKAGE } from "../src/constants/dependencies";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import {
   getComposerScriptMap,
@@ -80,16 +80,16 @@ describe("writePrismaDependencies", () => {
 describe("Composer package-manager commands", () => {
   test("uses each selected package manager for Prisma CLI execution", () => {
     expect(getComposerScriptMap("npm")["composer:deploy"]).toBe(
-      "npx --yes @prisma/cli@next composer deploy module.ts",
+      `npx --yes ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
     );
     expect(getComposerScriptMap("pnpm")["composer:deploy"]).toBe(
-      "pnpm dlx @prisma/cli@next composer deploy module.ts",
+      `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
     );
     expect(getComposerScriptMap("yarn")["composer:deploy"]).toBe(
-      "yarn dlx @prisma/cli@next composer deploy module.ts",
+      `yarn dlx ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
     );
     expect(getComposerScriptMap("bun")["composer:deploy"]).toBe(
-      "bunx @prisma/cli@next composer deploy module.ts",
+      `bunx ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
     );
   });
 

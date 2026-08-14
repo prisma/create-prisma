@@ -1,6 +1,7 @@
 import { log, spinner } from "@clack/prompts";
 import { execa } from "execa";
 
+import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import type { PackageManager } from "../types";
 import {
   getPackageExecutionArgs,
@@ -8,8 +9,6 @@ import {
   getRunScriptArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
-
-const PRISMA_CLI_PACKAGE = "@prisma/cli@next";
 
 type PrismaCliEnvelope = {
   ok: boolean;
@@ -54,7 +53,7 @@ export function parsePrismaCliEnvelope(output: string): PrismaCliEnvelope {
 }
 
 function getPrismaCliArgs(packageManager: PackageManager, args: string[]) {
-  return getPackageExecutionArgs(packageManager, [PRISMA_CLI_PACKAGE, ...args]);
+  return getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
 }
 
 async function isAuthenticated(packageManager: PackageManager, projectDir: string) {
@@ -83,7 +82,7 @@ async function ensureAuthentication(packageManager: PackageManager, projectDir: 
   if (await isAuthenticated(packageManager, projectDir)) return;
 
   const loginCommand = getPackageExecutionCommand(packageManager, [
-    PRISMA_CLI_PACKAGE,
+    PRISMA_PLATFORM_CLI_PACKAGE,
     "auth",
     "login",
   ]);

@@ -3,6 +3,7 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
+  "@prisma/cli": "8.0.0-rc.2",
   "@prisma/cli-engine": "8.0.0-rc.2",
   "@prisma/composer": "0.6.0-dev.18",
   "@prisma/composer-prisma-cloud": "0.6.0-dev.18",
@@ -22,6 +23,9 @@ export const dependencyVersionMap = {
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
+
+export const PRISMA_PLATFORM_CLI_PACKAGE =
+  `@prisma/cli@${dependencyVersionMap["@prisma/cli"]}` as const;
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 
