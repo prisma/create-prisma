@@ -155,9 +155,7 @@ describe("generated templates", () => {
               }
               if (template === "svelte") {
                 const viteConfig = await readFile(path.join(projectDir, "vite.config.ts"), "utf8");
-                expect(viteConfig).toContain(
-                  'noExternal: [/^@prisma\\//, "arktype", "dotenv", "mongodb"]',
-                );
+                expect(viteConfig).toContain("noExternal: true");
               }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
