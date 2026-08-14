@@ -134,6 +134,10 @@ describe("generated templates", () => {
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
               expect(serviceSource).toContain("compute({");
+              if (template === "elysia") {
+                const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
+                expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
+              }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
                 const composerSource = await readFile(
