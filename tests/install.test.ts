@@ -124,6 +124,7 @@ describe("generated templates", () => {
               const packageJson = await readPackageJson(projectDir);
               const moduleSource = await readFile(path.join(projectDir, "module.ts"), "utf8");
               const serviceSource = await readFile(path.join(projectDir, "service.ts"), "utf8");
+              const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
               const prismaConfig = await readFile(
                 path.join(projectDir, "prisma.config.ts"),
                 "utf8",
@@ -135,8 +136,43 @@ describe("generated templates", () => {
               expect(serviceSource).toContain("compute({");
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
+                const composerSource = await readFile(
+                  path.join(projectDir, "src/prisma/composer.ts"),
+                  "utf8",
+                );
+                if (authoring === "typescript") {
+                  expect(composerSource).toContain(
+                    'import type { Contract } from "./generated/contract.d.ts";',
+                  );
+                  expect(composerSource).toContain(
+                    'import contractJson from "./generated/contract.json"',
+                  );
+                } else {
+                  expect(composerSource).toContain(
+                    'import type { Contract } from "./contract.d.ts";',
+                  );
+                  expect(composerSource).toContain("pnContract<Contract>(contractJson)");
+                }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');
+              }
+              if (authoring === "typescript") {
+                expect(dbSource).toContain(
+                  'import type { Contract } from "./generated/contract.d.ts";',
+                );
+                expect(dbSource).toContain('import contractJson from "./generated/contract.json"');
+              } else {
+                expect(dbSource).toContain('import type { Contract } from "./contract.d.ts";');
+                expect(dbSource).toContain("contractJson,");
+              }
+              const prismaNextConfig = await readFile(
+                path.join(projectDir, "prisma-next.config.ts"),
+                "utf8",
+              );
+              if (authoring === "typescript") {
+                expect(prismaNextConfig).toContain('output: "./src/prisma/generated"');
+              } else {
+                expect(prismaNextConfig).not.toContain("output:");
               }
               expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(false);
               if (packageManager === "pnpm") {

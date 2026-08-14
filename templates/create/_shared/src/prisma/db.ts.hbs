@@ -2,8 +2,8 @@
 import postgres from "@prisma/orm-postgres/runtime";
 
 import service from "../../service.ts";
-import type { Contract } from "./contract.d.ts";
-import contractJson from "./contract.json" with { type: "json" };
+import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
+import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
 
 function loadComposerDatabase() {
   try {
@@ -23,8 +23,8 @@ export const db =
 import mongo from "@prisma/orm-mongo/runtime";
 
 import service from "../../service.ts";
-import type { Contract } from "./contract.d.ts";
-import contractJson from "./contract.json" with { type: "json" };
+import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
+import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
 
 function getDatabaseUrl(): string {
   try {

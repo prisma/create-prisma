@@ -138,4 +138,49 @@ describe("create-prisma e2e", () => {
     },
     TEST_TIMEOUT,
   );
+
+  test(
+    "builds a Next.js app with a TypeScript-authored contract",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-typescript-e2e-"));
+      tempRoots.push(rootDir);
+      const previousCwd = process.cwd();
+      process.chdir(rootDir);
+      try {
+        await runCreateCommand({
+          name: "next-typescript-app",
+          template: "next",
+          provider: "postgres",
+          authoring: "typescript",
+          packageManager: "bun",
+          deploy: false,
+          yes: true,
+        });
+      } finally {
+        process.chdir(previousCwd);
+      }
+
+      const projectDir = path.join(rootDir, "next-typescript-app");
+      const composerSource = await readFile(
+        path.join(projectDir, "src/prisma/composer.ts"),
+        "utf8",
+      );
+      const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
+
+      expect(composerSource).toContain(
+        'import type { Contract } from "./generated/contract.d.ts";',
+      );
+      expect(dbSource).toContain('import type { Contract } from "./generated/contract.d.ts";');
+      expect(await pathExists(path.join(projectDir, "src/prisma/generated/contract.json"))).toBe(
+        true,
+      );
+      expect(await pathExists(path.join(projectDir, "src/prisma/generated/contract.d.ts"))).toBe(
+        true,
+      );
+
+      await runCommand(projectDir, ["bun", "run", "build"]);
+      await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
+    },
+    TEST_TIMEOUT,
+  );
 });
