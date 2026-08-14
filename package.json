@@ -37,7 +37,7 @@
     "dev": "tsdown --watch",
     "start": "bun run ./dist/cli.mjs",
     "test": "bun run test:unit && bun run test:e2e",
-    "test:unit": "bun test ./tests/dependencies.test.ts ./tests/install.test.ts ./tests/node-version.test.ts ./tests/setup-prisma.test.ts ./tests/telemetry.test.ts",
+    "test:unit": "bun test ./tests/dependencies.test.ts ./tests/deploy-with-composer.test.ts ./tests/install.test.ts ./tests/node-version.test.ts ./tests/setup-prisma.test.ts ./tests/telemetry.test.ts",
     "test:e2e": "bun test --timeout 180000 ./tests/e2e/create-prisma.e2e.test.ts",
     "check": "bun run format:check && bun run lint",
     "lint": "oxlint . --deny-warnings",

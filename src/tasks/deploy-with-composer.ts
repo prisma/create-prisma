@@ -52,6 +52,13 @@ export function parsePrismaCliEnvelope(output: string): PrismaCliEnvelope {
   throw new Error("Prisma CLI returned output that is not a valid result envelope.");
 }
 
+export function extractDeploymentUrl(output: string): string | undefined {
+  return output
+    .match(/https:\/\/[a-z0-9.-]+\.prisma\.build\/?/gi)
+    ?.at(-1)
+    ?.replace(/\/$/, "");
+}
+
 function getPrismaCliArgs(packageManager: PackageManager, args: string[]) {
   return getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
 }
@@ -117,14 +124,23 @@ export async function deployWithComposer(options: {
     progress?.start("Deploying to Prisma...");
 
     const command = getRunScriptArgs(options.packageManager, "deploy");
-    await execa(command.command, command.args, {
+    const result = await execa(command.command, command.args, {
       cwd: options.projectDir,
       env: process.env,
       stdio: options.verbose ? "inherit" : "pipe",
     });
 
     progress?.stop("Deployed to Prisma.");
-    if (options.verbose) log.success("Deployed to Prisma.");
+    if (options.verbose) {
+      log.success("Deployed to Prisma.");
+    } else {
+      const deploymentUrl = extractDeploymentUrl(
+        [result.stdout, result.stderr]
+          .filter((value): value is string => typeof value === "string")
+          .join("\n"),
+      );
+      if (deploymentUrl) log.info(`App: ${deploymentUrl}`);
+    }
     return true;
   } catch (error) {
     progress?.stop("Deployment failed.");
