@@ -117,7 +117,7 @@ async function promptForPackageManager(
 async function promptForDeployment(): Promise<boolean | undefined> {
   const shouldDeploy = await confirm({
     message: "Deploy to Prisma now?",
-    initialValue: false,
+    initialValue: true,
   });
   if (isCancel(shouldDeploy)) {
     cancel("Operation cancelled.");
