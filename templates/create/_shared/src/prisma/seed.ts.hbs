@@ -1,42 +1,38 @@
-{{#if (requiresDotenvConfigImport packageManager)}}
 import "dotenv/config";
-{{/if}}
-import { db } from "./db.ts";
+{{#if (eq provider "postgres")}}
+import { readFile } from "node:fs/promises";
 
-const seedUsers = [
-  { email: "alice@prisma.io", username: "alice", name: "Alice" },
-  { email: "bob@prisma.io", username: "bob", name: "Bob" },
-  { email: "carol@prisma.io", username: "carol", name: "Carol" },
-];
-
-let createdCount = 0;
-
-{{#if (eq provider "mongo")}}
-try {
-  for (const user of seedUsers) {
-    const existingUser = await db.orm.users.where({ email: user.email }).first();
-    if (!existingUser) {
-      await db.orm.users.create(user);
-      createdCount += 1;
-    }
+async function loadComposerDevDatabaseUrl(): Promise<string | undefined> {
+  try {
+    const contents = await readFile(
+      new URL("../../.prisma-composer/dev/env.json", import.meta.url),
+      "utf8",
+    );
+    const env = JSON.parse(contents) as Record<string, unknown>;
+    const value = env.COMPOSER_APP_DATABASE_URL;
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
   }
+}
 
-  console.log(`Seeded ${createdCount} user${createdCount === 1 ? "" : "s"}.`);
+process.env.DATABASE_URL ??= await loadComposerDevDatabaseUrl();
+{{/if}}
+
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL is not set. Run dev:composer once to create the local database, or set DATABASE_URL explicitly.",
+  );
+}
+
+const [{ db }, { seedStarterData }] = await Promise.all([
+  import("./db.ts"),
+  import("./starter-data.ts"),
+]);
+
+try {
+  await seedStarterData();
+  console.log("Starter users are ready.");
 } finally {
   await db.close();
 }
-{{else}}
-try {
-  for (const user of seedUsers) {
-    const existingUser = await db.orm.public.User.where({ email: user.email }).first();
-    if (!existingUser) {
-      await db.orm.public.User.create(user);
-      createdCount += 1;
-    }
-  }
-
-  console.log(`Seeded ${createdCount} user${createdCount === 1 ? "" : "s"}.`);
-} finally {
-  await db.close();
-}
-{{/if}}

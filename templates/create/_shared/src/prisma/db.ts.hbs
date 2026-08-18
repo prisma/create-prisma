@@ -15,10 +15,9 @@ function loadComposerDatabase() {
 
 export const db =
   loadComposerDatabase() ??
-  postgres<Contract>({
-    contractJson,
-    url: process.env.DATABASE_URL!,
-  });
+  (process.env.DATABASE_URL
+    ? postgres<Contract>({ contractJson, url: process.env.DATABASE_URL })
+    : postgres<Contract>({ contractJson }));
 {{else}}
 import mongo from "@prisma/orm-mongo/runtime";
 
@@ -26,16 +25,27 @@ import service from "../../service.ts";
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
 
-function getDatabaseUrl(): string {
+function getDatabaseUrl(): string | undefined {
   try {
     return service.input().databaseUrl.expose();
   } catch {
-    return process.env.DATABASE_URL!;
+    return process.env.DATABASE_URL;
   }
 }
 
-export const db = mongo<Contract>({
-  contractJson,
-  url: getDatabaseUrl(),
-});
+const databaseUrl = getDatabaseUrl();
+
+export const db = databaseUrl
+  ? mongo<Contract>({ contractJson, url: databaseUrl })
+  : mongo<Contract>({ contractJson });
 {{/if}}
+
+let connection: Promise<void> | undefined;
+
+export function connectDatabase(): Promise<void> {
+  connection ??= db.connect().then(() => undefined).catch((error: unknown) => {
+    connection = undefined;
+    throw error;
+  });
+  return connection;
+}

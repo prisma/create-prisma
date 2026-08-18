@@ -1,0 +1,36 @@
+import { connectDatabase, db } from "./db.ts";
+
+const starterUsers = [
+  { email: "alice@prisma.io", username: "alice", name: "Alice" },
+  { email: "bob@prisma.io", username: "bob", name: "Bob" },
+  { email: "carol@prisma.io", username: "carol", name: "Carol" },
+];
+
+let seed: Promise<void> | undefined;
+
+async function seedOnce(): Promise<void> {
+  await connectDatabase();
+
+{{#if (eq provider "mongo")}}
+  for (const user of starterUsers) {
+    const existingUser = await db.orm.users.where({ email: user.email }).first();
+    if (!existingUser) await db.orm.users.create(user);
+  }
+{{else}}
+  for (const user of starterUsers) {
+    await db.orm.public.User.upsert({
+      create: user,
+      update: {},
+      conflictOn: { email: user.email },
+    });
+  }
+{{/if}}
+}
+
+export function seedStarterData(): Promise<void> {
+  seed ??= seedOnce().catch((error: unknown) => {
+    seed = undefined;
+    throw error;
+  });
+  return seed;
+}

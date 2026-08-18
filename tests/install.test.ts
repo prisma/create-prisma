@@ -125,6 +125,18 @@ describe("generated templates", () => {
               const moduleSource = await readFile(path.join(projectDir, "module.ts"), "utf8");
               const serviceSource = await readFile(path.join(projectDir, "service.ts"), "utf8");
               const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
+              const seedSource = await readFile(
+                path.join(projectDir, "src/prisma/seed.ts"),
+                "utf8",
+              );
+              const starterDataSource = await readFile(
+                path.join(projectDir, "src/prisma/starter-data.ts"),
+                "utf8",
+              );
+              const usersSource = await readFile(
+                path.join(projectDir, "src/prisma/users.ts"),
+                "utf8",
+              );
               const prismaConfig = await readFile(
                 path.join(projectDir, "prisma.config.ts"),
                 "utf8",
@@ -135,6 +147,9 @@ describe("generated templates", () => {
               expect(packageJson.dependencies).toHaveProperty("alchemy");
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
               expect(serviceSource).toContain("compute({");
+              expect(dbSource).toContain("export function connectDatabase()");
+              expect(starterDataSource).toContain("await connectDatabase()");
+              expect(usersSource).toContain("await seedStarterData()");
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
                 expect(serverSource).toContain('adapter: "Bun" in globalThis ? undefined : node()');
@@ -159,6 +174,8 @@ describe("generated templates", () => {
               }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
+                expect(seedSource).toContain("COMPOSER_APP_DATABASE_URL");
+                expect(starterDataSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
                   path.join(projectDir, "src/prisma/composer.ts"),
                   "utf8",
@@ -178,6 +195,7 @@ describe("generated templates", () => {
                 }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');
+                expect(seedSource).not.toContain("COMPOSER_APP_DATABASE_URL");
               }
               if (authoring === "typescript") {
                 expect(dbSource).toContain(
