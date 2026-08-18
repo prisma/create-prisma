@@ -14,7 +14,7 @@ export default module("{{projectName}}", ({ provision }) => {
     pnPostgres({
       name: "database",
       contract: appContract,
-      config: "./prisma-next.config.ts",
+      config: "./prisma.config.ts",
     }),
     { id: "database" },
   );
