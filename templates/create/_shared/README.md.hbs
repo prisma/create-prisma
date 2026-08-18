@@ -18,7 +18,7 @@ This builds the app and starts it with Composer. PostgreSQL projects get a local
 
 The deploy script builds the framework output, provisions Prisma Postgres when selected, applies migrations, and deploys the app to Prisma Compute.
 
-The starter users are inserted idempotently on the first database query. `{{runScriptCommand packageManager "db:seed"}}` can also seed an explicit `DATABASE_URL`; for local PostgreSQL it reuses the database created by `dev:composer`.
+The starter users are inserted idempotently on the first database query through the Composer service binding. `{{runScriptCommand packageManager "db:seed"}}` is only for seeding an explicit `DATABASE_URL` outside Composer.
 
 {{#if (eq provider "mongo")}}
 MongoDB is not provisioned by Composer. Set `MONGODB_URL` before running Composer locally or deploying.

@@ -174,7 +174,8 @@ describe("generated templates", () => {
               }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
-                expect(seedSource).toContain("COMPOSER_APP_DATABASE_URL");
+                expect(seedSource).not.toContain(".prisma-composer");
+                expect(seedSource).toContain("Set it explicitly for this standalone command");
                 expect(starterDataSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
                   path.join(projectDir, "src/prisma/composer.ts"),
@@ -195,7 +196,7 @@ describe("generated templates", () => {
                 }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');
-                expect(seedSource).not.toContain("COMPOSER_APP_DATABASE_URL");
+                expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {
                 expect(dbSource).toContain(
