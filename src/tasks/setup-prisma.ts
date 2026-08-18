@@ -18,8 +18,6 @@ import {
 import {
   detectPackageManager,
   getInstallCommand,
-  getLocalPackageBinaryArgs,
-  getLocalPackageBinaryCommand,
   getPackageExecutionArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
@@ -250,16 +248,11 @@ async function ensureComposerTypeScriptOptions(projectDir: string): Promise<void
 }
 
 async function emitContract(context: PrismaSetupContext, projectDir: string): Promise<void> {
-  const args = getLocalPackageBinaryArgs(context.packageManager, "prisma-next", [
-    "contract",
-    "emit",
-  ]);
+  const invocation = getPrismaCliInvocation(context.packageManager, ["contract", "emit"]);
   if (context.verbose) {
-    log.step(
-      getLocalPackageBinaryCommand(context.packageManager, "prisma-next", ["contract", "emit"]),
-    );
+    log.step([invocation.command, ...invocation.args].join(" "));
   }
-  await execa(args.command, args.args, {
+  await execa(invocation.command, invocation.args, {
     cwd: projectDir,
     stdio: context.verbose ? "inherit" : "pipe",
   });

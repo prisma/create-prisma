@@ -50,15 +50,15 @@ describe("writePrismaDependencies", () => {
 
       expect(packageJson.dependencies).toMatchObject({
         "@prisma/orm-postgres": dependencyVersionMap["@prisma/orm-postgres"],
-        dotenv: dependencyVersionMap.dotenv,
       });
+      expect(packageJson.dependencies?.dotenv).toBeUndefined();
       expect(packageJson.devDependencies).toMatchObject({
-        "prisma-next": dependencyVersionMap["prisma-next"],
+        "@prisma/cli-engine": dependencyVersionMap["@prisma/cli-engine"],
       });
       expect(packageJson.scripts).toMatchObject({
-        "contract:emit": "prisma-next contract emit",
-        "db:seed": "tsx src/prisma/seed.ts",
+        "contract:emit": `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} contract emit`,
       });
+      expect(packageJson.scripts?.["db:seed"]).toBeUndefined();
     });
   });
 
@@ -72,7 +72,7 @@ describe("writePrismaDependencies", () => {
         mongodb: dependencyVersionMap.mongodb,
       });
       expect(packageJson.dependencies?.["@prisma/orm-postgres"]).toBeUndefined();
-      expect(packageJson.scripts?.["db:seed"]).toBe("bun src/prisma/seed.ts");
+      expect(packageJson.scripts?.["db:seed"]).toBeUndefined();
     });
   });
 });
@@ -129,10 +129,6 @@ describe("generated templates", () => {
                 path.join(projectDir, "src/prisma/seed.ts"),
                 "utf8",
               );
-              const starterDataSource = await readFile(
-                path.join(projectDir, "src/prisma/starter-data.ts"),
-                "utf8",
-              );
               const usersSource = await readFile(
                 path.join(projectDir, "src/prisma/users.ts"),
                 "utf8",
@@ -148,14 +144,12 @@ describe("generated templates", () => {
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");
-              expect(starterDataSource).toContain("await connectDatabase()");
-              expect(usersSource).toContain("await seedStarterData()");
-              const seedPath = ["hono", "elysia", "nest"].includes(template)
-                ? "/users"
-                : ["astro", "nuxt"].includes(template)
-                  ? "/api/users"
-                  : "/";
-              expect(seedSource).toContain(`const seedPath = "${seedPath}";`);
+              expect(seedSource).toContain("await connectDatabase()");
+              expect(seedSource).toContain("export function seed()");
+              expect(usersSource).toContain("await seed()");
+              expect(await pathExists(path.join(projectDir, "src/prisma/starter-data.ts"))).toBe(
+                false,
+              );
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
                 expect(serverSource).toContain('adapter: "Bun" in globalThis ? undefined : node()');
@@ -180,10 +174,7 @@ describe("generated templates", () => {
               }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
-                expect(seedSource).not.toContain(".prisma-composer");
-                expect(seedSource).toContain('["run", "dev:composer"]');
-                expect(seedSource).toContain("await seedThroughComposer()");
-                expect(starterDataSource).toContain("conflictOn: { email: user.email }");
+                expect(seedSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
                   path.join(projectDir, "src/prisma/composer.ts"),
                   "utf8",
@@ -241,7 +232,6 @@ describe("generated templates", () => {
                     "  workerd: true",
                     "minimumReleaseAgeExclude:",
                     '  - "@prisma/*"',
-                    '  - "prisma-next"',
                     "overrides:",
                     '  effect: "4.0.0-beta.103"',
                     "",

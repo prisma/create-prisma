@@ -10,7 +10,6 @@ import {
   getRuntimeScriptCommand,
   getRunScriptCommand,
 } from "../utils/package-manager";
-import { requiresDotenvConfigImport } from "../utils/runtime";
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
 Handlebars.registerHelper(
@@ -22,10 +21,6 @@ Handlebars.registerHelper(
   "packageManagerManifestValue",
   (packageManager: PackageManager | undefined) =>
     getPackageManagerManifestValue(packageManager) ?? "",
-);
-Handlebars.registerHelper(
-  "requiresDotenvConfigImport",
-  (packageManager: PackageManager | undefined) => requiresDotenvConfigImport(packageManager),
 );
 Handlebars.registerHelper(
   "runtimeScript",

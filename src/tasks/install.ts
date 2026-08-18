@@ -15,17 +15,19 @@ import {
   getRunScriptCommand,
 } from "../utils/package-manager";
 
-function getPrismaNextScriptMap(packageManager: PackageManager): Record<string, string> {
+function getPrismaScriptMap(packageManager: PackageManager): Record<string, string> {
+  const prismaCommand = (...args: string[]) =>
+    getPackageExecutionCommand(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
+
   return {
-    "contract:emit": "prisma-next contract emit",
-    "db:init": "prisma-next db init",
-    "db:update": "prisma-next db update",
-    "db:verify": "prisma-next db verify",
-    "db:seed": packageManager === "bun" ? "bun src/prisma/seed.ts" : "tsx src/prisma/seed.ts",
-    "migration:plan": "prisma-next migration plan",
-    migrate: "prisma-next migrate",
-    "migration:status": "prisma-next migration status",
-    "migration:show": "prisma-next migration show",
+    "contract:emit": prismaCommand("contract", "emit"),
+    "db:init": prismaCommand("db", "init"),
+    "db:update": prismaCommand("db", "update"),
+    "db:verify": prismaCommand("db", "verify"),
+    "migration:plan": prismaCommand("migration", "plan"),
+    migrate: prismaCommand("migrate"),
+    "migration:status": prismaCommand("migration", "status"),
+    "migration:show": prismaCommand("migration", "show"),
   };
 }
 
@@ -127,13 +129,13 @@ export async function writePrismaDependencies(
   _authoring: AuthoringStyle,
   projectDir = process.cwd(),
 ): Promise<void> {
-  const dependencies = [getDbPackages(provider), "dotenv"];
+  const dependencies = [getDbPackages(provider)];
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
 
   await addPackageDependency({
     dependencies,
-    devDependencies: ["prisma-next", "@types/node"],
-    scripts: getPrismaNextScriptMap(packageManager),
+    devDependencies: ["@prisma/cli-engine", "@types/node"],
+    scripts: getPrismaScriptMap(packageManager),
     projectDir,
   });
 }

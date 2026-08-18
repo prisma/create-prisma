@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { defineConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
 
 export default defineConfig({

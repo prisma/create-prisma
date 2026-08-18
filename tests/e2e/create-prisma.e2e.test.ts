@@ -77,7 +77,8 @@ async function verifyComposerDev(projectDir: string) {
 
       const response = await fetch(match[1]);
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ users: [] });
+      const body = (await response.json()) as { users: Array<{ name: string }> };
+      expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
       return;
     }
   } finally {

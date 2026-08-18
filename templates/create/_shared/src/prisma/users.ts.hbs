@@ -1,12 +1,10 @@
-import "dotenv/config";
-
 import { db } from "./db.ts";
-import { seedStarterData } from "./starter-data.ts";
+import { seed } from "./seed.ts";
 
 export { db };
 
 export async function listUsers(limit = 10) {
-  await seedStarterData();
+  await seed();
 {{#if (eq provider "mongo")}}
   const users = [];
 
