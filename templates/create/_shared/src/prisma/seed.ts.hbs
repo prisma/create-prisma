@@ -1,19 +1,97 @@
 import "dotenv/config";
+import { spawn, type ChildProcess } from "node:child_process";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL is not set. Set it explicitly for this standalone command. Composer apps seed through their service binding on the first database query.",
-  );
+const seedPath = {{#if (eq template "astro")}}"/api/users"{{else if (eq template "nuxt")}}"/api/users"{{else if (eq template "hono")}}"/users"{{else if (eq template "elysia")}}"/users"{{else if (eq template "nest")}}"/users"{{else}}"/"{{/if}};
+
+async function seedExplicitDatabase(): Promise<void> {
+  const [{ db }, { seedStarterData }] = await Promise.all([
+    import("./db.ts"),
+    import("./starter-data.ts"),
+  ]);
+
+  try {
+    await seedStarterData();
+  } finally {
+    await db.close();
+  }
 }
 
-const [{ db }, { seedStarterData }] = await Promise.all([
-  import("./db.ts"),
-  import("./starter-data.ts"),
-]);
-
-try {
-  await seedStarterData();
-  console.log("Starter users are ready.");
-} finally {
-  await db.close();
+function stopComposer(child: ChildProcess): void {
+  if (child.exitCode !== null || child.pid === undefined) return;
+  try {
+    if (process.platform === "win32") child.kill("SIGINT");
+    else process.kill(-child.pid, "SIGINT");
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+  }
 }
+
+async function requestStarterUsers(origin: string): Promise<void> {
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      const response = await fetch(new URL(seedPath, origin));
+      const body = await response.text();
+      lastStatus = response.status;
+      if (response.ok && ["Alice", "Bob", "Carol"].every((name) => body.includes(name))) return;
+    } catch {
+      // The service may still be accepting its first connection after Composer reports ready.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(`The app's database route did not return the starter users (HTTP ${lastStatus}).`);
+}
+
+async function seedThroughComposer(): Promise<void> {
+  const child = spawn("{{packageManager}}", ["run", "dev:composer"], {
+    cwd: new URL("../..", import.meta.url),
+    detached: process.platform !== "win32",
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let output = "";
+  let settled = false;
+  const ready = new Promise<string>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Timed out waiting for composer dev.")), 120_000);
+    const consume = (chunk: Buffer) => {
+      const text = chunk.toString();
+      output = `${output}${text}`.slice(-20_000);
+      if (!settled) process.stderr.write(text);
+      const url = output.match(/\bapp(?::|\s+)\s+(http:\/\/(?:127\.0\.0\.1|localhost):\d+)/)?.[1];
+      if (url && !settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolve(url);
+      }
+    };
+    child.stdout?.on("data", consume);
+    child.stderr?.on("data", consume);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("exit", (code) => {
+      if (settled) return;
+      clearTimeout(timeout);
+      reject(new Error(`composer dev exited before the app was ready (code ${String(code)}).`));
+    });
+  });
+
+  const stopOnSignal = () => stopComposer(child);
+  process.once("SIGINT", stopOnSignal);
+  process.once("SIGTERM", stopOnSignal);
+  try {
+    const origin = await ready;
+    await requestStarterUsers(origin);
+  } finally {
+    process.removeListener("SIGINT", stopOnSignal);
+    process.removeListener("SIGTERM", stopOnSignal);
+    stopComposer(child);
+  }
+}
+
+if (process.env.DATABASE_URL) await seedExplicitDatabase();
+else await seedThroughComposer();
+
+console.log("Starter users are ready.");

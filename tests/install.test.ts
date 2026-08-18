@@ -150,6 +150,12 @@ describe("generated templates", () => {
               expect(dbSource).toContain("export function connectDatabase()");
               expect(starterDataSource).toContain("await connectDatabase()");
               expect(usersSource).toContain("await seedStarterData()");
+              const seedPath = ["hono", "elysia", "nest"].includes(template)
+                ? "/users"
+                : ["astro", "nuxt"].includes(template)
+                  ? "/api/users"
+                  : "/";
+              expect(seedSource).toContain(`const seedPath = "${seedPath}";`);
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
                 expect(serverSource).toContain('adapter: "Bun" in globalThis ? undefined : node()');
@@ -175,7 +181,8 @@ describe("generated templates", () => {
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
                 expect(seedSource).not.toContain(".prisma-composer");
-                expect(seedSource).toContain("Set it explicitly for this standalone command");
+                expect(seedSource).toContain('["run", "dev:composer"]');
+                expect(seedSource).toContain("await seedThroughComposer()");
                 expect(starterDataSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
                   path.join(projectDir, "src/prisma/composer.ts"),
