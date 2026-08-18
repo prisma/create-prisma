@@ -1,9 +1,16 @@
 import { definePrismaConfig } from "@prisma/cli-engine";
-
-import orm from "./prisma-next.config.ts";
+import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
 
 export default definePrismaConfig({
-  orm,
+  orm: ormConfig({
+    contract: "./src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",
+{{#if (eq authoring "typescript")}}
+    output: "./src/prisma/generated",
+{{/if}}
+    db: {
+      connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
+    },
+  }),
   composer: {
     configPath: "./prisma-composer.config.ts",
   },

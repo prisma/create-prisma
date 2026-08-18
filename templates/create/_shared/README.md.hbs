@@ -27,8 +27,7 @@ MongoDB is not provisioned by Composer. Set `MONGODB_URL` before running Compose
 ## Prisma
 
 - Contract: `src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}`
-- Prisma 8 config: `prisma-next.config.ts`
-- Universal CLI config: `prisma.config.ts`
+- Prisma and Composer config: `prisma.config.ts`
 - Composer app: `module.ts` and `service.ts`
 
 After changing the contract, run:

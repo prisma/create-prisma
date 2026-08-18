@@ -141,6 +141,7 @@ describe("generated templates", () => {
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
               expect(packageJson.dependencies).toHaveProperty("alchemy");
+              expect(prismaConfig).toContain("orm: ormConfig({");
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");
@@ -174,6 +175,8 @@ describe("generated templates", () => {
               }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
+                expect(moduleSource).toContain('config: "./prisma.config.ts"');
+                expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
                   path.join(projectDir, "src/prisma/composer.ts"),
@@ -194,26 +197,21 @@ describe("generated templates", () => {
                 }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');
+                expect(prismaConfig).toContain("connection: process.env.MONGODB_URL!");
                 expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {
+                expect(prismaConfig).toContain('output: "./src/prisma/generated"');
                 expect(dbSource).toContain(
                   'import type { Contract } from "./generated/contract.d.ts";',
                 );
                 expect(dbSource).toContain('import contractJson from "./generated/contract.json"');
               } else {
+                expect(prismaConfig).not.toContain("output:");
                 expect(dbSource).toContain('import type { Contract } from "./contract.d.ts";');
                 expect(dbSource).toContain("contractJson,");
               }
-              const prismaNextConfig = await readFile(
-                path.join(projectDir, "prisma-next.config.ts"),
-                "utf8",
-              );
-              if (authoring === "typescript") {
-                expect(prismaNextConfig).toContain('output: "./src/prisma/generated"');
-              } else {
-                expect(prismaNextConfig).not.toContain("output:");
-              }
+              expect(await pathExists(path.join(projectDir, "prisma-next.config.ts"))).toBe(false);
               expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(false);
               if (packageManager === "pnpm") {
                 expect(packageJson.pnpm).toBeUndefined();
