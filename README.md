@@ -1,179 +1,66 @@
 # create-prisma
 
-Scaffold a new app with Prisma Next already wired up.
+Create a Prisma 8 app with Prisma Composer built in.
 
-`create-prisma@next` gives you a project template, Prisma Next setup, database scripts, and a working starting point without making you assemble everything by hand.
+## Quick start
 
-## What It Does
-
-- creates a new app from a supported template
-- adds Prisma Next dependencies for PostgreSQL or MongoDB
-- runs `prisma-next init --no-install` to scaffold `prisma/contract.*`, `prisma-next.config.ts`, `prisma/db.ts`, `prisma-next.md`, and `.env.example`
-- writes a template-specific Prisma Next runtime helper
-- adds `contract:emit`, `db:init`, `db:update`, `db:verify`, `db:seed`, `migration:plan`, `migrate`, `migration:status`, and `migration:show` scripts
-- adds `db:up` / `db:down` and `docker-compose.yml` for default MongoDB projects
-- creates or updates `.env` with `DATABASE_URL`
-- can install dependencies and run `prisma-next contract emit`
-
-`db:init`, migrations, and seeding are never run automatically. PostgreSQL projects show
-`db:init` as a manual follow-up command; MongoDB projects show `db:up` plus the migration
-plan/apply path for initial schema setup.
-
-## Quick Start
-
-Use the package runner you already have:
+Use your package manager:
 
 ```bash
 npx create-prisma@next my-app
-```
-
-```bash
 pnpm dlx create-prisma@next my-app
-```
-
-```bash
 yarn dlx create-prisma@next my-app
-```
-
-```bash
 bunx create-prisma@next my-app
 ```
 
-```bash
-deno run -A npm:create-prisma@next my-app
+The CLI initializes Prisma 8 with the aligned `@prisma/cli` prerelease, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
+
+The only Composer prompt is:
+
+```text
+Deploy to Prisma now?
 ```
 
-If you already have it available locally:
+Choose no to deploy later with the generated `deploy` script.
 
-```bash
-create-prisma
-```
+## Templates
 
-## Common Examples
+- `minimal`
+- `hono`
+- `elysia`
+- `nest`
+- `next`
+- `svelte` (SvelteKit)
+- `astro`
+- `nuxt`
+- `tanstack-start`
 
-Create a project interactively:
+PostgreSQL and MongoDB are supported with PSL or TypeScript contract authoring. npm, pnpm, Yarn, and Bun are supported.
 
-```bash
-create-prisma
-```
+## Options
 
-Create a Minimal project non-interactively:
+- positional project name or `--name`
+- `--template`
+- `--provider postgres|postgresql|mongo|mongodb`
+- `--authoring psl|typescript`
+- `--package-manager npm|pnpm|yarn|bun`
+- `--deploy` / `--no-deploy`
+- `--yes`
+- `--force`
+- `--verbose`
 
-```bash
-create-prisma my-script --template minimal --provider postgres
-```
+This branch intentionally targets Prisma 8 only. It does not generate a Prisma 7 compatibility path.
 
-Create a Hono app non-interactively:
-
-```bash
-create-prisma my-api --template hono --provider postgres
-```
-
-Create a MongoDB app:
-
-```bash
-create-prisma my-api --template hono --provider mongodb
-```
-
-Scaffold into the current directory:
-
-```bash
-create-prisma . --template hono --provider postgres
-```
-
-Use TypeScript contract authoring:
-
-```bash
-create-prisma my-app --template next --authoring typescript
-```
-
-Use Prisma Postgres auto-provisioning:
-
-```bash
-create-prisma my-app --template nest --provider postgres --prisma-postgres
-```
-
-Target a specific Prisma Next release (useful for regression / bisect work):
-
-```bash
-create-prisma my-app --template hono --prisma-next-version 0.10.0
-```
-
-Scaffold against an open PR via pkg.pr.new:
-
-```bash
-create-prisma my-app --template hono --prisma-next-version pkg-pr-new:bad6795
-```
-
-## Supported Templates
-
-- `minimal` - script-first Prisma Next starter with no web framework
-- `hono` - lightweight TypeScript API server
-- `elysia` - Bun-friendly TypeScript API server
-- `nest` - structured Node API with controllers and services
-- `next` - full-stack React app with App Router
-- `svelte` - full-stack Svelte 5 app with Vite
-- `astro` - content-oriented web app with server routes
-- `nuxt` - full-stack Vue app with Nitro server routes
-- `tanstack-start` - React app with file routes and server functions
-
-## Supported Databases
-
-- `postgres` / `postgresql`
-- `mongo` / `mongodb`
-
-## Supported Package Managers
-
-- `npm`
-- `pnpm`
-- `yarn`
-- `bun`
-- `deno`
-
-## Useful Flags
-
-- positional project name or `--name` project name / relative path
-- `--template` choose the template
-- `--provider postgres|postgresql|mongo|mongodb` (default: `postgres`)
-- `--authoring psl|typescript` (default: `psl`)
-- `--package-manager` choose the package manager/runtime
-- `--database-url` set `DATABASE_URL`
-- `--yes` accept defaults and skip prompts
-- `--no-install` scaffold only
-- `--no-emit` skip `prisma-next contract emit`
-- `--prisma-postgres` provision Prisma Postgres for PostgreSQL
-- `--prisma-next-version <spec>` target a specific Prisma Next release, npm dist-tag, or
-  pkg.pr.new PR preview. Accepts a published version (`0.10.0`, `0.11.0-dev.9`),
-  an npm dist-tag (`latest` (default), `dev`, `next`, …), or `pkg-pr-new:<sha|branch|pr-number>`
-  to install from `https://pkg.pr.new/prisma/prisma-next/<package>@<ref>`.
-- `--force` allow scaffolding into a non-empty directory
-- `--verbose` print full command output
-
-Generated Node-based Prisma Next projects document Node.js 24 LTS or newer.
-
-## Local Development
+## Development
 
 ```bash
 bun install
+bun run test:unit
+bun run typecheck
 bun run check
 bun run build
-bun run start
 ```
-
-Useful repo scripts:
-
-- `bun run dev`
-- `bun run typecheck`
-- `bun run format`
-- `bun run lint`
-- `bun run bump`
 
 ## Telemetry
 
-Published builds may send anonymous usage telemetry to help improve the CLI. It does not include project names, file paths, or database URLs.
-
-Disable it with any of:
-
-- `DO_NOT_TRACK`
-- `CREATE_PRISMA_DISABLE_TELEMETRY`
-- `CREATE_PRISMA_TELEMETRY_DISABLED`
+Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.

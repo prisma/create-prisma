@@ -32,12 +32,12 @@ function formatCreatedAt(value: string): string {
 <template>
   <main class="shell">
     <div class="hero">
-      <p class="eyebrow">Nuxt + Prisma Next</p>
+      <p class="eyebrow">Nuxt + Prisma 8</p>
 
       <h1>Users from your database, loaded through Nitro.</h1>
       <p class="lede">
         This page fetches <code>/api/users</code> from <code>server/api/users.get.ts</code> using
-        the Prisma Next helper in <code>src/prisma/users.ts</code>.
+        the Prisma 8 helper in <code>src/prisma/users.ts</code>.
       </p>
     </div>
 
@@ -51,7 +51,7 @@ function formatCreatedAt(value: string): string {
         \{{ data.error }} Run <code>contract:emit</code> and apply your schema, then refresh.
       </p>
       <p v-else-if="!data?.users?.length" class="empty">
-        No users yet. Run db:seed after applying your first migration.
+        No users found.
       </p>
       <ul v-else class="users">
         <li v-for="user in data.users" :key="user.id">

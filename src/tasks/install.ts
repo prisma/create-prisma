@@ -3,59 +3,57 @@ import fs from "fs-extra";
 import path from "node:path";
 
 import {
-  DEFAULT_PRISMA_NEXT_SPEC,
   getCreateTemplateDependencies,
   getDependencyVersion,
-  type ResolvedPrismaNextSpec,
+  PRISMA_PLATFORM_CLI_PACKAGE,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
-import { getDenoPrismaSpecifier, getInstallArgs } from "../utils/package-manager";
+import {
+  getInstallArgs,
+  getPackageExecutionCommand,
+  getRunScriptCommand,
+} from "../utils/package-manager";
 
-function getPrismaNextScriptMap(packageManager: PackageManager) {
-  if (packageManager === "deno") {
-    const prismaNextCli = `deno run -A --env-file=.env ${getDenoPrismaSpecifier()}`;
-
-    return {
-      "contract:emit": `${prismaNextCli} contract emit`,
-      "db:init": `${prismaNextCli} db init`,
-      "db:update": `${prismaNextCli} db update`,
-      "db:verify": `${prismaNextCli} db verify`,
-      "db:seed": "deno run -A --env-file=.env src/prisma/seed.ts",
-      "migration:plan": `${prismaNextCli} migration plan`,
-      migrate: `${prismaNextCli} migrate`,
-      "migration:status": `${prismaNextCli} migration status`,
-      "migration:show": `${prismaNextCli} migration show`,
-    } as const;
-  }
-
-  if (packageManager === "bun") {
-    const prismaNextCli = "bun prisma-next";
-
-    return {
-      "contract:emit": `${prismaNextCli} contract emit`,
-      "db:init": `${prismaNextCli} db init`,
-      "db:update": `${prismaNextCli} db update`,
-      "db:verify": `${prismaNextCli} db verify`,
-      "db:seed": "bun src/prisma/seed.ts",
-      "migration:plan": `${prismaNextCli} migration plan`,
-      migrate: `${prismaNextCli} migrate`,
-      "migration:status": `${prismaNextCli} migration status`,
-      "migration:show": `${prismaNextCli} migration show`,
-    } as const;
-  }
+function getPrismaScriptMap(packageManager: PackageManager): Record<string, string> {
+  const prismaCommand = (...args: string[]) =>
+    getPackageExecutionCommand(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
 
   return {
-    "contract:emit": "prisma-next contract emit",
-    "db:init": "prisma-next db init",
-    "db:update": "prisma-next db update",
-    "db:verify": "prisma-next db verify",
-    "db:seed": "tsx src/prisma/seed.ts",
-    "migration:plan": "prisma-next migration plan",
-    migrate: "prisma-next migrate",
-    "migration:status": "prisma-next migration status",
-    "migration:show": "prisma-next migration show",
-  } as const;
+    "contract:emit": prismaCommand("contract", "emit"),
+    "db:init": prismaCommand("db", "init"),
+    "db:update": prismaCommand("db", "update"),
+    "db:verify": prismaCommand("db", "verify"),
+    "migration:plan": prismaCommand("migration", "plan"),
+    migrate: prismaCommand("migrate"),
+    "migration:status": prismaCommand("migration", "status"),
+    "migration:show": prismaCommand("migration", "show"),
+  };
+}
+
+export function getComposerScriptMap(packageManager: PackageManager): Record<string, string> {
+  const composerCommand = (subcommand: string, extraArgs: string[] = []) =>
+    getPackageExecutionCommand(packageManager, [
+      PRISMA_PLATFORM_CLI_PACKAGE,
+      "composer",
+      subcommand,
+      "module.ts",
+      ...extraArgs,
+    ]);
+
+  return {
+    "composer:dev": composerCommand("dev"),
+    "composer:deploy": composerCommand("deploy"),
+    "composer:destroy": composerCommand("destroy", ["--production"]),
+    deploy: `${getRunScriptCommand(packageManager, "build")} && ${getRunScriptCommand(
+      packageManager,
+      "composer:deploy",
+    )}`,
+    "dev:composer": `${getRunScriptCommand(packageManager, "build")} && ${getRunScriptCommand(
+      packageManager,
+      "composer:dev",
+    )}`,
+  };
 }
 
 function unique(items: string[]): string[] {
@@ -66,52 +64,6 @@ function sortRecord(record: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
 }
 
-function getGeneratedContractTypePackages(provider: DatabaseProvider): string[] {
-  if (provider === "mongo") {
-    return ["@prisma-next/adapter-mongo", "@prisma-next/contract", "@prisma-next/mongo-contract"];
-  }
-
-  return [
-    "@prisma-next/adapter-postgres",
-    "@prisma-next/contract",
-    "@prisma-next/sql-contract",
-    "@prisma-next/target-postgres",
-  ];
-}
-
-function getTypeScriptContractPackages(provider: DatabaseProvider): string[] {
-  if (provider === "mongo") {
-    return [
-      ...getGeneratedContractTypePackages(provider),
-      "@prisma-next/family-mongo",
-      "@prisma-next/mongo-contract-ts",
-      "@prisma-next/target-mongo",
-    ];
-  }
-
-  return [
-    ...getGeneratedContractTypePackages(provider),
-    "@prisma-next/family-sql",
-    "@prisma-next/sql-contract-ts",
-  ];
-}
-
-function getMigrationPackages(provider: DatabaseProvider): string[] {
-  if (provider === "mongo") {
-    return ["@prisma-next/family-mongo", "@prisma-next/target-mongo"];
-  }
-
-  return ["@prisma-next/target-postgres"];
-}
-
-function getOrmTypePackages(provider: DatabaseProvider): string[] {
-  if (provider === "mongo") {
-    return ["@prisma-next/mongo-orm"];
-  }
-
-  return ["@prisma-next/sql-orm-client"];
-}
-
 export async function addPackageDependency(opts: {
   dependencies?: string[];
   devDependencies?: string[];
@@ -119,7 +71,6 @@ export async function addPackageDependency(opts: {
   scripts?: Record<string, string>;
   scriptMode?: "if-missing";
   projectDir: string;
-  prismaNextSpec?: ResolvedPrismaNextSpec;
 }): Promise<void> {
   const {
     dependencies = [],
@@ -128,7 +79,6 @@ export async function addPackageDependency(opts: {
     scripts = {},
     scriptMode,
     projectDir,
-    prismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
   } = opts;
 
   const pkgJsonPath = path.join(projectDir, "package.json");
@@ -139,78 +89,54 @@ export async function addPackageDependency(opts: {
   }
 
   const pkgJson = await fs.readJson(pkgJsonPath);
+  pkgJson.dependencies ??= {};
+  pkgJson.devDependencies ??= {};
+  pkgJson.scripts ??= {};
 
-  if (!pkgJson.dependencies) pkgJson.dependencies = {};
-  if (!pkgJson.devDependencies) pkgJson.devDependencies = {};
-  if (!pkgJson.scripts) pkgJson.scripts = {};
-
-  for (const pkgName of unique(dependencies)) {
-    const version = getDependencyVersion(pkgName, prismaNextSpec);
-    if (version) {
-      pkgJson.dependencies[pkgName] = version;
-    } else {
-      console.warn(`Warning: Dependency ${pkgName} not found in version map.`);
-    }
+  for (const packageName of unique(dependencies)) {
+    const version = getDependencyVersion(packageName);
+    if (!version) throw new Error(`Dependency ${packageName} is missing from the version map.`);
+    pkgJson.dependencies[packageName] = version;
   }
-
-  for (const pkgName of unique(devDependencies)) {
-    const version = getDependencyVersion(pkgName, prismaNextSpec);
-    if (version) {
-      pkgJson.devDependencies[pkgName] = version;
-    } else {
-      console.warn(`Warning: Dev dependency ${pkgName} not found in version map.`);
-    }
+  for (const packageName of unique(devDependencies)) {
+    const version = getDependencyVersion(packageName);
+    if (!version) throw new Error(`Dependency ${packageName} is missing from the version map.`);
+    pkgJson.devDependencies[packageName] = version;
   }
-
-  for (const [pkgName, version] of Object.entries(customDependencies)) {
-    pkgJson.dependencies[pkgName] = version;
+  for (const [packageName, version] of Object.entries(customDependencies)) {
+    pkgJson.dependencies[packageName] = version;
   }
-
   for (const [scriptName, command] of Object.entries(scripts)) {
-    if (scriptMode === "if-missing") {
-      if (
-        typeof pkgJson.scripts[scriptName] !== "string" ||
-        pkgJson.scripts[scriptName].trim().length === 0
-      ) {
-        pkgJson.scripts[scriptName] = command;
-      }
+    if (
+      scriptMode === "if-missing" &&
+      typeof pkgJson.scripts[scriptName] === "string" &&
+      pkgJson.scripts[scriptName].trim().length > 0
+    ) {
       continue;
     }
-
     pkgJson.scripts[scriptName] = command;
   }
 
   pkgJson.dependencies = sortRecord(pkgJson.dependencies);
   pkgJson.devDependencies = sortRecord(pkgJson.devDependencies);
-
-  await fs.writeJson(pkgJsonPath, pkgJson, {
-    spaces: 2,
-  });
+  pkgJson.scripts = sortRecord(pkgJson.scripts);
+  await fs.writeJson(pkgJsonPath, pkgJson, { spaces: 2 });
 }
 
 export async function writePrismaDependencies(
   provider: DatabaseProvider,
   packageManager: PackageManager,
-  authoring: AuthoringStyle,
+  _authoring: AuthoringStyle,
   projectDir = process.cwd(),
-  prismaNextSpec: ResolvedPrismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
 ): Promise<void> {
-  const dependencies: string[] = [getDbPackages(provider, packageManager), "dotenv"];
-  const devDependencies: string[] = ["prisma-next", "@prisma-next/cli", "@types/node"];
-  devDependencies.push(...getGeneratedContractTypePackages(provider));
-  devDependencies.push(...getMigrationPackages(provider));
-  devDependencies.push(...getOrmTypePackages(provider));
-  if (authoring === "typescript") {
-    devDependencies.push(...getTypeScriptContractPackages(provider));
-  }
-  const prismaScriptMap = getPrismaNextScriptMap(packageManager);
+  const dependencies = [getDbPackages(provider)];
+  if (provider === "mongo") dependencies.push("arktype", "mongodb");
 
   await addPackageDependency({
     dependencies,
-    devDependencies,
-    scripts: prismaScriptMap,
+    devDependencies: ["@prisma/cli-engine", "@types/node"],
+    scripts: getPrismaScriptMap(packageManager),
     projectDir,
-    prismaNextSpec,
   });
 }
 
@@ -218,37 +144,37 @@ export async function writeCreateTemplateDependencies(opts: {
   template: CreateTemplate;
   packageManager: PackageManager;
   projectDir?: string;
-  prismaNextSpec?: ResolvedPrismaNextSpec;
 }): Promise<void> {
-  const {
-    template,
-    packageManager,
-    projectDir = process.cwd(),
-    prismaNextSpec = DEFAULT_PRISMA_NEXT_SPEC,
-  } = opts;
-  const targets = getCreateTemplateDependencies(template, packageManager);
+  const { template, packageManager, projectDir = process.cwd() } = opts;
 
-  for (const dependencyTarget of targets) {
-    const targetDirectory = path.join(projectDir, path.dirname(dependencyTarget.packageJsonPath));
-
+  for (const target of getCreateTemplateDependencies(template, packageManager)) {
     await addPackageDependency({
-      dependencies: dependencyTarget.dependencies,
-      devDependencies: dependencyTarget.devDependencies,
-      customDependencies: dependencyTarget.customDependencies,
-      projectDir: targetDirectory,
-      prismaNextSpec,
+      dependencies: target.dependencies,
+      devDependencies: target.devDependencies,
+      customDependencies: target.customDependencies,
+      scripts: getComposerScriptMap(packageManager),
+      projectDir: path.join(projectDir, path.dirname(target.packageJsonPath)),
     });
   }
+
+  const packageJsonPath = path.join(projectDir, "package.json");
+  const packageJson = await fs.readJson(packageJsonPath);
+  const effectVersion = getDependencyVersion("effect");
+  if (!effectVersion) throw new Error("Dependency effect is missing from the version map.");
+
+  if (packageManager === "yarn") {
+    packageJson.resolutions = { ...packageJson.resolutions, effect: effectVersion };
+  } else if (packageManager !== "pnpm") {
+    packageJson.overrides = { ...packageJson.overrides, effect: effectVersion };
+  }
+  await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 });
 }
 
 export async function installProjectDependencies(
   packageManager: PackageManager,
   projectDir = process.cwd(),
-  options: {
-    verbose?: boolean;
-  } = {},
+  options: { verbose?: boolean } = {},
 ): Promise<void> {
-  const verbose = options.verbose === true;
   const installCommand = getInstallArgs(packageManager);
   const env =
     packageManager === "yarn"
@@ -260,6 +186,6 @@ export async function installProjectDependencies(
   await execa(installCommand.command, installCommand.args, {
     cwd: projectDir,
     env,
-    stdio: verbose ? "inherit" : "pipe",
+    stdio: options.verbose === true ? "inherit" : "pipe",
   });
 }

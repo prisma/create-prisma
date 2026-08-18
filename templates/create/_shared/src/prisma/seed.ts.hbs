@@ -1,42 +1,36 @@
-{{#if (requiresDotenvConfigImport packageManager)}}
-import "dotenv/config";
-{{/if}}
-import { db } from "./db{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { connectDatabase, db } from "./db.ts";
 
-const seedUsers = [
+const users = [
   { email: "alice@prisma.io", username: "alice", name: "Alice" },
   { email: "bob@prisma.io", username: "bob", name: "Bob" },
   { email: "carol@prisma.io", username: "carol", name: "Carol" },
 ];
 
-let createdCount = 0;
+let pendingSeed: Promise<void> | undefined;
+
+async function runSeed(): Promise<void> {
+  await connectDatabase();
 
 {{#if (eq provider "mongo")}}
-try {
-  for (const user of seedUsers) {
+  for (const user of users) {
     const existingUser = await db.orm.users.where({ email: user.email }).first();
-    if (!existingUser) {
-      await db.orm.users.create(user);
-      createdCount += 1;
-    }
+    if (!existingUser) await db.orm.users.create(user);
   }
-
-  console.log(`Seeded ${createdCount} user${createdCount === 1 ? "" : "s"}.`);
-} finally {
-  await db.close();
-}
 {{else}}
-try {
-  for (const user of seedUsers) {
-    const existingUser = await db.orm.public.User.where({ email: user.email }).first();
-    if (!existingUser) {
-      await db.orm.public.User.create(user);
-      createdCount += 1;
-    }
+  for (const user of users) {
+    await db.orm.public.User.upsert({
+      create: user,
+      update: {},
+      conflictOn: { email: user.email },
+    });
   }
-
-  console.log(`Seeded ${createdCount} user${createdCount === 1 ? "" : "s"}.`);
-} finally {
-  await db.close();
-}
 {{/if}}
+}
+
+export function seed(): Promise<void> {
+  pendingSeed ??= runSeed().catch((error: unknown) => {
+    pendingSeed = undefined;
+    throw error;
+  });
+  return pendingSeed;
+}

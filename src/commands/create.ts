@@ -7,7 +7,7 @@ import {
   trackCreateFailed,
   type CreateTelemetryFailureStage,
 } from "../telemetry";
-import { scaffoldCreateTemplate } from "../templates/render-create-template";
+import { scaffoldCreateFrameworkTemplate } from "../templates/render-create-template";
 import { writeCreateTemplateDependencies } from "../tasks/install";
 import type { PrismaSetupContext } from "../tasks/setup-prisma";
 import { collectPrismaSetupContext, executePrismaSetupContext } from "../tasks/setup-prisma";
@@ -18,6 +18,7 @@ import {
   type CreateTemplate,
 } from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
+import { getUnsupportedNodeMessage, supportsPrismaNext } from "../utils/node-version";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "minimal";
@@ -100,7 +101,7 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
       {
         value: "minimal",
         label: "Minimal",
-        hint: "Script-first Prisma Next starter with no web framework",
+        hint: "Script-first Prisma 8 starter with no web framework",
       },
       {
         value: "hono",
@@ -188,6 +189,12 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
   try {
     input = CreateCommandInputSchema.parse(rawInput);
 
+    if (!supportsPrismaNext()) {
+      cancel(getUnsupportedNodeMessage());
+      process.exitCode = 1;
+      return;
+    }
+
     intro(getCreatePrismaIntro());
 
     failureStage = "collect_context";
@@ -199,6 +206,7 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     failureStage = "unknown";
     const executionResult = await executeCreateContext(context);
     if (!executionResult.ok) {
+      process.exitCode = 1;
       if (executionResult.error) {
         cancel(
           `Create command failed: ${
@@ -225,6 +233,7 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
+    process.exitCode = 1;
     cancel(`Create command failed: ${error instanceof Error ? error.message : String(error)}`);
     await trackCreateFailed({
       input,
@@ -301,14 +310,14 @@ async function executeCreateContext(
   context: CreatePromptContext,
 ): Promise<ExecuteCreateContextResult> {
   const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner();
-  createSpinner?.start("Creating Prisma Next project...");
+  createSpinner?.start("Creating Prisma 8 project...");
 
   try {
     if (context.prismaSetupContext.verbose) {
       log.step(`Scaffolding ${context.template} starter.`);
     }
 
-    await scaffoldCreateTemplate({
+    await scaffoldCreateFrameworkTemplate({
       projectDir: context.targetDirectory,
       projectName: context.projectPackageName,
       template: context.template,
@@ -321,7 +330,7 @@ async function executeCreateContext(
       log.success("Starter files scaffolded.");
     }
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma Next project.");
+    createSpinner?.stop("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -334,10 +343,9 @@ async function executeCreateContext(
       template: context.template,
       packageManager: context.prismaSetupContext.packageManager,
       projectDir: context.targetDirectory,
-      prismaNextSpec: context.prismaSetupContext.prismaNextSpec,
     });
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma Next project.");
+    createSpinner?.stop("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -369,6 +377,8 @@ async function executeCreateContext(
     const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
+      projectName: context.projectPackageName,
+      template: context.template,
       createdProjectPath: context.targetDirectory,
       includeDevNextStep: true,
       progressSpinner: createSpinner,
@@ -381,7 +391,7 @@ async function executeCreateContext(
       };
     }
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma Next project.");
+    createSpinner?.stop("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "prisma_setup",

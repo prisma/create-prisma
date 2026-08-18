@@ -1,17 +1,10 @@
-import type { DatabaseProvider, PackageManager } from "../types";
+import type { DatabaseProvider } from "../types";
 
-export function getDbPackages(
-  provider: DatabaseProvider,
-  _packageManager?: PackageManager,
-): string {
+export function getDbPackages(provider: DatabaseProvider): string {
   switch (provider) {
     case "postgres":
-      return "@prisma-next/postgres";
+      return "@prisma/orm-postgres";
     case "mongo":
-      return "@prisma-next/mongo";
-    default: {
-      const exhaustiveCheck: never = provider;
-      throw new Error(`Unsupported Prisma Next target: ${String(exhaustiveCheck)}`);
-    }
+      return "@prisma/orm-mongo";
   }
 }

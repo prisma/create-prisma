@@ -17,10 +17,10 @@
 
 <section class="shell">
 	<div class="hero">
-		<p class="eyebrow">SvelteKit + Prisma Next</p>
+		<p class="eyebrow">SvelteKit + Prisma 8</p>
 		<h1>Users from your database, loaded on the server.</h1>
 		<p class="lede">
-			This page reads from <code>+page.server.ts</code> using the Prisma Next helper in
+			This page reads from <code>+page.server.ts</code> using the Prisma 8 helper in
 			<code>src/prisma/users.ts</code>.
 		</p>
 	</div>
@@ -37,7 +37,7 @@
 				refresh.
 			</p>
 		{:else if data.users.length === 0}
-			<p class="empty">No users yet. Run db:seed after applying your first migration.</p>
+			<p class="empty">No users found.</p>
 		{:else}
 			<ul class="users">
 				{#each data.users as user}

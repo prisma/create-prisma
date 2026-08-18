@@ -22,11 +22,11 @@ const users = await listUsers(10).catch(() => undefined);
   <body>
     <main class="shell">
       <div class="hero">
-        <p class="eyebrow">Astro + Prisma Next</p>
+        <p class="eyebrow">Astro + Prisma 8</p>
 
         <h1>Users from your database, loaded on the server.</h1>
         <p class="lede">
-          This page reads from <code>src/pages/index.astro</code> using the Prisma Next helper in
+          This page reads from <code>src/pages/index.astro</code> using the Prisma 8 helper in
           <code>src/prisma/users.ts</code>. An Astro API route is also scaffolded in
           <code>src/pages/api/users.ts</code>.
         </p>
@@ -44,7 +44,7 @@ const users = await listUsers(10).catch(() => undefined);
             then refresh.
           </p>
         ) : users.length === 0 ? (
-          <p class="empty">No users yet. Run db:seed after applying your first migration.</p>
+          <p class="empty">No users found.</p>
         ) : (
           <ul class="users">
             {users.map((user) => (

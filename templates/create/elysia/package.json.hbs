@@ -6,9 +6,9 @@
   {{/if}}
   "type": "module",
   "scripts": {
-    "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/src/index.js" denoFlags="--unstable-net"}}",
-    "build": "{{runtimeScript packageManager "build" "src/index.ts" "dist/src/index.js"}}",
-    "start": "{{runtimeScript packageManager "start" "src/index.ts" "dist/src/index.js" denoFlags="--unstable-net"}}"
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.48",

@@ -1,14 +1,13 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Inject } from "@nestjs/common";
 
-import { UsersService } from "./users.service{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { UsersService } from "./users.service";
 
 @Controller("users")
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(@Inject(UsersService) private readonly usersService: UsersService) {}
 
   @Get()
   findAll() {
     return this.usersService.findAll();
   }
 }
-

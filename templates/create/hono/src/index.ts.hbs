@@ -1,10 +1,7 @@
-{{#if (requiresDotenvConfigImport packageManager)}}
-import "dotenv/config";
-{{/if}}
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 
-import { listUsers } from "./prisma/users{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { listUsers } from "./prisma/users";
 
 const app = new Hono();
 
@@ -27,7 +24,7 @@ app.get("/users", async (c) => {
   return c.json(users);
 });
 
-const rawPort = ({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? "").trim();
+const rawPort = (process.env.PORT ?? "").trim();
 const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;
 const port =
   Number.isInteger(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 3000;

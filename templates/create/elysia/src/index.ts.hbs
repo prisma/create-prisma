@@ -1,20 +1,14 @@
-{{#if (requiresDotenvConfigImport packageManager)}}
-import "dotenv/config";
-{{/if}}
-{{#if (eq packageManager "deno")}}
-{{else}}
 import { node } from "@elysiajs/node";
-{{/if}}
 import { Elysia } from "elysia";
 
-import { listUsers } from "./prisma/users{{#if (eq packageManager "deno")}}.ts{{/if}}";
+import { listUsers } from "./prisma/users";
 
-const rawPort = ({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? "").trim();
+const rawPort = (process.env.PORT ?? "").trim();
 const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;
 const port =
   Number.isInteger(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 3000;
 
-const app = new Elysia({{#if (eq packageManager "deno")}}{{else}}{ adapter: node() }{{/if}})
+const app = new Elysia({ adapter: "Bun" in globalThis ? undefined : node() })
   .get("/", () => {
     return {
       message: "hello from create-prisma + elysia",
@@ -35,13 +29,6 @@ const app = new Elysia({{#if (eq packageManager "deno")}}{{else}}{ adapter: node
     return users;
   })
 
-{{#if (eq packageManager "deno")}}
-  ;
-
-Deno.serve({ port }, app.fetch);
-console.log(`Server running at http://localhost:${port}`);
-{{else}}
-  .listen(port);
+  .listen({ port, hostname: "0.0.0.0" });
 
 console.log(`Server running at http://localhost:${app.server?.port ?? port}`);
-{{/if}}

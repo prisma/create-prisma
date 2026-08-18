@@ -1,0 +1,10 @@
+import { definePrismaConfig } from "@prisma/cli-engine";
+
+import orm from "./prisma-next.config.ts";
+
+export default definePrismaConfig({
+  orm,
+  composer: {
+    configPath: "./prisma-composer.config.ts",
+  },
+});
