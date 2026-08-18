@@ -299,10 +299,10 @@ export async function executePrismaSetupContext(
   const template = options.template ?? "minimal";
   const progress = context.verbose ? undefined : (options.progressSpinner ?? spinner());
   const ownsProgress = progress !== undefined && !options.progressSpinner;
-  if (ownsProgress) progress.start("Creating Prisma Next project...");
+  if (ownsProgress) progress.start("Creating Prisma 8 project...");
 
   try {
-    progress?.message("Preparing Prisma Next project files...");
+    progress?.message("Preparing Prisma 8 project files...");
     await runPrismaInit(context, projectDir);
 
     await scaffoldCreateSharedTemplates({
@@ -329,11 +329,11 @@ export async function executePrismaSetupContext(
       verbose: context.verbose,
     });
 
-    progress?.message("Generating Prisma Next contract artifacts...");
+    progress?.message("Generating Prisma 8 contract artifacts...");
     await emitContract(context, projectDir);
-    progress?.stop("Prisma Next project ready.");
+    progress?.stop("Prisma 8 project ready.");
   } catch (error) {
-    progress?.stop("Could not create Prisma Next project.");
+    progress?.stop("Could not create Prisma 8 project.");
     cancel(getCommandErrorMessage(error));
     return false;
   }
@@ -349,6 +349,6 @@ export async function executePrismaSetupContext(
 
   if (options.createdProjectPath) note(path.resolve(options.createdProjectPath), "Project path");
   note(formatNextSteps(buildNextSteps(context, options)), "Next steps");
-  outro(context.shouldDeploy ? "Prisma Next app deployed." : "Prisma Next setup complete.");
+  outro(context.shouldDeploy ? "Prisma 8 app deployed." : "Prisma 8 setup complete.");
   return true;
 }

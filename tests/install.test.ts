@@ -43,7 +43,7 @@ async function pathExists(filePath: string) {
 }
 
 describe("writePrismaDependencies", () => {
-  test("writes the Prisma Next Postgres runtime and Composer-ready scripts", async () => {
+  test("writes the Prisma 8 Postgres runtime and Composer-ready scripts", async () => {
     await withPackageJson(async (projectDir) => {
       await writePrismaDependencies("postgres", "pnpm", "psl", projectDir);
       const packageJson = await readPackageJson(projectDir);

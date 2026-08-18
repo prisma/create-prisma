@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { dependencyVersionMap, getDependencyVersion } from "../src/constants/dependencies";
 
-describe("Prisma Next dependency versions", () => {
-  test("uses the aligned Prisma Next and Composer releases", () => {
+describe("Prisma 8 dependency versions", () => {
+  test("uses the aligned Prisma 8 and Composer releases", () => {
     expect(getDependencyVersion("prisma-next")).toBe("8.0.0-rc.1");
     expect(getDependencyVersion("@prisma/orm-postgres")).toBe("8.0.0-rc.1");
     expect(getDependencyVersion("@prisma/cli")).toBe("8.0.0-rc.2");

@@ -101,7 +101,7 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
       {
         value: "minimal",
         label: "Minimal",
-        hint: "Script-first Prisma Next starter with no web framework",
+        hint: "Script-first Prisma 8 starter with no web framework",
       },
       {
         value: "hono",
@@ -310,7 +310,7 @@ async function executeCreateContext(
   context: CreatePromptContext,
 ): Promise<ExecuteCreateContextResult> {
   const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner();
-  createSpinner?.start("Creating Prisma Next project...");
+  createSpinner?.start("Creating Prisma 8 project...");
 
   try {
     if (context.prismaSetupContext.verbose) {
@@ -330,7 +330,7 @@ async function executeCreateContext(
       log.success("Starter files scaffolded.");
     }
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma Next project.");
+    createSpinner?.stop("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -345,7 +345,7 @@ async function executeCreateContext(
       projectDir: context.targetDirectory,
     });
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma Next project.");
+    createSpinner?.stop("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -391,7 +391,7 @@ async function executeCreateContext(
       };
     }
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma Next project.");
+    createSpinner?.stop("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "prisma_setup",

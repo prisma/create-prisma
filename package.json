@@ -2,7 +2,7 @@
   "name": "create-prisma",
   "version": "0.4.2",
   "private": false,
-  "description": "Create Prisma Next projects with first-party templates and great DX.",
+  "description": "Create Prisma 8 projects with first-party templates and great DX.",
   "homepage": "https://github.com/prisma/create-prisma",
   "bugs": {
     "url": "https://github.com/prisma/create-prisma/issues"

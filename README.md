@@ -1,6 +1,6 @@
 # create-prisma
 
-Create a Prisma Next app with Prisma Composer built in.
+Create a Prisma 8 app with Prisma Composer built in.
 
 ## Quick start
 
@@ -13,7 +13,7 @@ yarn dlx create-prisma@next my-app
 bunx create-prisma@next my-app
 ```
 
-The CLI initializes Prisma Next with the aligned `@prisma/cli` prerelease, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
+The CLI initializes Prisma 8 with the aligned `@prisma/cli` prerelease, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
 
 The only Composer prompt is:
 
@@ -49,7 +49,7 @@ PostgreSQL and MongoDB are supported with PSL or TypeScript contract authoring. 
 - `--force`
 - `--verbose`
 
-This branch intentionally targets Prisma Next only. It does not generate a Prisma 7 compatibility path.
+This branch intentionally targets Prisma 8 only. It does not generate a Prisma 7 compatibility path.
 
 ## Development
 
