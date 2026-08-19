@@ -27,6 +27,7 @@ describe("collectPrismaSetupContext", () => {
         authoring: "psl",
         packageManager: "bun",
         shouldDeploy: false,
+        shouldPromptForWorkspace: false,
       });
     });
   });
@@ -38,6 +39,39 @@ describe("collectPrismaSetupContext", () => {
         { projectDir },
       );
       expect(context?.shouldDeploy).toBe(true);
+    });
+  });
+
+  test("preserves an explicit workspace for unattended deployment", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        {
+          yes: true,
+          packageManager: "pnpm",
+          deploy: true,
+          workspace: "workspace_123",
+        },
+        { projectDir },
+      );
+      expect(context).toMatchObject({
+        shouldPromptForWorkspace: false,
+        workspace: "workspace_123",
+      });
+    });
+  });
+
+  test("allows workspace selection during an interactive deployment", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        {
+          provider: "postgres",
+          authoring: "psl",
+          packageManager: "bun",
+          deploy: true,
+        },
+        { projectDir },
+      );
+      expect(context.shouldPromptForWorkspace).toBe(true);
     });
   });
 

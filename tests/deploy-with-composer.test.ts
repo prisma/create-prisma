@@ -1,27 +1,76 @@
 import { describe, expect, test } from "bun:test";
 
-import { extractDeploymentUrl } from "../src/tasks/deploy-with-composer";
+import {
+  getConsoleProjectUrl,
+  parseComposerDeployResult,
+  parsePrismaCliEnvelope,
+} from "../src/tasks/deploy-with-composer";
 
-describe("extractDeploymentUrl", () => {
-  test("returns the deployed Prisma Compute URL", () => {
-    expect(
-      extractDeploymentUrl(`
-app       compute-service cps_abc123
-          https://abc123.ewr.prisma.build
-Done: 22 succeeded
-`),
-    ).toBe("https://abc123.ewr.prisma.build");
+describe("getConsoleProjectUrl", () => {
+  test("converts Management API resource ids to Console route ids", () => {
+    expect(getConsoleProjectUrl("wksp_workspace123", "proj_project123")).toBe(
+      "https://console.prisma.io/workspace123/project123",
+    );
   });
 
-  test("uses the final deployed URL and removes a trailing slash", () => {
+  test("preserves raw workspace and project ids", () => {
+    expect(getConsoleProjectUrl("workspace123", "project123")).toBe(
+      "https://console.prisma.io/workspace123/project123",
+    );
+  });
+});
+
+describe("parsePrismaCliEnvelope", () => {
+  test("reads the terminal result after progress frames", () => {
     expect(
-      extractDeploymentUrl(
-        "Previous: https://old.ewr.prisma.build\nCurrent: https://new.fra.prisma.build/",
+      parsePrismaCliEnvelope(
+        [
+          '{"kind":"progress","message":"Deploying"}',
+          '{"kind":"result","envelope":{"ok":true,"result":{"summary":null}}}',
+        ].join("\n"),
       ),
-    ).toBe("https://new.fra.prisma.build");
+    ).toEqual({ ok: true, result: { summary: null } });
+  });
+});
+
+describe("parseComposerDeployResult", () => {
+  test("reads the official Composer deployment summary", () => {
+    expect(
+      parseComposerDeployResult({
+        summary: {
+          app: "my-app",
+          nodes: [
+            {
+              address: "app",
+              entities: [
+                {
+                  kind: "compute-service",
+                  id: "cps_abc123",
+                  url: "https://abc123.ewr.prisma.build/",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      appName: "my-app",
+      appUrl: "https://abc123.ewr.prisma.build",
+    });
   });
 
-  test("returns undefined when deploy output has no Compute URL", () => {
-    expect(extractDeploymentUrl("Done: 22 succeeded")).toBeUndefined();
+  test("keeps the app name when no compute URL was reported", () => {
+    expect(
+      parseComposerDeployResult({
+        summary: {
+          app: "worker",
+          nodes: [{ address: "database", entities: [] }],
+        },
+      }),
+    ).toEqual({ appName: "worker" });
+  });
+
+  test("returns undefined when Composer has no deployment summary", () => {
+    expect(parseComposerDeployResult({ summary: null })).toBeUndefined();
   });
 });

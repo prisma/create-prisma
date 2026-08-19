@@ -56,6 +56,12 @@ export const PrismaSetupOptionsSchema = z.object({
     "Package manager used for dependency installation",
   ),
   deploy: z.boolean().optional().describe("Deploy the generated app to Prisma immediately"),
+  workspace: z
+    .string()
+    .trim()
+    .min(1, "Please enter a valid workspace id or name")
+    .optional()
+    .describe("Prisma workspace id or name to deploy into"),
 });
 
 export const PrismaSetupCommandInputSchema = CommonCommandOptionsSchema.extend(

@@ -137,12 +137,14 @@ describe("generated templates", () => {
                 path.join(projectDir, "prisma.config.ts"),
                 "utf8",
               );
+              const tsconfig = await readFile(path.join(projectDir, "tsconfig.json"), "utf8");
 
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
               expect(packageJson.dependencies).toHaveProperty("alchemy");
               expect(prismaConfig).toContain("orm: ormConfig({");
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
+              expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");
               expect(seedSource).toContain("await connectDatabase()");

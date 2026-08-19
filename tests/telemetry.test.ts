@@ -28,6 +28,7 @@ const createContext: CreatePromptContext = {
     authoring: "psl",
     packageManager: "bun",
     shouldDeploy: true,
+    shouldPromptForWorkspace: false,
   },
 };
 
