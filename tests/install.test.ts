@@ -137,12 +137,14 @@ describe("generated templates", () => {
                 path.join(projectDir, "prisma.config.ts"),
                 "utf8",
               );
+              const tsconfig = await readFile(path.join(projectDir, "tsconfig.json"), "utf8");
 
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
               expect(packageJson.dependencies).toHaveProperty("alchemy");
               expect(prismaConfig).toContain("orm: ormConfig({");
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
+              expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");
               expect(seedSource).toContain("await connectDatabase()");
@@ -176,8 +178,7 @@ describe("generated templates", () => {
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
                 expect(moduleSource).toContain('config: "./prisma.config.ts"');
-                expect(prismaConfig).toContain('import { env } from "node:process"');
-                expect(prismaConfig).toContain("connection: env.DATABASE_URL!");
+                expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
                   path.join(projectDir, "src/prisma/composer.ts"),
@@ -198,8 +199,7 @@ describe("generated templates", () => {
                 }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');
-                expect(prismaConfig).toContain('import { env } from "node:process"');
-                expect(prismaConfig).toContain("connection: env.MONGODB_URL!");
+                expect(prismaConfig).toContain("connection: process.env.MONGODB_URL!");
                 expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {

@@ -1,5 +1,3 @@
-import { env } from "node:process";
-
 import { definePrismaConfig } from "@prisma/cli-engine";
 import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
 
@@ -10,7 +8,7 @@ export default definePrismaConfig({
     output: "./src/prisma/generated",
 {{/if}}
     db: {
-      connection: env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
+      connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
     },
   }),
   composer: {
