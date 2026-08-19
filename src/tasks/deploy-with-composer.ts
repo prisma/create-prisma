@@ -78,6 +78,19 @@ function getErrorMessage(error: unknown): string {
   return redactSecrets(String(error));
 }
 
+function stripResourcePrefix(id: string, prefix: "proj" | "wksp"): string {
+  const marker = `${prefix}_`;
+  return id.startsWith(marker) ? id.slice(marker.length) : id;
+}
+
+export function getConsoleProjectUrl(workspaceId: string, projectId: string): string {
+  const consoleWorkspaceId = stripResourcePrefix(workspaceId, "wksp");
+  const consoleProjectId = stripResourcePrefix(projectId, "proj");
+  return `https://console.prisma.io/${encodeURIComponent(
+    consoleWorkspaceId,
+  )}/${encodeURIComponent(consoleProjectId)}`;
+}
+
 export function parsePrismaCliEnvelope<Result = unknown>(
   output: string,
 ): PrismaCliEnvelope<Result> {
@@ -304,9 +317,7 @@ async function getProjectDetails(options: {
       project: {
         id: result.project.id,
         name: result.project.name,
-        consoleUrl: `https://console.prisma.io/${encodeURIComponent(
-          result.workspace.id,
-        )}/${encodeURIComponent(result.project.id)}`,
+        consoleUrl: getConsoleProjectUrl(result.workspace.id, result.project.id),
       },
     };
   } catch {

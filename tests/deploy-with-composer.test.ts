@@ -1,9 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  getConsoleProjectUrl,
   parseComposerDeployResult,
   parsePrismaCliEnvelope,
 } from "../src/tasks/deploy-with-composer";
+
+describe("getConsoleProjectUrl", () => {
+  test("converts Management API resource ids to Console route ids", () => {
+    expect(getConsoleProjectUrl("wksp_workspace123", "proj_project123")).toBe(
+      "https://console.prisma.io/workspace123/project123",
+    );
+  });
+
+  test("preserves raw workspace and project ids", () => {
+    expect(getConsoleProjectUrl("workspace123", "project123")).toBe(
+      "https://console.prisma.io/workspace123/project123",
+    );
+  });
+});
 
 describe("parsePrismaCliEnvelope", () => {
   test("reads the terminal result after progress frames", () => {
