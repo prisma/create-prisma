@@ -330,7 +330,7 @@ async function executeCreateContext(
       log.success("Starter files scaffolded.");
     }
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma 8 project.");
+    createSpinner?.error("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -345,7 +345,7 @@ async function executeCreateContext(
       projectDir: context.targetDirectory,
     });
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma 8 project.");
+    createSpinner?.error("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -391,7 +391,7 @@ async function executeCreateContext(
       };
     }
   } catch (error) {
-    createSpinner?.stop("Could not create Prisma 8 project.");
+    createSpinner?.error("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "prisma_setup",

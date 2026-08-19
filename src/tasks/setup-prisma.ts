@@ -21,7 +21,7 @@ import {
   getPackageExecutionArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
-import { deployWithComposer } from "./deploy-with-composer";
+import { deployWithComposer, type ComposerDeployResult } from "./deploy-with-composer";
 import { installProjectDependencies, writePrismaDependencies } from "./install";
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgres";
@@ -262,6 +262,42 @@ function formatNextSteps(steps: NextStep[]): string {
   return steps.map((step) => `${step.command}\n  ${step.description}`).join("\n\n");
 }
 
+function formatPlatformTarget(name: string | null, id: string): string {
+  return name ? `${name} (${id})` : id;
+}
+
+function formatProjectSummary(options: {
+  createdProjectPath?: string;
+  deployment?: ComposerDeployResult;
+}): string {
+  const lines: string[] = [];
+  if (options.createdProjectPath) {
+    lines.push(`Path: ${path.resolve(options.createdProjectPath)}`);
+  }
+  if (options.deployment?.workspace) {
+    lines.push(
+      `Workspace: ${formatPlatformTarget(
+        options.deployment.workspace.name,
+        options.deployment.workspace.id,
+      )}`,
+    );
+  }
+  if (options.deployment) {
+    lines.push(
+      `Project: ${
+        options.deployment.project.id
+          ? formatPlatformTarget(options.deployment.project.name, options.deployment.project.id)
+          : options.deployment.project.name
+      }`,
+    );
+    lines.push(`App: ${options.deployment.appUrl ?? options.deployment.appName}`);
+    if (options.deployment.project.consoleUrl) {
+      lines.push(`Console: ${options.deployment.project.consoleUrl}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 function buildNextSteps(context: PrismaSetupContext, options: PrismaSetupRunOptions): NextStep[] {
   const nextSteps = [...(options.prependNextSteps ?? [])];
   if (context.databaseProvider === "mongo") {
@@ -326,22 +362,28 @@ export async function executePrismaSetupContext(
     await emitContract(context, projectDir);
     progress?.stop("Prisma 8 project ready.");
   } catch (error) {
-    progress?.stop("Could not create Prisma 8 project.");
+    progress?.error("Could not create Prisma 8 project.");
     cancel(getCommandErrorMessage(error));
     return false;
   }
 
+  let deployment: ComposerDeployResult | undefined;
   if (context.shouldDeploy) {
-    const didDeploy = await deployWithComposer({
+    deployment = await deployWithComposer({
+      appName: projectName,
       packageManager: context.packageManager,
       projectDir,
       verbose: context.verbose,
     });
-    if (!didDeploy) return false;
+    if (!deployment) return false;
   }
 
-  if (options.createdProjectPath) note(path.resolve(options.createdProjectPath), "Project path");
+  const projectSummary = formatProjectSummary({
+    createdProjectPath: options.createdProjectPath,
+    deployment,
+  });
+  if (projectSummary) note(projectSummary, context.shouldDeploy ? "Deployment" : "Project");
   note(formatNextSteps(buildNextSteps(context, options)), "Next steps");
-  outro(context.shouldDeploy ? "Prisma 8 app deployed." : "Prisma 8 setup complete.");
+  outro(context.shouldDeploy ? "Prisma 8 app deployed." : "Prisma 8 project ready.");
   return true;
 }

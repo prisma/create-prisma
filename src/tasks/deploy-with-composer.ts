@@ -10,10 +10,45 @@ import {
   getRunScriptCommand,
 } from "../utils/package-manager";
 
-type PrismaCliEnvelope = {
+type PrismaCliEnvelope<Result = unknown> = {
   ok: boolean;
-  result?: unknown;
-  error?: { summary?: string; message?: string };
+  result?: Result;
+  error?: { summary?: string; message?: string; why?: string };
+};
+
+type PrismaWorkspace = {
+  id: string;
+  name: string | null;
+};
+
+type WhoamiResult = {
+  authenticated: boolean;
+  workspace: PrismaWorkspace | null;
+};
+
+type ProjectShowResult = {
+  workspace: PrismaWorkspace;
+  project: { id: string; name: string } | null;
+};
+
+type ComposerDeployCommandResult = {
+  summary: {
+    app: string;
+    nodes: Array<{
+      entities: Array<{ kind: string; id: string; url?: string }>;
+    }>;
+  } | null;
+};
+
+export type ComposerDeployResult = {
+  appName: string;
+  appUrl?: string;
+  workspace?: PrismaWorkspace;
+  project: {
+    id?: string;
+    name: string;
+    consoleUrl?: string;
+  };
 };
 
 function redactSecrets(message: string): string {
@@ -30,7 +65,9 @@ function getErrorMessage(error: unknown): string {
   return redactSecrets(String(error));
 }
 
-export function parsePrismaCliEnvelope(output: string): PrismaCliEnvelope {
+export function parsePrismaCliEnvelope<Result = unknown>(
+  output: string,
+): PrismaCliEnvelope<Result> {
   const lines = output
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -43,50 +80,72 @@ export function parsePrismaCliEnvelope(output: string): PrismaCliEnvelope {
       const candidate = parsed.kind === "result" ? parsed.envelope : parsed;
       if (typeof candidate !== "object" || candidate === null) continue;
       if (typeof Reflect.get(candidate, "ok") !== "boolean") continue;
-      return candidate as PrismaCliEnvelope;
+      return candidate as PrismaCliEnvelope<Result>;
     } catch {
-      // The CLI may print progress lines before its final JSON envelope.
+      // The CLI may print progress frames before its final JSON envelope.
     }
   }
 
   throw new Error("Prisma CLI returned output that is not a valid result envelope.");
 }
 
-export function extractDeploymentUrl(output: string): string | undefined {
-  return output
-    .match(/https:\/\/[a-z0-9.-]+\.prisma\.build\/?/gi)
-    ?.at(-1)
-    ?.replace(/\/$/, "");
-}
-
 function getPrismaCliArgs(packageManager: PackageManager, args: string[]) {
   return getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
 }
 
-async function isAuthenticated(packageManager: PackageManager, projectDir: string) {
-  const invocation = getPrismaCliArgs(packageManager, [
-    "auth",
-    "whoami",
+async function runPrismaJsonCommand<Result>(options: {
+  packageManager: PackageManager;
+  projectDir: string;
+  args: string[];
+  forwardStderr?: boolean;
+}): Promise<Result> {
+  const invocation = getPrismaCliArgs(options.packageManager, [
+    ...options.args,
     "--json",
     "--no-interactive",
   ]);
   const result = await execa(invocation.command, invocation.args, {
-    cwd: projectDir,
+    cwd: options.projectDir,
     env: process.env,
     reject: false,
   });
-  const envelope = parsePrismaCliEnvelope(result.stdout);
-  if (result.exitCode !== 0 || !envelope.ok) {
+
+  if (options.forwardStderr && result.stderr) {
+    process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : `${result.stderr}\n`);
+  }
+
+  let envelope: PrismaCliEnvelope<Result>;
+  try {
+    envelope = parsePrismaCliEnvelope<Result>(result.stdout);
+  } catch (error) {
+    if (result.exitCode !== 0 && result.stderr.trim()) throw new Error(result.stderr.trim());
+    throw error;
+  }
+
+  if (result.exitCode !== 0 || !envelope.ok || envelope.result === undefined) {
+    const summary = envelope.error?.summary ?? envelope.error?.message;
     throw new Error(
-      envelope.error?.summary ?? envelope.error?.message ?? "Prisma authentication check failed.",
+      [summary, envelope.error?.why].filter(Boolean).join(": ") ||
+        result.stderr.trim() ||
+        "Prisma CLI command failed.",
     );
   }
-  if (typeof envelope.result !== "object" || envelope.result === null) return false;
-  return Reflect.get(envelope.result, "authenticated") === true;
+  return envelope.result;
 }
 
-async function ensureAuthentication(packageManager: PackageManager, projectDir: string) {
-  if (await isAuthenticated(packageManager, projectDir)) return;
+async function ensureAuthentication(
+  packageManager: PackageManager,
+  projectDir: string,
+): Promise<WhoamiResult> {
+  const whoami = () =>
+    runPrismaJsonCommand<WhoamiResult>({
+      packageManager,
+      projectDir,
+      args: ["auth", "whoami"],
+    });
+
+  const authState = await whoami();
+  if (authState.authenticated) return authState;
 
   const loginCommand = getPackageExecutionCommand(packageManager, [
     PRISMA_PLATFORM_CLI_PACKAGE,
@@ -107,44 +166,109 @@ async function ensureAuthentication(packageManager: PackageManager, projectDir: 
     stdio: "inherit",
   });
 
-  if (!(await isAuthenticated(packageManager, projectDir))) {
+  const authenticatedState = await whoami();
+  if (!authenticatedState.authenticated) {
     throw new Error("Prisma sign-in completed without an active workspace session.");
+  }
+  return authenticatedState;
+}
+
+export function parseComposerDeployResult(result: ComposerDeployCommandResult):
+  | {
+      appName: string;
+      appUrl?: string;
+    }
+  | undefined {
+  const summary = result.summary;
+  if (!summary) return;
+  const computeService = summary.nodes
+    .flatMap((node) => node.entities)
+    .find((entity) => entity.kind === "compute-service");
+  return {
+    appName: summary.app,
+    ...(computeService?.url ? { appUrl: computeService.url.replace(/\/$/, "") } : {}),
+  };
+}
+
+async function getProjectDetails(options: {
+  packageManager: PackageManager;
+  projectDir: string;
+  appName: string;
+}): Promise<Pick<ComposerDeployResult, "workspace" | "project"> | undefined> {
+  try {
+    const result = await runPrismaJsonCommand<ProjectShowResult>({
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      args: ["project", "show", "--project", options.appName],
+    });
+    if (!result.project) return;
+    return {
+      workspace: result.workspace,
+      project: {
+        id: result.project.id,
+        name: result.project.name,
+        consoleUrl: `https://console.prisma.io/${encodeURIComponent(
+          result.workspace.id,
+        )}/${encodeURIComponent(result.project.id)}`,
+      },
+    };
+  } catch {
+    // Metadata enrichment must not turn a successful deploy into a failure.
+    return;
   }
 }
 
 export async function deployWithComposer(options: {
+  appName: string;
   packageManager: PackageManager;
   projectDir: string;
   verbose: boolean;
-}): Promise<boolean> {
+}): Promise<ComposerDeployResult | undefined> {
   const progress = options.verbose ? undefined : spinner();
 
   try {
-    await ensureAuthentication(options.packageManager, options.projectDir);
-    progress?.start("Deploying to Prisma...");
+    const authState = await ensureAuthentication(options.packageManager, options.projectDir);
 
-    const command = getRunScriptArgs(options.packageManager, "deploy");
-    const result = await execa(command.command, command.args, {
+    progress?.start("Building for deployment...");
+    if (options.verbose) log.step("Building for deployment.");
+    const build = getRunScriptArgs(options.packageManager, "build");
+    await execa(build.command, build.args, {
       cwd: options.projectDir,
       env: process.env,
       stdio: options.verbose ? "inherit" : "pipe",
     });
 
+    progress?.message("Deploying to Prisma...");
+    if (options.verbose) log.step("Deploying to Prisma.");
+    const deployment = parseComposerDeployResult(
+      await runPrismaJsonCommand<ComposerDeployCommandResult>({
+        packageManager: options.packageManager,
+        projectDir: options.projectDir,
+        args: ["composer", "deploy", "module.ts"],
+        forwardStderr: options.verbose,
+      }),
+    );
+    const appName = deployment?.appName ?? options.appName;
+
+    progress?.message("Loading deployment details...");
+    const details = await getProjectDetails({
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      appName,
+    });
+
     progress?.stop("Deployed to Prisma.");
-    if (options.verbose) {
-      log.success("Deployed to Prisma.");
-    } else {
-      const deploymentUrl = extractDeploymentUrl(
-        [result.stdout, result.stderr]
-          .filter((value): value is string => typeof value === "string")
-          .join("\n"),
-      );
-      if (deploymentUrl) log.info(`App: ${deploymentUrl}`);
-    }
-    return true;
+    if (options.verbose) log.success("Deployed to Prisma.");
+    const workspace = details?.workspace ?? authState.workspace ?? undefined;
+    return {
+      appName,
+      ...(deployment?.appUrl ? { appUrl: deployment.appUrl } : {}),
+      ...(workspace ? { workspace } : {}),
+      project: details?.project ?? { name: appName },
+    };
   } catch (error) {
-    progress?.stop("Deployment failed.");
+    progress?.error("Deployment failed.");
     log.error(`Deploy failed: ${getErrorMessage(error)}`);
-    return false;
+    return;
   }
 }
