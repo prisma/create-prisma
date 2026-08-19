@@ -1,4 +1,4 @@
-import { log, spinner } from "@clack/prompts";
+import { cancel, isCancel, log, select, spinner } from "@clack/prompts";
 import { execa } from "execa";
 
 import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
@@ -24,6 +24,19 @@ type PrismaWorkspace = {
 type WhoamiResult = {
   authenticated: boolean;
   workspace: PrismaWorkspace | null;
+  source: "stored" | "environment" | null;
+};
+
+type WorkspaceListResult = {
+  items: Array<{
+    workspaceId: string;
+    workspaceName: string | null;
+    current: boolean;
+  }>;
+};
+
+type WorkspaceUseResult = {
+  workspace: PrismaWorkspace;
 };
 
 type ProjectShowResult = {
@@ -173,6 +186,90 @@ async function ensureAuthentication(
   return authenticatedState;
 }
 
+function workspaceLabel(workspace: PrismaWorkspace): string {
+  return workspace.name ?? workspace.id;
+}
+
+async function useWorkspace(options: {
+  packageManager: PackageManager;
+  projectDir: string;
+  workspace: string;
+  activeWorkspace: PrismaWorkspace;
+}): Promise<PrismaWorkspace> {
+  const result = await runPrismaJsonCommand<WorkspaceUseResult>({
+    packageManager: options.packageManager,
+    projectDir: options.projectDir,
+    args: ["auth", "workspace", "use", options.workspace],
+  });
+  if (result.workspace.id !== options.activeWorkspace.id) {
+    log.info(`Prisma CLI workspace switched to ${workspaceLabel(result.workspace)}.`);
+  }
+  return result.workspace;
+}
+
+async function selectDeploymentWorkspace(options: {
+  packageManager: PackageManager;
+  projectDir: string;
+  shouldPrompt: boolean;
+  workspace?: string;
+  authState: WhoamiResult;
+}): Promise<PrismaWorkspace | undefined> {
+  const activeWorkspace = options.authState.workspace;
+  if (!activeWorkspace) {
+    throw new Error("The active Prisma credential does not specify a workspace.");
+  }
+
+  if (options.workspace) {
+    if (options.authState.source === "environment") {
+      if (options.workspace === activeWorkspace.id || options.workspace === activeWorkspace.name) {
+        return activeWorkspace;
+      }
+      throw new Error(
+        `The environment credential is fixed to workspace ${workspaceLabel(
+          activeWorkspace,
+        )}. Unset it before using --workspace ${options.workspace}.`,
+      );
+    }
+    return useWorkspace({
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      workspace: options.workspace,
+      activeWorkspace,
+    });
+  }
+
+  if (!options.shouldPrompt || process.stdin.isTTY !== true) return activeWorkspace;
+
+  const available = await runPrismaJsonCommand<WorkspaceListResult>({
+    packageManager: options.packageManager,
+    projectDir: options.projectDir,
+    args: ["auth", "workspace", "list"],
+  });
+  if (available.items.length <= 1) return activeWorkspace;
+
+  const selectedWorkspaceId = await select({
+    message: "Select Prisma workspace for deployment",
+    initialValue: activeWorkspace.id,
+    options: available.items.map((workspace) => ({
+      value: workspace.workspaceId,
+      label: workspace.workspaceName ?? workspace.workspaceId,
+      hint: workspace.current ? `${workspace.workspaceId}, current` : workspace.workspaceId,
+    })),
+  });
+  if (isCancel(selectedWorkspaceId)) {
+    cancel("Operation cancelled.");
+    return;
+  }
+  if (selectedWorkspaceId === activeWorkspace.id) return activeWorkspace;
+
+  return useWorkspace({
+    packageManager: options.packageManager,
+    projectDir: options.projectDir,
+    workspace: selectedWorkspaceId,
+    activeWorkspace,
+  });
+}
+
 export function parseComposerDeployResult(result: ComposerDeployCommandResult):
   | {
       appName: string;
@@ -222,12 +319,22 @@ export async function deployWithComposer(options: {
   appName: string;
   packageManager: PackageManager;
   projectDir: string;
+  shouldPromptForWorkspace: boolean;
   verbose: boolean;
+  workspace?: string;
 }): Promise<ComposerDeployResult | undefined> {
   const progress = options.verbose ? undefined : spinner();
 
   try {
     const authState = await ensureAuthentication(options.packageManager, options.projectDir);
+    const selectedWorkspace = await selectDeploymentWorkspace({
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      shouldPrompt: options.shouldPromptForWorkspace,
+      authState,
+      ...(options.workspace ? { workspace: options.workspace } : {}),
+    });
+    if (!selectedWorkspace) return;
 
     progress?.start("Building for deployment...");
     if (options.verbose) log.step("Building for deployment.");
@@ -259,7 +366,7 @@ export async function deployWithComposer(options: {
 
     progress?.stop("Deployed to Prisma.");
     if (options.verbose) log.success("Deployed to Prisma.");
-    const workspace = details?.workspace ?? authState.workspace ?? undefined;
+    const workspace = details?.workspace ?? selectedWorkspace;
     return {
       appName,
       ...(deployment?.appUrl ? { appUrl: deployment.appUrl } : {}),

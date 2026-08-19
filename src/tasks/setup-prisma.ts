@@ -49,6 +49,8 @@ export type PrismaSetupContext = {
   authoring: AuthoringStyle;
   packageManager: PackageManager;
   shouldDeploy: boolean;
+  shouldPromptForWorkspace: boolean;
+  workspace?: string;
 };
 
 async function promptForDatabaseProvider(): Promise<DatabaseProvider | undefined> {
@@ -155,6 +157,8 @@ export async function collectPrismaSetupContext(
     authoring,
     packageManager,
     shouldDeploy,
+    shouldPromptForWorkspace: !useDefaults,
+    ...(input.workspace ? { workspace: input.workspace } : {}),
   };
 }
 
@@ -373,7 +377,9 @@ export async function executePrismaSetupContext(
       appName: projectName,
       packageManager: context.packageManager,
       projectDir,
+      shouldPromptForWorkspace: context.shouldPromptForWorkspace,
       verbose: context.verbose,
+      ...(context.workspace ? { workspace: context.workspace } : {}),
     });
     if (!deployment) return false;
   }

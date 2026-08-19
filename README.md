@@ -15,13 +15,17 @@ bunx create-prisma@next my-app
 
 The CLI initializes Prisma 8 with `prisma@next`, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
 
-The only Composer prompt is:
+The deployment prompt is:
 
 ```text
 Deploy to Prisma now?
 ```
 
 Choose no to deploy later with the generated `deploy` script.
+
+When multiple Prisma workspace sessions are available, the CLI asks which workspace should receive
+the deployment. For unattended usage, pass `--workspace <id-or-name>` or omit it to use the active
+workspace. Choosing another workspace also updates the Prisma CLI's active workspace session.
 
 ## Templates
 
@@ -45,6 +49,7 @@ PostgreSQL and MongoDB are supported with PSL or TypeScript contract authoring. 
 - `--authoring psl|typescript`
 - `--package-manager npm|pnpm|yarn|bun`
 - `--deploy` / `--no-deploy`
+- `--workspace <id-or-name>`
 - `--yes`
 - `--force`
 - `--verbose`
