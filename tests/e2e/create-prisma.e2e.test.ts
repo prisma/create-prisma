@@ -137,6 +137,45 @@ describe("create-prisma e2e", () => {
     expect(await pathExists(path.join(rootDir, "failed-app", "package.json"))).toBe(true);
   });
 
+  test("rejects unsupported Deno combinations with a non-zero exit code", async () => {
+    const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-deno-reject-e2e-"));
+    tempRoots.push(rootDir);
+
+    const child = Bun.spawn({
+      cmd: [
+        process.execPath,
+        path.join(import.meta.dir, "../../src/cli.ts"),
+        "create",
+        "unsupported-deno-app",
+        "--template",
+        "next",
+        "--provider",
+        "postgres",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "deno",
+        "--no-deploy",
+        "--yes",
+      ],
+      cwd: rootDir,
+      env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exitCode).toBe(1);
+    expect(`${stdout}\n${stderr}`).toContain(
+      "Deno support currently requires the minimal template",
+    );
+    expect(await pathExists(path.join(rootDir, "unsupported-deno-app"))).toBe(false);
+  });
+
   test(
     "generates, builds, and runs a Composer-backed Prisma Postgres app",
     async () => {
@@ -220,6 +259,54 @@ describe("create-prisma e2e", () => {
 
       await runCommand(projectDir, ["bun", "run", "build"]);
       await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
+    },
+    TEST_TIMEOUT,
+  );
+
+  test(
+    "generates and checks a minimal Deno Prisma Postgres app",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-deno-e2e-"));
+      tempRoots.push(rootDir);
+      const previousCwd = process.cwd();
+      process.chdir(rootDir);
+      try {
+        await runCreateCommand({
+          name: "deno-app",
+          template: "minimal",
+          provider: "postgres",
+          authoring: "psl",
+          packageManager: "deno",
+          deploy: false,
+          yes: true,
+        });
+      } finally {
+        process.chdir(previousCwd);
+      }
+
+      const projectDir = path.join(rootDir, "deno-app");
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectDir, "package.json"), "utf8"),
+      ) as Record<string, any>;
+      const configSource = await readFile(path.join(projectDir, "prisma-next.config.ts"), "utf8");
+      const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
+
+      expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "src/prisma/contract.json"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "src/prisma/contract.d.ts"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(false);
+      expect(await pathExists(path.join(projectDir, "module.ts"))).toBe(false);
+      expect(await pathExists(path.join(projectDir, "service.ts"))).toBe(false);
+      expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(false);
+      expect(configSource).toContain("dotenv/config");
+      expect(dbSource).toContain('Deno.env.get("DATABASE_URL")');
+      expect(packageJson.scripts).toMatchObject({
+        build: "deno check src/index.ts",
+        dev: "deno run -A --env-file=.env --watch src/index.ts",
+      });
+      expect(packageJson.scripts.deploy).toBeUndefined();
+
+      await runCommand(projectDir, ["deno", "task", "build"]);
     },
     TEST_TIMEOUT,
   );

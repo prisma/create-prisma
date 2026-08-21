@@ -1,3 +1,4 @@
+{{#unless (eq packageManager "deno")}}
 import { definePrismaConfig } from "@prisma/cli-engine";
 import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
 
@@ -15,3 +16,4 @@ export default definePrismaConfig({
     configPath: "./prisma-composer.config.ts",
   },
 });
+{{/unless}}

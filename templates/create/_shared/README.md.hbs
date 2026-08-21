@@ -1,5 +1,37 @@
 # {{projectName}}
 
+{{#if (eq packageManager "deno")}}
+A minimal Prisma 8 app for Deno and PostgreSQL.
+
+## Run locally
+
+Copy `.env.example` to `.env`, set `DATABASE_URL`, then initialize the database:
+
+```bash
+deno task db:init
+```
+
+Start the app:
+
+```bash
+deno task dev
+```
+
+The starter users are inserted idempotently from `src/prisma/seed.ts` on the first database query.
+
+## Prisma
+
+- Contract: `src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}`
+- Prisma config: `prisma-next.config.ts`
+
+After changing the contract, run:
+
+```bash
+deno task contract:emit
+```
+
+Prisma Compute does not support Deno deployments yet.
+{{else}}
 A minimal {{template}} app with Prisma 8 and Prisma Composer.
 
 ## Run locally
@@ -37,3 +69,4 @@ After changing the contract, run:
 ```
 
 To use the framework's development server directly, run `{{runScriptCommand packageManager "dev"}}`. This direct mode requires `DATABASE_URL`.
+{{/if}}

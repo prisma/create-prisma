@@ -1,3 +1,4 @@
+{{#unless (eq packageManager "deno")}}
 import { defineConfig } from "@prisma/composer/config";
 import { nodeBuild } from "@prisma/composer/node/control";
 {{#if (eq template "next")}}
@@ -9,3 +10,4 @@ export default defineConfig({
   extensions: [prismaCloud(), nodeBuild(){{#if (eq template "next")}}, nextjsBuild(){{/if}}],
   state: prismaState(),
 });
+{{/unless}}

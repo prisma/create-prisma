@@ -3,7 +3,11 @@ import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { dependencyVersionMap, PRISMA_PLATFORM_CLI_PACKAGE } from "../src/constants/dependencies";
+import {
+  dependencyVersionMap,
+  PRISMA_DENO_CLI_PACKAGE,
+  PRISMA_PLATFORM_CLI_PACKAGE,
+} from "../src/constants/dependencies";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import {
   getComposerScriptMap,
@@ -75,6 +79,26 @@ describe("writePrismaDependencies", () => {
       expect(packageJson.scripts?.["db:seed"]).toBeUndefined();
     });
   });
+
+  test("writes Deno-native Prisma scripts without Composer dependencies", async () => {
+    await withPackageJson(async (projectDir) => {
+      await writePrismaDependencies("postgres", "deno", "psl", projectDir);
+      const packageJson = await readPackageJson(projectDir);
+
+      expect(packageJson.dependencies).toMatchObject({
+        "@prisma/orm-postgres": dependencyVersionMap["@prisma/orm-postgres"],
+        dotenv: dependencyVersionMap.dotenv,
+      });
+      expect(packageJson.devDependencies).toMatchObject({
+        "@types/node": dependencyVersionMap["@types/node"],
+      });
+      expect(packageJson.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
+      expect(packageJson.scripts).toMatchObject({
+        "contract:emit": `deno run -A npm:${PRISMA_DENO_CLI_PACKAGE} contract emit`,
+        "db:init": `deno run -A --env-file=.env npm:${PRISMA_DENO_CLI_PACKAGE} db init`,
+      });
+    });
+  });
 });
 
 describe("Composer package-manager commands", () => {
@@ -91,6 +115,7 @@ describe("Composer package-manager commands", () => {
     expect(getComposerScriptMap("bun")["composer:deploy"]).toBe(
       `bunx ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
     );
+    expect(getComposerScriptMap("deno")).toEqual({});
   });
 
   test("keeps installs package-manager native", () => {
@@ -109,6 +134,10 @@ describe("generated templates", () => {
       for (const provider of databaseProviders) {
         for (const authoring of authoringStyles) {
           for (const packageManager of packageManagers) {
+            if (packageManager === "deno" && (template !== "minimal" || provider !== "postgres")) {
+              continue;
+            }
+
             const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-matrix-"));
             try {
               await scaffoldCreateTemplate({
@@ -122,8 +151,6 @@ describe("generated templates", () => {
               await writeCreateTemplateDependencies({ template, packageManager, projectDir });
 
               const packageJson = await readPackageJson(projectDir);
-              const moduleSource = await readFile(path.join(projectDir, "module.ts"), "utf8");
-              const serviceSource = await readFile(path.join(projectDir, "service.ts"), "utf8");
               const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
               const seedSource = await readFile(
                 path.join(projectDir, "src/prisma/seed.ts"),
@@ -133,11 +160,36 @@ describe("generated templates", () => {
                 path.join(projectDir, "src/prisma/users.ts"),
                 "utf8",
               );
+              const tsconfig = await readFile(path.join(projectDir, "tsconfig.json"), "utf8");
+
+              if (packageManager === "deno") {
+                expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(true);
+                expect(await pathExists(path.join(projectDir, "module.ts"))).toBe(false);
+                expect(await pathExists(path.join(projectDir, "service.ts"))).toBe(false);
+                expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(false);
+                expect(await pathExists(path.join(projectDir, "prisma-composer.config.ts"))).toBe(
+                  false,
+                );
+                expect(packageJson.dependencies?.["@prisma/composer"]).toBeUndefined();
+                expect(packageJson.scripts).toMatchObject({
+                  build: "deno check src/index.ts",
+                  dev: "deno run -A --env-file=.env --watch src/index.ts",
+                  start: "deno run -A --env-file=.env src/index.ts",
+                });
+                expect(packageJson.scripts?.deploy).toBeUndefined();
+                expect(dbSource).toContain('Deno.env.get("DATABASE_URL")');
+                expect(dbSource).not.toContain('import service from "../../service.ts"');
+                expect(seedSource).toContain("await connectDatabase()");
+                expect(usersSource).toContain("await seed()");
+                continue;
+              }
+
+              const moduleSource = await readFile(path.join(projectDir, "module.ts"), "utf8");
+              const serviceSource = await readFile(path.join(projectDir, "service.ts"), "utf8");
               const prismaConfig = await readFile(
                 path.join(projectDir, "prisma.config.ts"),
                 "utf8",
               );
-              const tsconfig = await readFile(path.join(projectDir, "tsconfig.json"), "utf8");
 
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");

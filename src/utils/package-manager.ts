@@ -34,6 +34,10 @@ function parseUserAgent(userAgent: string | undefined): PackageManager | null {
     return "bun";
   }
 
+  if (userAgent?.startsWith("deno")) {
+    return "deno";
+  }
+
   if (userAgent?.startsWith("npm")) {
     return "npm";
   }
@@ -61,6 +65,16 @@ async function detectFromPackageJson(projectDir: string): Promise<PackageManager
   return parsePackageManagerField(packageJson.packageManager);
 }
 
+async function detectFromDenoConfig(projectDir: string): Promise<PackageManager | null> {
+  for (const configFile of ["deno.json", "deno.jsonc"]) {
+    if (await fs.pathExists(path.join(projectDir, configFile))) {
+      return "deno";
+    }
+  }
+
+  return null;
+}
+
 async function detectFromLockfile(projectDir: string): Promise<PackageManager | null> {
   const lockfileChecks: Array<{ manager: PackageManager; lockfile: string }> = [
     { manager: "pnpm", lockfile: "pnpm-lock.yaml" },
@@ -69,6 +83,7 @@ async function detectFromLockfile(projectDir: string): Promise<PackageManager | 
     { manager: "bun", lockfile: "bun.lock" },
     { manager: "npm", lockfile: "package-lock.json" },
     { manager: "npm", lockfile: "npm-shrinkwrap.json" },
+    { manager: "deno", lockfile: "deno.lock" },
   ];
 
   for (const check of lockfileChecks) {
@@ -91,6 +106,11 @@ export async function detectPackageManager(projectDir = process.cwd()): Promise<
     return fromLockfile;
   }
 
+  const fromDenoConfig = await detectFromDenoConfig(projectDir);
+  if (fromDenoConfig) {
+    return fromDenoConfig;
+  }
+
   const fromUserAgent = parseUserAgent(process.env.npm_config_user_agent);
   if (fromUserAgent) {
     return fromUserAgent;
@@ -106,15 +126,25 @@ export function getPackageManagerManifestValue(
     return undefined;
   }
 
+  if (packageManager === "deno") {
+    return undefined;
+  }
+
   return packageManagerManifestValues[packageManager];
 }
 
 export function getInstallCommand(packageManager: PackageManager): string {
+  if (packageManager === "deno") {
+    return "deno install";
+  }
+
   return `${packageManager} install`;
 }
 
 export function getRunScriptCommand(packageManager: PackageManager, scriptName: string): string {
   switch (packageManager) {
+    case "deno":
+      return `deno task ${scriptName}`;
     case "bun":
       return `bun run ${scriptName}`;
     case "pnpm":
@@ -133,6 +163,17 @@ export function getRuntimeScriptCommand(
   options: RuntimeScriptOptions,
 ): string {
   const { sourceEntrypoint, builtEntrypoint } = options;
+
+  if (packageManager === "deno") {
+    switch (kind) {
+      case "dev":
+        return `deno run -A --env-file=.env --watch ${sourceEntrypoint}`;
+      case "build":
+        return `deno check ${sourceEntrypoint}`;
+      case "start":
+        return `deno run -A --env-file=.env ${sourceEntrypoint}`;
+    }
+  }
 
   if (packageManager === "bun") {
     switch (kind) {
@@ -156,6 +197,13 @@ export function getRuntimeScriptCommand(
 }
 
 export function getInstallArgs(packageManager: PackageManager): CommandAndArgs {
+  if (packageManager === "deno") {
+    return {
+      command: "deno",
+      args: ["install"],
+    };
+  }
+
   return {
     command: packageManager,
     args: ["install"],
@@ -167,6 +215,13 @@ export function getPackageExecutionArgs(
   commandArgs: string[],
 ): CommandAndArgs {
   switch (packageManager) {
+    case "deno": {
+      const [packageName, ...args] = commandArgs;
+      if (!packageName) {
+        throw new Error("Package execution requires a package name.");
+      }
+      return { command: "deno", args: ["run", "-A", `npm:${packageName}`, ...args] };
+    }
     case "pnpm":
       return { command: "pnpm", args: ["dlx", ...commandArgs] };
     case "yarn":
@@ -193,6 +248,8 @@ export function getLocalPackageBinaryArgs(
   binaryArgs: string[],
 ): CommandAndArgs {
   switch (packageManager) {
+    case "deno":
+      return { command: "deno", args: ["run", "-A", `npm:${binaryName}`, ...binaryArgs] };
     case "pnpm":
       return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
     case "yarn":
@@ -222,6 +279,10 @@ export function getPrismaCliArgs(
     return getPackageExecutionArgs(packageManager, ["--bun", "prisma", ...prismaArgs]);
   }
 
+  if (packageManager === "deno") {
+    return getPackageExecutionArgs(packageManager, ["prisma-next", ...prismaArgs]);
+  }
+
   return getPackageExecutionArgs(packageManager, ["prisma", ...prismaArgs]);
 }
 
@@ -230,6 +291,8 @@ export function getRunScriptArgs(
   scriptName: string,
 ): CommandAndArgs {
   switch (packageManager) {
+    case "deno":
+      return { command: "deno", args: ["task", scriptName] };
     case "bun":
       return { command: "bun", args: ["run", scriptName] };
     case "pnpm":

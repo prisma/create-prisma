@@ -12,6 +12,7 @@ export const dependencyVersionMap = {
   "@types/node": "^25.6.2",
   alchemy: "2.0.0-beta.67",
   arktype: "^2.2.3",
+  dotenv: "^17.4.2",
   esbuild: "^0.28.1",
   effect: "4.0.0-beta.103",
   mongodb: "^7.1.0",
@@ -22,6 +23,9 @@ export const dependencyVersionMap = {
 } as const;
 
 export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@next";
+// The consolidated CLI currently imports Node-only credential storage when Deno starts it.
+// Keep Deno on Prisma 8's ORM-only CLI entrypoint until that upstream path is Deno-compatible.
+export const PRISMA_DENO_CLI_PACKAGE = "prisma-next";
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 

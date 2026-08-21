@@ -3,12 +3,13 @@ import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
+import { PRISMA_DENO_CLI_PACKAGE, PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import { scaffoldCreateSharedTemplates } from "../templates/render-create-template";
 import {
   AuthoringStyleSchema,
   DatabaseProviderSchema,
   PackageManagerSchema,
+  packageManagers,
   type AuthoringStyle,
   type CreateTemplate,
   type DatabaseProvider,
@@ -91,6 +92,7 @@ function getPackageManagerHint(option: PackageManager, detected: PackageManager)
     pnpm: "Fast, disk-efficient package manager",
     yarn: "Yarn package manager",
     bun: "Fast runtime and package manager",
+    deno: "Deno runtime (minimal PostgreSQL apps)",
   } satisfies Record<PackageManager, string>;
   return option === detected ? `Detected; ${hints[option]}` : hints[option];
 }
@@ -101,7 +103,7 @@ async function promptForPackageManager(
   const packageManager = await select({
     message: "Choose package manager",
     initialValue: detected,
-    options: (["npm", "pnpm", "yarn", "bun"] as const).map((value) => ({
+    options: packageManagers.map((value) => ({
       value,
       label: value,
       hint: getPackageManagerHint(value, detected),
@@ -128,7 +130,7 @@ async function promptForDeployment(): Promise<boolean | undefined> {
 
 export async function collectPrismaSetupContext(
   input: PrismaSetupCommandInput,
-  options: { projectDir?: string } = {},
+  options: { projectDir?: string; template?: CreateTemplate } = {},
 ): Promise<PrismaSetupContext | undefined> {
   const projectDir = path.resolve(options.projectDir ?? process.cwd());
   const useDefaults = input.yes === true;
@@ -147,7 +149,20 @@ export async function collectPrismaSetupContext(
     (useDefaults ? detectedPackageManager : await promptForPackageManager(detectedPackageManager));
   if (!packageManager) return;
 
-  const shouldDeploy = input.deploy ?? (useDefaults ? false : await promptForDeployment());
+  if (packageManager === "deno" && databaseProvider !== "postgres") {
+    throw new Error("Deno support currently requires PostgreSQL.");
+  }
+  if (packageManager === "deno" && options.template && options.template !== "minimal") {
+    throw new Error("Deno support currently requires the minimal template.");
+  }
+  if (packageManager === "deno" && input.deploy === true) {
+    throw new Error("Prisma Compute does not support Deno deployments yet. Use --no-deploy.");
+  }
+
+  const shouldDeploy =
+    packageManager === "deno"
+      ? false
+      : (input.deploy ?? (useDefaults ? false : await promptForDeployment()));
   if (shouldDeploy === undefined) return;
 
   return {
@@ -179,24 +194,41 @@ function getInitTarget(provider: DatabaseProvider): "postgres" | "mongodb" {
 }
 
 function getPrismaCliInvocation(packageManager: PackageManager, args: string[]) {
-  return getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
+  const packageName =
+    packageManager === "deno" ? PRISMA_DENO_CLI_PACKAGE : PRISMA_PLATFORM_CLI_PACKAGE;
+  return getPackageExecutionArgs(packageManager, [packageName, ...args]);
 }
 
 async function runPrismaInit(context: PrismaSetupContext, projectDir: string): Promise<void> {
-  const args = [
-    "orm",
-    "init",
-    "--yes",
-    "--no-interactive",
-    "--target",
-    getInitTarget(context.databaseProvider),
-    "--authoring",
-    context.authoring,
-    "--schema-path",
-    getContractPath(context.authoring),
-    "--skip-install",
-    "--skip-skills",
-  ];
+  const args =
+    context.packageManager === "deno"
+      ? [
+          "init",
+          "--yes",
+          "--no-interactive",
+          "--target",
+          getInitTarget(context.databaseProvider),
+          "--authoring",
+          context.authoring,
+          "--schema-path",
+          getContractPath(context.authoring),
+          "--no-install",
+          "--no-skill",
+        ]
+      : [
+          "orm",
+          "init",
+          "--yes",
+          "--no-interactive",
+          "--target",
+          getInitTarget(context.databaseProvider),
+          "--authoring",
+          context.authoring,
+          "--schema-path",
+          getContractPath(context.authoring),
+          "--skip-install",
+          "--skip-skills",
+        ];
   const invocation = getPrismaCliInvocation(context.packageManager, args);
   if (context.verbose) log.step(`Running ${[invocation.command, ...invocation.args].join(" ")}`);
   await execa(invocation.command, invocation.args, {
@@ -204,6 +236,7 @@ async function runPrismaInit(context: PrismaSetupContext, projectDir: string): P
     stdio: context.verbose ? "inherit" : "pipe",
     env: { ...process.env, CI: "1" },
   });
+  if (context.packageManager === "deno") await fs.remove(path.join(projectDir, "prisma-next.md"));
 }
 
 async function ensureGitignoreEntry(projectDir: string, entry: string): Promise<void> {
@@ -312,9 +345,18 @@ function buildNextSteps(context: PrismaSetupContext, options: PrismaSetupRunOpti
   }
   if (options.includeDevNextStep) {
     nextSteps.push({
-      command: getRunScriptCommand(context.packageManager, "dev:composer"),
-      description: "Build and start the app with Prisma Composer locally.",
+      command: getRunScriptCommand(
+        context.packageManager,
+        context.packageManager === "deno" ? "dev" : "dev:composer",
+      ),
+      description:
+        context.packageManager === "deno"
+          ? "Start the Deno app after setting DATABASE_URL in .env."
+          : "Build and start the app with Prisma Composer locally.",
     });
+  }
+  if (context.packageManager === "deno") {
+    return nextSteps;
   }
   nextSteps.push({
     command: getRunScriptCommand(context.packageManager, "deploy"),

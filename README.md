@@ -7,10 +7,10 @@ Create a Prisma 8 app with Prisma Composer built in.
 Use your package manager:
 
 ```bash
-npx create-prisma@next my-app
-pnpm dlx create-prisma@next my-app
-yarn dlx create-prisma@next my-app
-bunx create-prisma@next my-app
+npx create-prisma@latest my-app
+pnpm dlx create-prisma@latest my-app
+yarn dlx create-prisma@latest my-app
+bunx create-prisma@latest my-app
 ```
 
 The CLI initializes Prisma 8 with `prisma@next`, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
@@ -41,13 +41,21 @@ workspace. Choosing another workspace also updates the Prisma CLI's active works
 
 PostgreSQL and MongoDB are supported with PSL or TypeScript contract authoring. npm, pnpm, Yarn, and Bun are supported.
 
+Deno is supported for local minimal PostgreSQL apps:
+
+```bash
+deno run -A npm:create-prisma@latest my-deno-app --template minimal --provider postgres --package-manager deno --no-deploy
+```
+
+Prisma Compute does not support Deno deployments yet.
+
 ## Options
 
 - positional project name or `--name`
 - `--template`
 - `--provider postgres|postgresql|mongo|mongodb`
 - `--authoring psl|typescript`
-- `--package-manager npm|pnpm|yarn|bun`
+- `--package-manager npm|pnpm|yarn|bun|deno`
 - `--deploy` / `--no-deploy`
 - `--workspace <id-or-name>`
 - `--yes`

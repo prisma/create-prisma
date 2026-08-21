@@ -1,3 +1,4 @@
+{{#unless (eq packageManager "deno")}}
 {{#if (eq template "next")}}
 import nextjs from "@prisma/composer/nextjs";
 {{else}}
@@ -40,3 +41,4 @@ export default compute({
   build: node({ module: import.meta.url, entry: "./dist/server.mjs" }),
 {{/if}}
 });
+{{/unless}}
