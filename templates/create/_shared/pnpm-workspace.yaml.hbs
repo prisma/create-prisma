@@ -1,0 +1,16 @@
+{{#if (eq packageManager "pnpm")}}
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+{{#if (eq template "next")}}
+  sharp: true
+  unrs-resolver: true
+{{else if (eq template "astro")}}
+  sharp: true
+{{/if}}
+  workerd: true
+minimumReleaseAgeExclude:
+  - "@prisma/*"
+overrides:
+  effect: "4.0.0-beta.103"
+{{/if}}

@@ -1,63 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
-{{#if (eq schemaPreset "basic")}}
 import { createServerFn } from "@tanstack/react-start";
-import { prisma } from "../lib/prisma.server";
-{{/if}}
 
-{{#if (eq schemaPreset "basic")}}
-function isBootstrapQueryError(error: unknown): error is { code?: string } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "P2021"
-  );
-}
+import { listUsers as listStarterUsers } from "../prisma/users";
 
 const listUsers = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    return await prisma.user.findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-  } catch (error) {
-    if (isBootstrapQueryError(error)) {
-      return undefined;
-    }
-
-    throw error;
-  }
+  return listStarterUsers(10)
+    .then((rows) =>
+      rows.map((user) => ({
+        ...user,
+        createdAt: user.createdAt?.toISOString() ?? null,
+      }))
+    )
+    .catch(() => undefined);
 });
-{{/if}}
 
 export const Route = createFileRoute("/")({
-{{#if (eq schemaPreset "basic")}}
+
   loader: async () => listUsers(),
-{{/if}}
+
   component: Home,
 });
 
 function Home() {
-{{#if (eq schemaPreset "basic")}}
+
   const formatter = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "UTC",
   });
   const users = Route.useLoaderData();
-{{/if}}
 
   return (
     <main className="shell">
       <div className="hero">
-        <p className="eyebrow">TanStack Start + Prisma 7</p>
-{{#if (eq schemaPreset "basic")}}
+        <p className="eyebrow">TanStack Start + Prisma 8</p>
+
         <h1>Users from your database, loaded through a server function.</h1>
         <p className="lede">
-          This route uses TanStack Start&apos;s server function API and the Prisma client in{" "}
-          <code>src/lib/prisma.server.ts</code>.
+          This route uses TanStack Start&apos;s server function API and the Prisma 8 helper in{" "}
+          <code>src/prisma/users.ts</code>.
         </p>
       </div>
 
@@ -69,63 +50,31 @@ function Home() {
 
         {!users ? (
           <p className="empty">
-            Could not query users yet. Run <code>db:migrate</code>, then <code>db:seed</code>,
+            Could not query users yet. Run <code>contract:emit</code> and apply your schema,
             then refresh.
           </p>
         ) : users.length === 0 ? (
-          <p className="empty">No users yet. Run <code>db:seed</code> after your first migration.</p>
+          <p className="empty">No users found.</p>
         ) : (
           <ul className="users">
             {users.map((user) => (
               <li key={user.id}>
                 <div>
                   <strong>{user.name ?? "Unnamed user"}</strong>
-                  <p>{user.email}</p>
+                  <p>{user.username ? `@${user.username}` : user.email}</p>
                 </div>
-                <time dateTime={user.createdAt.toISOString()}>
-                  {formatter.format(user.createdAt)}
-                </time>
+                {user.createdAt ? (
+                  <time dateTime={user.createdAt}>
+                    {formatter.format(new Date(user.createdAt))}
+                  </time>
+                ) : (
+                  <span className="empty">No timestamp</span>
+                )}
               </li>
             ))}
           </ul>
         )}
       </section>
-{{else}}
-        <h1>Your TanStack Start app is ready.</h1>
-        <p className="lede">
-          Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then query your
-          database from server functions or route loaders.
-        </p>
-      </div>
-
-      <section className="panel">
-        <div className="panelHeader">
-          <h2>What&apos;s included</h2>
-          <span>Starter kit</span>
-        </div>
-
-        <ul className="users">
-          <li>
-            <div>
-              <strong>File-based routing</strong>
-              <p>Add new routes in <code>src/routes</code>.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Prisma client</strong>
-              <p>Use the shared instance from <code>src/lib/prisma.server.ts</code>.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Seed script</strong>
-              <p>Run <code>db:seed</code> after your first migration.</p>
-            </div>
-          </li>
-        </ul>
-      </section>
-{{/if}}
 
       <section className="panel">
         <div className="panelHeader">
@@ -133,7 +82,7 @@ function Home() {
         </div>
 
         <ul className="steps">
-          <li>Run <code>db:generate</code> after schema changes.</li>
+          <li>Run <code>contract:emit</code> after contract changes.</li>
           <li>Use TanStack Start server functions for server-only logic.</li>
           <li>Preview production output with <code>preview</code>.</li>
         </ul>

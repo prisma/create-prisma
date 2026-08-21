@@ -7,18 +7,18 @@
   "type": "module",
   "scripts": {
     "dev": "{{runtimeScript packageManager "dev" "src/main.ts" "dist/main.js"}}",
-    "build": "{{runtimeScript packageManager "build" "src/main.ts" "dist/main.js" emit=true}}",
-    "start": "{{runtimeScript packageManager "start" "src/main.ts" "dist/main.js"}}"
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --external:'@nestjs/websockets/*' --external:@nestjs/microservices --external:'@nestjs/microservices/*' --external:@nestjs/platform-socket.io --external:class-transformer --external:class-validator",
+    "start": "node dist/server.mjs"
   },
   "dependencies": {
-    "@nestjs/common": "^11.1.27",
-    "@nestjs/core": "^11.1.27",
-    "@nestjs/platform-express": "^11.1.27",
+    "@nestjs/common": "^11.1.17",
+    "@nestjs/core": "^11.1.17",
+    "@nestjs/platform-express": "^11.1.17",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
-    "typescript": "^6.0.3"
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3"
   }
 }

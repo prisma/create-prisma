@@ -1,9 +1,11 @@
 import { createCreatePrismaCli } from "./index";
 
-await createCreatePrismaCli().run({
-  formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+createCreatePrismaCli().run({
+  process: {
+    exit(code): never {
+      const commandExitCode =
+        typeof process.exitCode === "number" && process.exitCode !== 0 ? process.exitCode : code;
+      process.exit(commandExitCode);
+    },
+  },
 });
-
-if (process.exitCode && process.exitCode !== 0) {
-  process.exit(process.exitCode);
-}

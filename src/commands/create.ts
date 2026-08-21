@@ -1,47 +1,27 @@
-import { cancel, intro, isCancel, log, outro, select, spinner, text } from "@clack/prompts";
+import { cancel, intro, isCancel, log, select, spinner, text } from "@clack/prompts";
 import fs from "fs-extra";
 import path from "node:path";
 
-import { scaffoldCreateTemplate } from "../templates/render-create-template";
-import { addPackageDependency, writeCreateTemplateDependencies } from "../tasks/install";
-import type { CreateAddonSetupContext } from "../tasks/setup-addons";
-import type { PrismaSetupContext } from "../tasks/setup-prisma";
-import {
-  CreateCommandInputSchema,
-  CreateTemplateSchema,
-  type CreateCommandInput,
-  type CreateTemplate,
-  type SchemaPreset,
-} from "../types";
-import {
-  collectPrismaSetupInitialContext,
-  completePrismaSetupContext,
-  executePrismaSetupContext,
-} from "../tasks/setup-prisma";
-import {
-  collectCreateAddonSetupContext,
-  executeCreateAddonSetupContext,
-} from "../tasks/setup-addons";
-import {
-  collectComputeDeployContext,
-  executeComputeDatabaseSetup,
-  executeComputeDeployContext,
-  getComputeDeployScriptMap,
-  type ComputeDatabaseResult,
-  type ComputeDeployContext,
-  type ComputeDeployResult,
-} from "../tasks/deploy-to-compute";
 import {
   trackCreateCompleted,
   trackCreateFailed,
   type CreateTelemetryFailureStage,
 } from "../telemetry";
+import { scaffoldCreateFrameworkTemplate } from "../templates/render-create-template";
+import { writeCreateTemplateDependencies } from "../tasks/install";
+import type { PrismaSetupContext } from "../tasks/setup-prisma";
+import { collectPrismaSetupContext, executePrismaSetupContext } from "../tasks/setup-prisma";
+import {
+  CreateCommandInputSchema,
+  CreateTemplateSchema,
+  type CreateCommandInput,
+  type CreateTemplate,
+} from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
-import { getRunScriptCommand } from "../utils/package-manager";
+import { getUnsupportedNodeMessage, supportsPrismaNext } from "../utils/node-version";
 
 const DEFAULT_PROJECT_NAME = "my-app";
-const DEFAULT_TEMPLATE: CreateTemplate = "hono";
-const DEFAULT_SCHEMA_PRESET: SchemaPreset = "basic";
+const DEFAULT_TEMPLATE: CreateTemplate = "minimal";
 
 export type CreateTargetPathState = {
   exists: boolean;
@@ -56,9 +36,6 @@ export type CreatePromptContext = {
   template: CreateTemplate;
   projectPackageName: string;
   prismaSetupContext: PrismaSetupContext;
-  addonSetupContext?: CreateAddonSetupContext;
-  computeDeployContext?: ComputeDeployContext;
-  useComputeDatabase: boolean;
 };
 
 type ExecuteCreateContextResult =
@@ -122,49 +99,49 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
     initialValue: DEFAULT_TEMPLATE,
     options: [
       {
+        value: "minimal",
+        label: "Minimal",
+        hint: "Script-first Prisma 8 starter with no web framework",
+      },
+      {
         value: "hono",
         label: "Hono",
-        hint: "TypeScript API starter",
+        hint: "Lightweight TypeScript API server",
       },
       {
         value: "elysia",
         label: "Elysia",
-        hint: "TypeScript API starter with Elysia's Node adapter",
+        hint: "Bun-friendly TypeScript API server",
       },
       {
         value: "nest",
         label: "NestJS",
-        hint: "Official Nest-style API starter with a Prisma service",
+        hint: "Structured Node API with controllers and services",
       },
       {
         value: "next",
         label: "Next.js",
-        hint: "App Router + TypeScript starter",
+        hint: "Full-stack React app with App Router",
       },
       {
         value: "svelte",
         label: "SvelteKit",
-        hint: "Official minimal SvelteKit + TypeScript starter",
+        hint: "Full-stack Svelte 5 app with Vite",
       },
       {
         value: "astro",
         label: "Astro",
-        hint: "Official minimal Astro starter with API route example",
+        hint: "Content-oriented web app with server routes",
       },
       {
         value: "nuxt",
         label: "Nuxt",
-        hint: "Official minimal Nuxt starter with Nitro API route example",
+        hint: "Full-stack Vue app with Nitro server routes",
       },
       {
         value: "tanstack-start",
         label: "TanStack Start",
-        hint: "TanStack Start React app with file routes and server functions",
-      },
-      {
-        value: "turborepo",
-        label: "Turborepo",
-        hint: "Monorepo starter with apps + packages/db Prisma package",
+        hint: "React app with file routes and server functions",
       },
     ],
   });
@@ -212,6 +189,12 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
   try {
     input = CreateCommandInputSchema.parse(rawInput);
 
+    if (!supportsPrismaNext()) {
+      cancel(getUnsupportedNodeMessage());
+      process.exitCode = 1;
+      return;
+    }
+
     intro(getCreatePrismaIntro());
 
     failureStage = "collect_context";
@@ -223,16 +206,25 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
     failureStage = "unknown";
     const executionResult = await executeCreateContext(context);
     if (!executionResult.ok) {
-      failureStage = executionResult.stage;
-      const error =
-        executionResult.error instanceof Error
-          ? executionResult.error
-          : new Error(
-              executionResult.error === undefined
-                ? `Create command failed during ${executionResult.stage}`
-                : String(executionResult.error),
-            );
-      throw error;
+      process.exitCode = 1;
+      if (executionResult.error) {
+        cancel(
+          `Create command failed: ${
+            executionResult.error instanceof Error
+              ? executionResult.error.message
+              : String(executionResult.error)
+          }`,
+        );
+      }
+
+      await trackCreateFailed({
+        input,
+        context,
+        durationMs: Date.now() - startedAt,
+        error: executionResult.error,
+        stage: executionResult.stage,
+      });
+      return;
     }
 
     await trackCreateCompleted({
@@ -241,28 +233,23 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
-    const commandError = error instanceof Error ? error : new Error(String(error));
-    cancel(`Create command failed: ${commandError.message}`);
-    try {
-      await trackCreateFailed({
-        input,
-        context,
-        durationMs: Date.now() - startedAt,
-        error: commandError,
-        stage: failureStage,
-      });
-    } catch {
-      // Telemetry is best-effort and must not hide the original command error.
-    }
-    throw commandError;
+    process.exitCode = 1;
+    cancel(`Create command failed: ${error instanceof Error ? error.message : String(error)}`);
+    await trackCreateFailed({
+      input,
+      context,
+      durationMs: Date.now() - startedAt,
+      error,
+      stage: failureStage,
+    });
   }
 }
 
 async function collectCreateContext(
   input: CreateCommandInput,
 ): Promise<CreatePromptContext | undefined> {
-  const useDefaults = input.yes === true;
   const force = input.force === true;
+  const useDefaults = input.yes === true;
 
   const projectNameInput =
     input.name ?? (useDefaults ? DEFAULT_PROJECT_NAME : await promptForProjectName());
@@ -302,46 +289,10 @@ async function collectCreateContext(
     return;
   }
 
-  const prismaSetupInitialContext = await collectPrismaSetupInitialContext(input, {
+  const prismaSetupContext = await collectPrismaSetupContext(input, {
     projectDir: targetDirectory,
-    defaultSchemaPreset: DEFAULT_SCHEMA_PRESET,
   });
-  if (!prismaSetupInitialContext) {
-    return;
-  }
-
-  const projectPackageName = toPackageName(path.basename(targetDirectory));
-  const computeDeployContext = await collectComputeDeployContext(input, {
-    template,
-    packageManager: prismaSetupInitialContext.packageManager,
-    useDefaults,
-    defaultServiceName: projectPackageName,
-  });
-  if (computeDeployContext === undefined) {
-    return;
-  }
-
-  const prismaSetupContext = await completePrismaSetupContext(input, prismaSetupInitialContext);
   if (!prismaSetupContext) {
-    return;
-  }
-
-  const useComputeDatabase = Boolean(
-    computeDeployContext && prismaSetupContext.shouldUsePrismaPostgres,
-  );
-  if (useComputeDatabase) {
-    log.info(
-      "Prisma Postgres selected: create-prisma will provision a database and write DATABASE_URL to the template env file before deploying.",
-    );
-  }
-
-  const addonSetupContext = await collectCreateAddonSetupContext(input, {
-    useDefaults,
-    provider: prismaSetupContext.databaseProvider,
-    shouldUsePrismaPostgres: prismaSetupContext.shouldUsePrismaPostgres,
-    shouldUseComputeDeploy: Boolean(computeDeployContext),
-  });
-  if (addonSetupContext === undefined) {
     return;
   }
 
@@ -350,32 +301,36 @@ async function collectCreateContext(
     targetPathState,
     force,
     template,
-    projectPackageName,
+    projectPackageName: toPackageName(path.basename(targetDirectory)),
     prismaSetupContext,
-    addonSetupContext: addonSetupContext ?? undefined,
-    computeDeployContext: computeDeployContext ?? undefined,
-    useComputeDatabase,
   };
 }
 
 async function executeCreateContext(
   context: CreatePromptContext,
 ): Promise<ExecuteCreateContextResult> {
-  const scaffoldSpinner = spinner();
-  scaffoldSpinner.start(`Scaffolding ${context.template} project...`);
+  const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner();
+  createSpinner?.start("Creating Prisma 8 project...");
+
   try {
-    await scaffoldCreateTemplate({
+    if (context.prismaSetupContext.verbose) {
+      log.step(`Scaffolding ${context.template} starter.`);
+    }
+
+    await scaffoldCreateFrameworkTemplate({
       projectDir: context.targetDirectory,
       projectName: context.projectPackageName,
       template: context.template,
-      schemaPreset: context.prismaSetupContext.schemaPreset,
       provider: context.prismaSetupContext.databaseProvider,
+      authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
-      compute: Boolean(context.computeDeployContext),
     });
-    scaffoldSpinner.stop("Project files scaffolded.");
+
+    if (context.prismaSetupContext.verbose) {
+      log.success("Starter files scaffolded.");
+    }
   } catch (error) {
-    scaffoldSpinner.stop("Could not scaffold project files.");
+    createSpinner?.error("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -389,14 +344,8 @@ async function executeCreateContext(
       packageManager: context.prismaSetupContext.packageManager,
       projectDir: context.targetDirectory,
     });
-    if (context.computeDeployContext) {
-      await addPackageDependency({
-        scripts: getComputeDeployScriptMap(context.computeDeployContext),
-        scriptMode: "if-missing",
-        projectDir: context.targetDirectory,
-      });
-    }
   } catch (error) {
+    createSpinner?.error("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "scaffold_template",
@@ -417,125 +366,38 @@ async function executeCreateContext(
   const nextSteps =
     formatPathForDisplay(context.targetDirectory) === "."
       ? []
-      : [`- cd ${formatPathForDisplay(context.targetDirectory)}`];
-  if (context.addonSetupContext) {
-    try {
-      await executeCreateAddonSetupContext({
-        context: context.addonSetupContext,
-        packageManager: context.prismaSetupContext.packageManager,
-        projectDir: context.targetDirectory,
-        verbose: context.prismaSetupContext.verbose,
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        stage: "addons",
-        error,
-      };
-    }
-  }
+      : [
+          {
+            command: `cd ${formatPathForDisplay(context.targetDirectory)}`,
+            description: "Enter your new project directory.",
+          },
+        ];
 
-  let computeDatabaseResult: ComputeDatabaseResult | undefined;
-  if (context.useComputeDatabase && context.computeDeployContext) {
-    try {
-      const result = await executeComputeDatabaseSetup({
-        context: context.computeDeployContext,
-        projectDir: context.targetDirectory,
-      });
-      if (!result.ok && !result.cancelled) {
-        return {
-          ok: false,
-          stage: "compute_deploy",
-          error: result.error,
-        };
-      }
-      if (result.ok) {
-        computeDatabaseResult = result.result;
-      }
-    } catch (error) {
-      return {
-        ok: false,
-        stage: "compute_deploy",
-        error,
-      };
-    }
-  }
-
-  const prismaSetupContext = computeDatabaseResult
-    ? {
-        ...context.prismaSetupContext,
-        databaseUrl: computeDatabaseResult.databaseUrl,
-        shouldUsePrismaPostgres: false,
-      }
-    : context.prismaSetupContext;
-
-  let prismaResult: Awaited<ReturnType<typeof executePrismaSetupContext>>;
   try {
-    prismaResult = await executePrismaSetupContext(prismaSetupContext, {
+    const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
-      includeDevNextStep: !context.useComputeDatabase,
+      projectName: context.projectPackageName,
+      template: context.template,
+      createdProjectPath: context.targetDirectory,
+      includeDevNextStep: true,
+      progressSpinner: createSpinner,
     });
 
-    if (!prismaResult.ok) {
+    if (!didSetupPrisma) {
       return {
         ok: false,
         stage: "prisma_setup",
       };
     }
   } catch (error) {
+    createSpinner?.error("Could not create Prisma 8 project.");
     return {
       ok: false,
       stage: "prisma_setup",
       error,
     };
   }
-
-  let deployResult: ComputeDeployResult | undefined;
-  if (context.computeDeployContext) {
-    try {
-      const result = await executeComputeDeployContext({
-        context: context.computeDeployContext,
-        projectDir: context.targetDirectory,
-        createProject: !computeDatabaseResult,
-      });
-      if (!result.ok && !result.cancelled) {
-        return {
-          ok: false,
-          stage: "compute_deploy",
-          error: result.error,
-        };
-      }
-      if (result.ok) {
-        deployResult = result.result;
-        prismaResult.nextSteps.push(
-          `- ${getRunScriptCommand(context.prismaSetupContext.packageManager, "compute:deploy")}`,
-        );
-      }
-    } catch (error) {
-      return {
-        ok: false,
-        stage: "compute_deploy",
-        error,
-      };
-    }
-  }
-
-  const summaryLines: string[] = [];
-  summaryLines.push(`Setup complete.${prismaResult.warningSection}`);
-  if (deployResult) {
-    const database = computeDatabaseResult?.database ?? deployResult.database;
-    summaryLines.push(
-      "",
-      "Deployed to Prisma Compute:",
-      ...(deployResult.appUrl ? [`- App URL: ${deployResult.appUrl}`] : []),
-      `- App: ${deployResult.appName} (${deployResult.appId})`,
-      `- Deployment: ${deployResult.deploymentId}`,
-      ...(database ? [`- Database: ${database.name} (${database.id})`] : []),
-    );
-  }
-  summaryLines.push("", "Next steps:", prismaResult.nextSteps.join("\n"));
-  outro(summaryLines.join("\n"));
 
   return { ok: true };
 }

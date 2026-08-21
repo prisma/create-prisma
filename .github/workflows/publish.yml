@@ -8,6 +8,7 @@ on:
     types:
       - opened
       - synchronize
+      - labeled
       - reopened
       - ready_for_review
 
@@ -22,7 +23,10 @@ concurrency:
 jobs:
   preview:
     name: Publish PR preview
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'labeled' || github.event.label.name == 'release:next')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -39,20 +43,27 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.14.0"
+          node-version: "22.18.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Compute preview metadata
         id: preview
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
+          PUBLISH_NEXT="${{ contains(github.event.pull_request.labels.*.name, 'release:next') }}"
           BASE_VERSION=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));process.stdout.write(p.version)")
-          PREVIEW_VERSION="${BASE_VERSION}-pr.${PR_NUMBER}.${{ github.run_number }}.${{ github.run_attempt }}"
-          DIST_TAG="pr${PR_NUMBER}"
+          if [ "$PUBLISH_NEXT" = "true" ]; then
+            PREVIEW_VERSION="${BASE_VERSION}-next.${PR_NUMBER}.${{ github.run_number }}.${{ github.run_attempt }}"
+            DIST_TAG="next"
+          else
+            PREVIEW_VERSION="${BASE_VERSION}-pr.${PR_NUMBER}.${{ github.run_number }}.${{ github.run_attempt }}"
+            DIST_TAG="pr${PR_NUMBER}"
+          fi
 
           echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "version=$PREVIEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "publish_next=$PUBLISH_NEXT" >> "$GITHUB_OUTPUT"
 
       - name: Ensure npm version for trusted publishing
         run: |
@@ -88,6 +99,9 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          CREATE_PRISMA_TELEMETRY_API_KEY: ${{ steps.preview.outputs.publish_next == 'true' && secrets.CREATE_PRISMA_TELEMETRY_API_KEY || '' }}
+          CREATE_PRISMA_TELEMETRY_HOST: ${{ steps.preview.outputs.publish_next == 'true' && vars.CREATE_PRISMA_TELEMETRY_HOST || '' }}
 
       - name: Publish to npm
         run: npm publish --access public --tag "${{ steps.preview.outputs.dist_tag }}"
@@ -97,16 +111,21 @@ jobs:
         env:
           PREVIEW_VERSION: ${{ steps.preview.outputs.version }}
           DIST_TAG: ${{ steps.preview.outputs.dist_tag }}
+          PUBLISH_NEXT: ${{ steps.preview.outputs.publish_next }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const marker = "<!-- create-prisma-preview-comment -->";
+            const isNext = process.env.PUBLISH_NEXT === "true";
             const body = [
               marker,
-              "## PR preview published",
+              isNext ? "## @next preview published" : "## PR preview published",
               "",
               `- Version: \`${process.env.PREVIEW_VERSION}\``,
               `- Tag: \`${process.env.DIST_TAG}\``,
+              ...(isNext
+                ? ["- Trigger: PR has the `release:next` label, so this is available as `create-prisma@next`"]
+                : []),
               `- Run with Bun: \`bunx create-prisma@${process.env.DIST_TAG}\``,
               `- Run with npm: \`npx create-prisma@${process.env.DIST_TAG}\``,
               `- Run with Yarn: \`yarn dlx create-prisma@${process.env.DIST_TAG}\``,
@@ -145,10 +164,17 @@ jobs:
 
       - name: Preview summary
         run: |
-          echo "## PR preview published" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.preview.outputs.publish_next }}" = "true" ]; then
+            echo "## @next preview published" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## PR preview published" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: \`${{ steps.preview.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: \`${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.preview.outputs.publish_next }}" = "true" ]; then
+            echo "- Trigger: PR has the \`release:next\` label" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "- Run with Bun: \`bunx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Run with npm: \`npx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Run with Yarn: \`yarn dlx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
@@ -175,7 +201,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.14.0"
+          node-version: "22.18.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Extract version from commit message

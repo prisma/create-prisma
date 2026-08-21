@@ -1,0 +1,28 @@
+import { module } from "@prisma/composer";
+{{#if (eq provider "postgres")}}
+import { pnPostgres } from "@prisma/composer-prisma-cloud/prisma-next";
+
+import { appContract } from "./src/prisma/composer.ts";
+{{else}}
+import { envSecret } from "@prisma/composer-prisma-cloud";
+{{/if}}
+import app from "./service.ts";
+
+export default module("{{projectName}}", ({ provision }) => {
+{{#if (eq provider "postgres")}}
+  const database = provision(
+    pnPostgres({
+      name: "database",
+      contract: appContract,
+      config: "./prisma.config.ts",
+    }),
+    { id: "database" },
+  );
+
+  provision(app, { deps: { database } });
+{{else}}
+  provision(app, {
+    input: { databaseUrl: envSecret("MONGODB_URL") },
+  });
+{{/if}}
+});

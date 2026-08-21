@@ -1,19 +1,12 @@
 import type { APIRoute } from "astro";
-{{#if (eq schemaPreset "basic")}}
-import prisma from "../../lib/prisma";
+
+import { listUsers } from "../../prisma/users";
 
 export const GET: APIRoute = async () => {
-  const users = await prisma.user
-    .findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
-    .catch((error) => {
-      console.error("Failed to query users:", error);
-      return undefined;
-    });
+  const users = await listUsers(10).catch((error) => {
+    console.error("Failed to query users:", error);
+    return undefined;
+  });
 
   if (!users) {
     return new Response(JSON.stringify({ error: "Could not query users yet." }), {
@@ -30,13 +23,3 @@ export const GET: APIRoute = async () => {
     },
   });
 };
-{{else}}
-
-export const GET: APIRoute = async () => {
-  return new Response(JSON.stringify([]), {
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-};
-{{/if}}

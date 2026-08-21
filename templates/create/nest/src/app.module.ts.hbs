@@ -1,20 +1,19 @@
 import { Module } from "@nestjs/common";
-import { AppController } from "./app.controller{{#if (eq packageManager "deno")}}.ts{{/if}}";
-import { PrismaService } from "./prisma.service{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{#if (eq schemaPreset "basic")}}
-import { UsersController } from "./users.controller{{#if (eq packageManager "deno")}}.ts{{/if}}";
-import { UsersService } from "./users.service{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{/if}}
+import { AppController } from "./app.controller";
+import { PrismaService } from "./prisma.service";
+
+import { UsersController } from "./users.controller";
+import { UsersService } from "./users.service";
 
 @Module({
   imports: [],
   controllers: [
-    AppController{{#if (eq schemaPreset "basic")}},
-    UsersController{{/if}}
+    AppController,
+    UsersController
   ],
   providers: [
-    PrismaService{{#if (eq schemaPreset "basic")}},
-    UsersService{{/if}}
+    PrismaService,
+    UsersService
   ],
 })
 export class AppModule {}

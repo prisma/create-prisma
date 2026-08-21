@@ -1,89 +1,82 @@
 import type { CreateTemplate, PackageManager } from "../types";
-import { usesNodeStyleRuntime } from "../utils/runtime";
 
 export const dependencyVersionMap = {
+  "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@libsql/client": "^0.17.4",
-  "@prisma/client": "^7.8.0",
-  "@prisma/adapter-pg": "^7.8.0",
-  "@prisma/adapter-libsql": "^7.8.0",
-  "@prisma/adapter-mariadb": "^7.8.0",
-  "@prisma/adapter-mssql": "^7.8.0",
-  "@prisma/compute-sdk": "latest",
-  "@types/node": "^26.0.0",
-  dotenv: "^17.4.2",
-  prisma: "^7.8.0",
-  tsx: "^4.22.4",
+  "@prisma/cli-engine": "0.2.0",
+  "@prisma/composer": "0.10.0",
+  "@prisma/composer-prisma-cloud": "0.10.0",
+  "@prisma/orm-mongo": "8.0.0-rc.4",
+  "@prisma/orm-postgres": "8.0.0-rc.4",
+  "@sveltejs/adapter-node": "^5.3.2",
+  "@types/node": "^25.6.2",
+  alchemy: "2.0.0-beta.67",
+  arktype: "^2.2.3",
+  esbuild: "^0.28.1",
+  effect: "4.0.0-beta.103",
+  mongodb: "^7.1.0",
+  "mongodb-memory-server": "^11.1.0",
+  nitro: "^3.0.260610-beta",
+  tsx: "^4.21.0",
+  typescript: "^5.9.3",
 } as const;
+
+export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@next";
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 
 export type CreateTemplateDependencyTarget = {
   packageJsonPath: string;
-  dependencies: AvailableDependency[];
-  devDependencies: AvailableDependency[];
+  dependencies: string[];
+  devDependencies: string[];
   customDependencies?: Record<string, string>;
 };
 
-const computeConfigTemplates = new Set<CreateTemplate>([
-  "hono",
-  "elysia",
-  "nest",
-  "next",
-  "astro",
-  "nuxt",
-  "tanstack-start",
-  "turborepo",
-]);
+export function getDependencyVersion(packageName: string): string | undefined {
+  return dependencyVersionMap[packageName as AvailableDependency];
+}
 
-function getWorkspaceDependencyVersion(packageManager: PackageManager): string {
-  return packageManager === "npm" ? "*" : "workspace:*";
+function usesEsbuild(template: CreateTemplate): boolean {
+  return (
+    template === "minimal" || template === "hono" || template === "elysia" || template === "nest"
+  );
 }
 
 export function getCreateTemplateDependencies(
   template: CreateTemplate,
-  packageManager: PackageManager,
+  _packageManager: PackageManager,
 ): CreateTemplateDependencyTarget[] {
-  const targets: CreateTemplateDependencyTarget[] = [];
+  const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud", "alchemy"];
+  const devDependencies = ["@prisma/cli-engine"];
 
-  if (template === "hono" || template === "elysia" || template === "nest") {
-    const runtimeDevDependencies: AvailableDependency[] = usesNodeStyleRuntime(packageManager)
-      ? ["tsx"]
-      : [];
-
-    if (template === "elysia" && packageManager !== "deno") {
-      targets.push({
-        packageJsonPath: "package.json",
-        dependencies: ["@elysiajs/node"],
-        devDependencies: ["@types/node", ...runtimeDevDependencies],
-      });
-    } else if (runtimeDevDependencies.length > 0) {
-      targets.push({
-        packageJsonPath: "package.json",
-        dependencies: [],
-        devDependencies: runtimeDevDependencies,
-      });
-    }
+  if (usesEsbuild(template)) {
+    devDependencies.push("esbuild");
+  }
+  if (template === "minimal" || usesEsbuild(template)) {
+    devDependencies.push("tsx");
+  }
+  if (template === "minimal") {
+    devDependencies.push("typescript");
+  }
+  if (template === "elysia") {
+    dependencies.push("@elysiajs/node");
+    devDependencies.push("@types/node");
+  }
+  if (template === "svelte") {
+    devDependencies.push("@sveltejs/adapter-node");
+  }
+  if (template === "astro") {
+    dependencies.push("@astrojs/node");
+  }
+  if (template === "tanstack-start") {
+    devDependencies.push("nitro");
   }
 
-  if (template === "turborepo") {
-    targets.push({
-      packageJsonPath: "apps/api/package.json",
-      dependencies: ["dotenv"],
-      devDependencies: ["tsx"],
-      customDependencies: {
-        "@repo/db": getWorkspaceDependencyVersion(packageManager),
-      },
-    });
-  }
-
-  if (computeConfigTemplates.has(template)) {
-    targets.push({
+  return [
+    {
       packageJsonPath: "package.json",
-      dependencies: [],
-      devDependencies: ["@prisma/compute-sdk"],
-    });
-  }
-
-  return targets;
+      dependencies,
+      devDependencies,
+    },
+  ];
 }

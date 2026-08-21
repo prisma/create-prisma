@@ -1,0 +1,51 @@
+{{#if (eq provider "postgres")}}
+import postgres from "@prisma/orm-postgres/runtime";
+
+import service from "../../service.ts";
+import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
+import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
+
+function loadComposerDatabase() {
+  try {
+    return service.load().database.client;
+  } catch {
+    return undefined;
+  }
+}
+
+export const db =
+  loadComposerDatabase() ??
+  (process.env.DATABASE_URL
+    ? postgres<Contract>({ contractJson, url: process.env.DATABASE_URL })
+    : postgres<Contract>({ contractJson }));
+{{else}}
+import mongo from "@prisma/orm-mongo/runtime";
+
+import service from "../../service.ts";
+import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
+import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
+
+function getDatabaseUrl(): string | undefined {
+  try {
+    return service.input().databaseUrl.expose();
+  } catch {
+    return process.env.DATABASE_URL;
+  }
+}
+
+const databaseUrl = getDatabaseUrl();
+
+export const db = databaseUrl
+  ? mongo<Contract>({ contractJson, url: databaseUrl })
+  : mongo<Contract>({ contractJson });
+{{/if}}
+
+let connection: Promise<void> | undefined;
+
+export function connectDatabase(): Promise<void> {
+  connection ??= db.connect().then(() => undefined).catch((error: unknown) => {
+    connection = undefined;
+    throw error;
+  });
+  return connection;
+}

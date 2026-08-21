@@ -1,95 +1,52 @@
-import fs from "fs-extra";
-import path from "node:path";
-
-import type { CreateTemplate, DatabaseProvider, PackageManager, SchemaPreset } from "../types";
-import { escapeRegExp } from "../utils/regexp";
+import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { renderTemplateTree, resolveTemplatesDir } from "./shared";
 
 type CreateTemplateContext = {
   projectName: string;
+  template: CreateTemplate;
   provider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
+  authoring: AuthoringStyle;
   packageManager?: PackageManager;
-  compute: boolean;
 };
 
 function getCreateTemplateDir(template: CreateTemplate): string {
   return resolveTemplatesDir(`templates/create/${template}`);
 }
 
+function getCreateSharedTemplateDir(): string {
+  return resolveTemplatesDir("templates/create/_shared");
+}
+
 function createTemplateContext(
   projectName: string,
+  template: CreateTemplate,
   provider: DatabaseProvider,
-  schemaPreset: SchemaPreset,
-  packageManager: PackageManager | undefined,
-  compute: boolean,
+  authoring: AuthoringStyle,
+  packageManager?: PackageManager,
 ): CreateTemplateContext {
   return {
     projectName,
+    template,
     provider,
-    schemaPreset,
+    authoring,
     packageManager,
-    compute,
   };
 }
 
-const pnpmAllowedBuilds = [
-  "@prisma/engines",
-  "@parcel/watcher",
-  "esbuild",
-  "prisma",
-  "sharp",
-  "unrs-resolver",
-] as const;
-
-function renderPnpmAllowBuildLine(packageName: string): string {
-  const key = packageName.startsWith("@") ? JSON.stringify(packageName) : packageName;
-  return `  ${key}: true`;
-}
-
-function renderPnpmAllowBuilds(): string {
-  return ["allowBuilds:", ...pnpmAllowedBuilds.map(renderPnpmAllowBuildLine)].join("\n");
-}
-
-function hasPnpmAllowBuild(content: string, packageName: string): boolean {
-  const key = escapeRegExp(packageName);
-  return new RegExp(`^\\s*["']?${key}["']?\\s*:\\s*true\\s*$`, "m").test(content);
-}
-
-function mergePnpmAllowBuilds(content: string): string {
-  const missingBuilds = pnpmAllowedBuilds.filter(
-    (packageName) => !hasPnpmAllowBuild(content, packageName),
-  );
-  if (missingBuilds.length === 0) {
-    return content;
-  }
-
-  const missingLines = missingBuilds.map(renderPnpmAllowBuildLine);
-  const trimmedContent = content.trimEnd();
-  const lines = trimmedContent.length > 0 ? trimmedContent.split("\n") : [];
-  const allowBuildsIndex = lines.findIndex((line) => /^allowBuilds:\s*$/.test(line));
-  if (allowBuildsIndex === -1) {
-    const allowBuilds = ["allowBuilds:", ...missingLines].join("\n");
-    return trimmedContent.length > 0 ? `${trimmedContent}\n\n${allowBuilds}\n` : `${allowBuilds}\n`;
-  }
-
-  lines.splice(allowBuildsIndex + 1, 0, ...missingLines);
-  return `${lines.join("\n")}\n`;
-}
-
-async function ensurePnpmWorkspaceAllowBuilds(projectDir: string): Promise<void> {
-  const workspacePath = path.join(projectDir, "pnpm-workspace.yaml");
-
-  if (!(await fs.pathExists(workspacePath))) {
-    await fs.writeFile(workspacePath, `${renderPnpmAllowBuilds()}\n`, "utf8");
-    return;
-  }
-
-  const existingContent = await fs.readFile(workspacePath, "utf8");
-  const nextContent = mergePnpmAllowBuilds(existingContent);
-  if (nextContent !== existingContent) {
-    await fs.writeFile(workspacePath, nextContent, "utf8");
-  }
+export async function scaffoldCreateSharedTemplates(opts: {
+  projectDir: string;
+  projectName: string;
+  template: CreateTemplate;
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  packageManager?: PackageManager;
+}): Promise<void> {
+  const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
+  await renderTemplateTree<CreateTemplateContext>({
+    templateRoot: getCreateSharedTemplateDir(),
+    outputDir: projectDir,
+    context: createTemplateContext(projectName, template, provider, authoring, packageManager),
+  });
 }
 
 export async function scaffoldCreateTemplate(opts: {
@@ -97,25 +54,27 @@ export async function scaffoldCreateTemplate(opts: {
   projectName: string;
   template: CreateTemplate;
   provider: DatabaseProvider;
-  schemaPreset: SchemaPreset;
+  authoring: AuthoringStyle;
   packageManager?: PackageManager;
-  compute?: boolean;
 }): Promise<void> {
-  const { projectDir, projectName, template, provider, schemaPreset, packageManager } = opts;
+  await scaffoldCreateFrameworkTemplate(opts);
+  await scaffoldCreateSharedTemplates(opts);
+}
+
+export async function scaffoldCreateFrameworkTemplate(opts: {
+  projectDir: string;
+  projectName: string;
+  template: CreateTemplate;
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  packageManager?: PackageManager;
+}): Promise<void> {
+  const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
   const templateRoot = getCreateTemplateDir(template);
-  const context = createTemplateContext(
-    projectName,
-    provider,
-    schemaPreset,
-    packageManager,
-    opts.compute === true,
-  );
+  const context = createTemplateContext(projectName, template, provider, authoring, packageManager);
   await renderTemplateTree<CreateTemplateContext>({
     templateRoot,
     outputDir: projectDir,
     context,
   });
-  if (packageManager === "pnpm") {
-    await ensurePnpmWorkspaceAllowBuilds(projectDir);
-  }
 }

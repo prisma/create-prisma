@@ -1,43 +1,34 @@
-{{#if (requiresDotenvConfigImport packageManager)}}
-import "dotenv/config";
-{{/if}}
-{{#if (eq packageManager "deno")}}
-{{else}}
 import { node } from "@elysiajs/node";
-{{/if}}
 import { Elysia } from "elysia";
-{{#if (eq schemaPreset "basic")}}
-import { prisma } from "./lib/prisma{{#if (eq packageManager "deno")}}.ts{{/if}}";
-{{/if}}
 
-const rawPort = ({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? "").trim();
+import { listUsers } from "./prisma/users";
+
+const rawPort = (process.env.PORT ?? "").trim();
 const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN;
 const port =
-  Number.isInteger(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 8080;
+  Number.isInteger(parsedPort) && parsedPort >= 0 && parsedPort <= 65535 ? parsedPort : 3000;
 
-const app = new Elysia({{#if (eq packageManager "deno")}}{{else}}{ adapter: node() }{{/if}})
+const app = new Elysia({ adapter: "Bun" in globalThis ? undefined : node() })
   .get("/", () => {
     return {
       message: "hello from create-prisma + elysia",
     };
   })
-{{#if (eq schemaPreset "basic")}}
-  .get("/users", async () => {
-    return prisma.user.findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-  })
-{{/if}}
-{{#if (eq packageManager "deno")}}
-  ;
 
-Deno.serve({ port }, app.fetch);
-console.log(`Server running at http://localhost:${port}`);
-{{else}}
-  .listen(port);
+  .get("/users", async ({ set }) => {
+    const users = await listUsers(10).catch((error) => {
+      console.error("Failed to query users:", error);
+      return undefined;
+    });
+
+    if (!users) {
+      set.status = 500;
+      return { error: "Could not query users yet. Run contract:emit and apply your schema first." };
+    }
+
+    return users;
+  })
+
+  .listen({ port, hostname: "0.0.0.0" });
 
 console.log(`Server running at http://localhost:${app.server?.port ?? port}`);
-{{/if}}

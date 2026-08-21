@@ -1,18 +1,11 @@
-{{#if (eq schemaPreset "basic")}}
-import prisma from "../utils/prisma";
+import { listUsers } from "../../src/prisma/users";
 
 export default defineEventHandler(async () => {
-  const users = await prisma.user
-    .findMany({
-      take: 10,
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
+  const users = await listUsers(10)
     .then((rows) =>
       rows.map((user) => ({
         ...user,
-        createdAt: user.createdAt.toISOString(),
+        createdAt: user.createdAt?.toISOString() ?? null,
       }))
     )
     .catch((error) => {
@@ -29,8 +22,3 @@ export default defineEventHandler(async () => {
 
   return { users };
 });
-{{else}}
-export default defineEventHandler(async () => {
-  return { users: [] };
-});
-{{/if}}

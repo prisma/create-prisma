@@ -3,12 +3,12 @@ useHead({
   title: "create-prisma + nuxt",
 });
 
-{{#if (eq schemaPreset "basic")}}
 type User = {
   id: string;
   email: string;
+  username: string | null;
   name: string | null;
-  createdAt: string;
+  createdAt: string | null;
 };
 
 type UsersPayload = {
@@ -26,18 +26,18 @@ const { data } = await useFetch<UsersPayload>("/api/users");
 function formatCreatedAt(value: string): string {
   return formatter.format(new Date(value));
 }
-{{/if}}
+
 </script>
 
 <template>
   <main class="shell">
     <div class="hero">
-      <p class="eyebrow">Nuxt + Prisma 7</p>
-{{#if (eq schemaPreset "basic")}}
+      <p class="eyebrow">Nuxt + Prisma 8</p>
+
       <h1>Users from your database, loaded through Nitro.</h1>
       <p class="lede">
         This page fetches <code>/api/users</code> from <code>server/api/users.get.ts</code> using
-        the Prisma instance in <code>server/utils/prisma.ts</code>.
+        the Prisma 8 helper in <code>src/prisma/users.ts</code>.
       </p>
     </div>
 
@@ -48,57 +48,23 @@ function formatCreatedAt(value: string): string {
       </div>
 
       <p v-if="data?.error" class="empty">
-        \{{ data.error }} Run <code>db:migrate</code>, then <code>db:seed</code>, then refresh.
+        \{{ data.error }} Run <code>contract:emit</code> and apply your schema, then refresh.
       </p>
       <p v-else-if="!data?.users?.length" class="empty">
-        No users yet. Run <code>db:seed</code> after your first migration.
+        No users found.
       </p>
       <ul v-else class="users">
         <li v-for="user in data.users" :key="user.id">
           <div>
             <strong>\{{ user.name ?? "Unnamed user" }}</strong>
-            <p>\{{ user.email }}</p>
+            <p>\{{ user.username ? "@" + user.username : user.email }}</p>
           </div>
-          <time :datetime="user.createdAt">\{{ formatCreatedAt(user.createdAt) }}</time>
+          <time v-if="user.createdAt" :datetime="user.createdAt">\{{ formatCreatedAt(user.createdAt) }}</time>
+          <span v-else class="muted">No timestamp</span>
         </li>
       </ul>
     </section>
-{{else}}
-      <h1>Your Nuxt app is ready.</h1>
-      <p class="lede">
-        Edit <code>prisma/schema.prisma</code>, run <code>db:migrate</code>, then query data in
-        Nitro routes or server utilities with the Prisma instance in <code>server/utils/prisma.ts</code>.
-      </p>
-    </div>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>What's included</h2>
-        <span>Starter kit</span>
-      </div>
-
-      <ul class="users">
-        <li>
-          <div>
-            <strong>Prisma client</strong>
-            <p>Use the shared server instance from <code>server/utils/prisma.ts</code>.</p>
-          </div>
-        </li>
-        <li>
-          <div>
-            <strong>Nitro API route</strong>
-            <p>Start from <code>server/api/users.get.ts</code> for server-side data access.</p>
-          </div>
-        </li>
-        <li>
-          <div>
-            <strong>Generated client output</strong>
-            <p>Prisma Client is generated into <code>server/generated/prisma</code>.</p>
-          </div>
-        </li>
-      </ul>
-    </section>
-{{/if}}
   </main>
 </template>
 
@@ -165,6 +131,7 @@ h2 {
 
 .panel-header span,
 .empty,
+.muted,
 time {
   color: #888;
   font-size: 0.8rem;

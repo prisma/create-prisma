@@ -1,0 +1,15 @@
+{
+  "name": "{{projectName}}",
+  "private": true,
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
