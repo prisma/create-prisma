@@ -1,3 +1,4 @@
+{{#unless (eq packageManager "deno")}}
 import { module } from "@prisma/composer";
 {{#if (eq provider "postgres")}}
 import { pnPostgres } from "@prisma/composer-prisma-cloud/prisma-next";
@@ -26,3 +27,4 @@ export default module("{{projectName}}", ({ provision }) => {
   });
 {{/if}}
 });
+{{/unless}}

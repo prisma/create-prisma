@@ -3,7 +3,7 @@ import { z } from "zod";
 export const databaseProviders = ["postgres", "mongo"] as const;
 export const databaseProviderInputs = ["postgres", "postgresql", "mongo", "mongodb"] as const;
 
-export const packageManagers = ["npm", "pnpm", "yarn", "bun"] as const;
+export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
 export const authoringStyles = ["psl", "typescript"] as const;
 export const createTemplates = [
   "minimal",

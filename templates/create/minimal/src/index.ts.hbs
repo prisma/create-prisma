@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 
-import { listUsers } from "./prisma/users";
+import { listUsers } from "./prisma/users{{#if (eq packageManager "deno")}}.ts{{/if}}";
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number({{#if (eq packageManager "deno")}}Deno.env.get("PORT"){{else}}process.env.PORT{{/if}} ?? 3000);
 
 createServer(async (_request, response) => {
   try {

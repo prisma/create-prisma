@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   getCreateTemplateDependencies,
   getDependencyVersion,
+  PRISMA_DENO_CLI_PACKAGE,
   PRISMA_PLATFORM_CLI_PACKAGE,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
@@ -16,6 +17,27 @@ import {
 } from "../utils/package-manager";
 
 function getPrismaScriptMap(packageManager: PackageManager): Record<string, string> {
+  if (packageManager === "deno") {
+    const prismaCommand = (needsDatabase: boolean, ...args: string[]) =>
+      [
+        "deno run -A",
+        ...(needsDatabase ? ["--env-file=.env"] : []),
+        `npm:${PRISMA_DENO_CLI_PACKAGE}`,
+        ...args,
+      ].join(" ");
+
+    return {
+      "contract:emit": prismaCommand(false, "contract", "emit"),
+      "db:init": prismaCommand(true, "db", "init"),
+      "db:update": prismaCommand(true, "db", "update"),
+      "db:verify": prismaCommand(true, "db", "verify"),
+      "migration:plan": prismaCommand(true, "migration", "plan"),
+      migrate: prismaCommand(true, "migrate"),
+      "migration:status": prismaCommand(true, "migration", "status"),
+      "migration:show": prismaCommand(true, "migration", "show"),
+    };
+  }
+
   const prismaCommand = (...args: string[]) =>
     getPackageExecutionCommand(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
 
@@ -32,6 +54,10 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
 }
 
 export function getComposerScriptMap(packageManager: PackageManager): Record<string, string> {
+  if (packageManager === "deno") {
+    return {};
+  }
+
   const composerCommand = (subcommand: string, extraArgs: string[] = []) =>
     getPackageExecutionCommand(packageManager, [
       PRISMA_PLATFORM_CLI_PACKAGE,
@@ -131,10 +157,14 @@ export async function writePrismaDependencies(
 ): Promise<void> {
   const dependencies = [getDbPackages(provider)];
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
+  if (packageManager === "deno") dependencies.push("dotenv");
+
+  const devDependencies =
+    packageManager === "deno" ? ["@types/node"] : ["@prisma/cli-engine", "@types/node"];
 
   await addPackageDependency({
     dependencies,
-    devDependencies: ["@prisma/cli-engine", "@types/node"],
+    devDependencies,
     scripts: getPrismaScriptMap(packageManager),
     projectDir,
   });
@@ -146,6 +176,10 @@ export async function writeCreateTemplateDependencies(opts: {
   projectDir?: string;
 }): Promise<void> {
   const { template, packageManager, projectDir = process.cwd() } = opts;
+
+  if (packageManager === "deno") {
+    return;
+  }
 
   for (const target of getCreateTemplateDependencies(template, packageManager)) {
     await addPackageDependency({

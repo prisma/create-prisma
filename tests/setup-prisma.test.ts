@@ -84,4 +84,42 @@ describe("collectPrismaSetupContext", () => {
       expect(context?.databaseProvider).toBe("mongo");
     });
   });
+
+  test("supports Deno for local minimal PostgreSQL apps", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { yes: true, packageManager: "deno", provider: "postgres" },
+        { projectDir, template: "minimal" },
+      );
+
+      expect(context).toMatchObject({
+        databaseProvider: "postgres",
+        packageManager: "deno",
+        shouldDeploy: false,
+      });
+    });
+  });
+
+  test("rejects Deno for unsupported providers, templates, and deployments", async () => {
+    await withTempProject(async (projectDir) => {
+      await expect(
+        collectPrismaSetupContext(
+          { yes: true, packageManager: "deno", provider: "mongo" },
+          { projectDir, template: "minimal" },
+        ),
+      ).rejects.toThrow("Deno support currently requires PostgreSQL.");
+      await expect(
+        collectPrismaSetupContext(
+          { yes: true, packageManager: "deno", provider: "postgres" },
+          { projectDir, template: "next" },
+        ),
+      ).rejects.toThrow("Deno support currently requires the minimal template.");
+      await expect(
+        collectPrismaSetupContext(
+          { yes: true, packageManager: "deno", provider: "postgres", deploy: true },
+          { projectDir, template: "minimal" },
+        ),
+      ).rejects.toThrow("Prisma Compute does not support Deno deployments yet. Use --no-deploy.");
+    });
+  });
 });

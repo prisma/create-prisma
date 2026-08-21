@@ -1,6 +1,17 @@
 {{#if (eq provider "postgres")}}
 import postgres from "@prisma/orm-postgres/runtime";
 
+{{#if (eq packageManager "deno")}}
+import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
+import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
+
+const databaseUrl = Deno.env.get("DATABASE_URL");
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is not set. Add it to .env before starting the app.");
+}
+
+export const db = postgres<Contract>({ contractJson, url: databaseUrl });
+{{else}}
 import service from "../../service.ts";
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
@@ -18,6 +29,7 @@ export const db =
   (process.env.DATABASE_URL
     ? postgres<Contract>({ contractJson, url: process.env.DATABASE_URL })
     : postgres<Contract>({ contractJson }));
+{{/if}}
 {{else}}
 import mongo from "@prisma/orm-mongo/runtime";
 

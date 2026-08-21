@@ -291,6 +291,7 @@ async function collectCreateContext(
 
   const prismaSetupContext = await collectPrismaSetupContext(input, {
     projectDir: targetDirectory,
+    template,
   });
   if (!prismaSetupContext) {
     return;
