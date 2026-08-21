@@ -135,7 +135,7 @@ export function getPackageManagerManifestValue(
 
 export function getInstallCommand(packageManager: PackageManager): string {
   if (packageManager === "deno") {
-    return "deno install --allow-scripts";
+    return "deno install";
   }
 
   return `${packageManager} install`;
@@ -200,7 +200,7 @@ export function getInstallArgs(packageManager: PackageManager): CommandAndArgs {
   if (packageManager === "deno") {
     return {
       command: "deno",
-      args: ["install", "--allow-scripts"],
+      args: ["install"],
     };
   }
 

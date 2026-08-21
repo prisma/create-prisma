@@ -122,7 +122,7 @@ describe("Composer package-manager commands", () => {
     for (const packageManager of packageManagers) {
       expect(getInstallArgs(packageManager)).toEqual({
         command: packageManager,
-        args: packageManager === "deno" ? ["install", "--allow-scripts"] : ["install"],
+        args: ["install"],
       });
     }
   });
