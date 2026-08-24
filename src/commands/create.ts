@@ -382,6 +382,7 @@ async function executeCreateContext(
       template: context.template,
       createdProjectPath: context.targetDirectory,
       includeDevNextStep: true,
+      initializeGit: !context.targetPathState.exists || context.targetPathState.isEmptyDirectory,
       progressSpinner: createSpinner,
     });
 
