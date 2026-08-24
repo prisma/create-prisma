@@ -1,6 +1,6 @@
 {
   "name": "create-prisma",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": false,
   "description": "Create Prisma 8 projects with first-party templates and great DX.",
   "homepage": "https://github.com/prisma/create-prisma",
