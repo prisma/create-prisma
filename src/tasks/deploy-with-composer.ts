@@ -370,7 +370,11 @@ async function getProjectDetails(options: {
   }
 }
 
-export async function deployWithComposer(options: {
+/**
+ * Performs the optional one-shot deployment at the end of a create-prisma scaffold.
+ * Generated projects use their own `deploy` script for every subsequent deployment.
+ */
+export async function deployNewProjectWithComposer(options: {
   appName: string;
   packageManager: PackageManager;
   projectDir: string;

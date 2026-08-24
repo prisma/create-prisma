@@ -22,7 +22,7 @@ import {
   getPackageExecutionArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
-import { deployWithComposer, type ComposerDeployResult } from "./deploy-with-composer";
+import { deployNewProjectWithComposer, type ComposerDeployResult } from "./deploy-with-composer";
 import { installProjectDependencies, writePrismaDependencies } from "./install";
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgres";
@@ -437,7 +437,7 @@ export async function executePrismaSetupContext(
 
   let deployment: ComposerDeployResult | undefined;
   if (context.shouldDeploy) {
-    deployment = await deployWithComposer({
+    deployment = await deployNewProjectWithComposer({
       appName: projectName,
       packageManager: context.packageManager,
       projectDir,
