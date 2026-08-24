@@ -239,6 +239,25 @@ async function runPrismaInit(context: PrismaSetupContext, projectDir: string): P
   if (context.packageManager === "deno") await fs.remove(path.join(projectDir, "prisma-next.md"));
 }
 
+async function initializeAgentSkills(
+  context: PrismaSetupContext,
+  projectDir: string,
+): Promise<void> {
+  if (context.packageManager === "deno") return;
+
+  const invocation = getPrismaCliInvocation(context.packageManager, [
+    "init",
+    "--yes",
+    "--no-interactive",
+  ]);
+  if (context.verbose) log.step(`Running ${[invocation.command, ...invocation.args].join(" ")}`);
+  await execa(invocation.command, invocation.args, {
+    cwd: projectDir,
+    stdio: context.verbose ? "inherit" : "pipe",
+    env: { ...process.env, CI: "1" },
+  });
+}
+
 async function ensureGitignoreEntry(projectDir: string, entry: string): Promise<void> {
   const gitignorePath = path.join(projectDir, ".gitignore");
   const existing = (await fs.pathExists(gitignorePath))
@@ -403,6 +422,9 @@ export async function executePrismaSetupContext(
     await installProjectDependencies(context.packageManager, projectDir, {
       verbose: context.verbose,
     });
+
+    progress?.message("Installing Prisma agent skills...");
+    await initializeAgentSkills(context, projectDir);
 
     progress?.message("Generating Prisma 8 contract artifacts...");
     await emitContract(context, projectDir);

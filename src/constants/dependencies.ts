@@ -3,21 +3,21 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@prisma/cli-engine": "0.2.0",
-  "@prisma/composer": "0.10.0",
-  "@prisma/composer-prisma-cloud": "0.10.0",
+  "@prisma/composer": "0.12.0",
+  "@prisma/composer-prisma-cloud": "0.12.0",
   "@prisma/orm-mongo": "8.0.0-rc.4",
   "@prisma/orm-postgres": "8.0.0-rc.4",
   "@sveltejs/adapter-node": "^5.3.2",
   "@types/node": "^25.6.2",
-  alchemy: "2.0.0-beta.67",
+  alchemy: "2.0.0-beta.74",
   arktype: "^2.2.3",
   dotenv: "^17.4.2",
   esbuild: "^0.28.1",
-  effect: "4.0.0-beta.103",
+  effect: "4.0.0-rc.111",
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
+  prisma: "next",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
@@ -51,7 +51,7 @@ export function getCreateTemplateDependencies(
   _packageManager: PackageManager,
 ): CreateTemplateDependencyTarget[] {
   const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud", "alchemy"];
-  const devDependencies = ["@prisma/cli-engine"];
+  const devDependencies: string[] = [];
 
   if (usesEsbuild(template)) {
     devDependencies.push("esbuild");

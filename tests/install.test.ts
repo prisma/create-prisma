@@ -3,11 +3,7 @@ import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  dependencyVersionMap,
-  PRISMA_DENO_CLI_PACKAGE,
-  PRISMA_PLATFORM_CLI_PACKAGE,
-} from "../src/constants/dependencies";
+import { dependencyVersionMap, PRISMA_DENO_CLI_PACKAGE } from "../src/constants/dependencies";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import {
   getComposerScriptMap,
@@ -15,7 +11,7 @@ import {
   writePrismaDependencies,
 } from "../src/tasks/install";
 import { authoringStyles, createTemplates, databaseProviders, packageManagers } from "../src/types";
-import { getInstallArgs } from "../src/utils/package-manager";
+import { getInstallArgs, getRunScriptCommand } from "../src/utils/package-manager";
 
 type PackageJson = {
   dependencies?: Record<string, string>;
@@ -57,11 +53,12 @@ describe("writePrismaDependencies", () => {
       });
       expect(packageJson.dependencies?.dotenv).toBeUndefined();
       expect(packageJson.devDependencies).toMatchObject({
-        "@prisma/cli-engine": dependencyVersionMap["@prisma/cli-engine"],
+        prisma: dependencyVersionMap.prisma,
       });
       expect(packageJson.scripts).toMatchObject({
-        "contract:emit": `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} contract emit`,
-        migrate: `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} db migrate`,
+        "contract:emit": "prisma contract emit",
+        migrate: "prisma db migrate",
+        "skills:sync": "prisma skills sync || exit 0",
       });
       expect(packageJson.scripts?.["db:seed"]).toBeUndefined();
     });
@@ -94,6 +91,7 @@ describe("writePrismaDependencies", () => {
         "@types/node": dependencyVersionMap["@types/node"],
       });
       expect(packageJson.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
+      expect(packageJson.devDependencies?.prisma).toBeUndefined();
       expect(packageJson.scripts).toMatchObject({
         "contract:emit": `deno run -A npm:${PRISMA_DENO_CLI_PACKAGE} contract emit`,
         "db:init": `deno run -A --env-file=.env npm:${PRISMA_DENO_CLI_PACKAGE} db init`,
@@ -104,21 +102,12 @@ describe("writePrismaDependencies", () => {
 
 describe("Composer package-manager commands", () => {
   test("uses each selected package manager for Prisma CLI execution", () => {
-    expect(getComposerScriptMap("npm")["composer:deploy"]).toBe(
-      `npx --yes ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
-    );
-    expect(getComposerScriptMap("pnpm")["composer:deploy"]).toBe(
-      `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
-    );
-    expect(getComposerScriptMap("yarn")["composer:deploy"]).toBe(
-      `yarn dlx ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
-    );
-    expect(getComposerScriptMap("bun")["composer:deploy"]).toBe(
-      `bunx ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
-    );
-    expect(getComposerScriptMap("bun")["composer:dev"]).toBe(
-      `bunx ${PRISMA_PLATFORM_CLI_PACKAGE} dev module.ts`,
-    );
+    for (const packageManager of ["npm", "pnpm", "yarn", "bun"] as const) {
+      expect(getComposerScriptMap(packageManager)["composer:deploy"]).toBe(
+        "prisma deploy module.ts",
+      );
+      expect(getComposerScriptMap(packageManager)["composer:dev"]).toBe("prisma dev module.ts");
+    }
     expect(getComposerScriptMap("bun")["composer:destroy"]).toBeUndefined();
     expect(getComposerScriptMap("deno")).toEqual({});
   });
@@ -200,6 +189,8 @@ describe("generated templates", () => {
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
               expect(packageJson.dependencies).toHaveProperty("alchemy");
               expect(prismaConfig).toContain("orm: ormConfig({");
+              expect(prismaConfig).toContain('import { definePrismaConfig } from "prisma/config"');
+              expect(prismaConfig).toContain('agents: ["claude", "cursor", "agents", "devin"]');
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
               expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
@@ -231,6 +222,11 @@ describe("generated templates", () => {
               if (template === "svelte") {
                 const viteConfig = await readFile(path.join(projectDir, "vite.config.ts"), "utf8");
                 expect(viteConfig).toContain("noExternal: true");
+              }
+              if (template === "nuxt") {
+                expect(packageJson.scripts?.postinstall).toBe(
+                  `nuxt prepare && ${getRunScriptCommand(packageManager, "skills:sync")}`,
+                );
               }
               if (provider === "postgres") {
                 expect(moduleSource).toContain("pnPostgres({");
@@ -290,14 +286,14 @@ describe("generated templates", () => {
                     "minimumReleaseAgeExclude:",
                     '  - "@prisma/*"',
                     "overrides:",
-                    '  effect: "4.0.0-beta.103"',
+                    '  effect: "4.0.0-rc.111"',
                     "",
                   ].join("\n"),
                 );
               } else if (packageManager === "yarn") {
-                expect(packageJson.resolutions?.effect).toBe("4.0.0-beta.103");
+                expect(packageJson.resolutions?.effect).toBe("4.0.0-rc.111");
               } else {
-                expect(packageJson.overrides?.effect).toBe("4.0.0-beta.103");
+                expect(packageJson.overrides?.effect).toBe("4.0.0-rc.111");
               }
             } finally {
               await rm(projectDir, { recursive: true, force: true });

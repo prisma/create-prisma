@@ -36,6 +36,19 @@ async function runCommand(projectDir: string, args: string[]) {
   return `${stdout}\n${stderr}`;
 }
 
+function findAppEndpoint(output: string): string | undefined {
+  for (const line of output.split(/\r?\n/)) {
+    try {
+      const frame = JSON.parse(line) as { kind?: unknown; name?: unknown; url?: unknown };
+      if (frame.kind === "endpoint" && frame.name === "app" && typeof frame.url === "string") {
+        return frame.url;
+      }
+    } catch {
+      // Build output and package-manager prefixes are not JSON protocol frames.
+    }
+  }
+}
+
 async function verifyComposerDev(projectDir: string) {
   const process = Bun.spawn({
     cmd: ["bun", "run", "dev:composer"],
@@ -72,10 +85,10 @@ async function verifyComposerDev(projectDir: string) {
           result: nextResult,
         }));
       }
-      const match = output.match(/app:\s+(http:\/\/localhost:\d+)/);
-      if (!match?.[1]) continue;
+      const appUrl = findAppEndpoint(output);
+      if (!appUrl) continue;
 
-      const response = await fetch(match[1]);
+      const response = await fetch(appUrl);
       expect(response.status).toBe(200);
       const body = (await response.json()) as { users: Array<{ name: string }> };
       expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
@@ -206,8 +219,16 @@ describe("create-prisma e2e", () => {
 
       expect(await pathExists(path.join(projectDir, "src/prisma/contract.json"))).toBe(true);
       expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(true);
+      expect(
+        await pathExists(path.join(projectDir, ".agents/skills/prisma-composer/SKILL.md")),
+      ).toBe(true);
+      expect(
+        await pathExists(path.join(projectDir, ".claude/skills/prisma-composer/SKILL.md")),
+      ).toBe(true);
+      expect(packageJson.devDependencies.prisma).toBe("next");
+      expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
-      expect(packageJson.overrides.effect).toBe("4.0.0-beta.103");
+      expect(packageJson.overrides.effect).toBe("4.0.0-rc.111");
       expect(moduleSource).toContain("pnPostgres({");
       expect(dbSource).toContain("service.load().database.client");
 

@@ -1,8 +1,11 @@
 {{#unless (eq packageManager "deno")}}
-import { definePrismaConfig } from "@prisma/cli-engine";
+import { definePrismaConfig } from "prisma/config";
 import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
 
 export default definePrismaConfig({
+  skills: {
+    agents: ["claude", "cursor", "agents", "devin"],
+  },
   orm: ormConfig({
     contract: "./src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",
 {{#if (eq authoring "typescript")}}

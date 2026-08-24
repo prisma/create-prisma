@@ -6,15 +6,10 @@ import {
   getCreateTemplateDependencies,
   getDependencyVersion,
   PRISMA_DENO_CLI_PACKAGE,
-  PRISMA_PLATFORM_CLI_PACKAGE,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
-import {
-  getInstallArgs,
-  getPackageExecutionCommand,
-  getRunScriptCommand,
-} from "../utils/package-manager";
+import { getInstallArgs, getRunScriptCommand } from "../utils/package-manager";
 
 function getPrismaScriptMap(packageManager: PackageManager): Record<string, string> {
   if (packageManager === "deno") {
@@ -38,8 +33,7 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
     };
   }
 
-  const prismaCommand = (...args: string[]) =>
-    getPackageExecutionCommand(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
+  const prismaCommand = (...args: string[]) => ["prisma", ...args].join(" ");
 
   return {
     "contract:emit": prismaCommand("contract", "emit"),
@@ -50,6 +44,7 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
     migrate: prismaCommand("db", "migrate"),
     "migration:status": prismaCommand("migration", "status"),
     "migration:show": prismaCommand("migration", "show"),
+    "skills:sync": `${prismaCommand("skills", "sync")} || exit 0`,
   };
 }
 
@@ -59,11 +54,7 @@ export function getComposerScriptMap(packageManager: PackageManager): Record<str
   }
 
   const composerCommand = (subcommand: "dev" | "deploy") =>
-    getPackageExecutionCommand(packageManager, [
-      PRISMA_PLATFORM_CLI_PACKAGE,
-      subcommand,
-      "module.ts",
-    ]);
+    ["prisma", subcommand, "module.ts"].join(" ");
 
   return {
     "composer:dev": composerCommand("dev"),
@@ -156,8 +147,7 @@ export async function writePrismaDependencies(
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
   if (packageManager === "deno") dependencies.push("dotenv");
 
-  const devDependencies =
-    packageManager === "deno" ? ["@types/node"] : ["@prisma/cli-engine", "@types/node"];
+  const devDependencies = packageManager === "deno" ? ["@types/node"] : ["@types/node", "prisma"];
 
   await addPackageDependency({
     dependencies,
