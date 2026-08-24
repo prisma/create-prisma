@@ -61,6 +61,7 @@ describe("writePrismaDependencies", () => {
       });
       expect(packageJson.scripts).toMatchObject({
         "contract:emit": `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} contract emit`,
+        migrate: `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} db migrate`,
       });
       expect(packageJson.scripts?.["db:seed"]).toBeUndefined();
     });
@@ -104,17 +105,21 @@ describe("writePrismaDependencies", () => {
 describe("Composer package-manager commands", () => {
   test("uses each selected package manager for Prisma CLI execution", () => {
     expect(getComposerScriptMap("npm")["composer:deploy"]).toBe(
-      `npx --yes ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
+      `npx --yes ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
     );
     expect(getComposerScriptMap("pnpm")["composer:deploy"]).toBe(
-      `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
+      `pnpm dlx ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
     );
     expect(getComposerScriptMap("yarn")["composer:deploy"]).toBe(
-      `yarn dlx ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
+      `yarn dlx ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
     );
     expect(getComposerScriptMap("bun")["composer:deploy"]).toBe(
-      `bunx ${PRISMA_PLATFORM_CLI_PACKAGE} composer deploy module.ts`,
+      `bunx ${PRISMA_PLATFORM_CLI_PACKAGE} deploy module.ts`,
     );
+    expect(getComposerScriptMap("bun")["composer:dev"]).toBe(
+      `bunx ${PRISMA_PLATFORM_CLI_PACKAGE} dev module.ts`,
+    );
+    expect(getComposerScriptMap("bun")["composer:destroy"]).toBeUndefined();
     expect(getComposerScriptMap("deno")).toEqual({});
   });
 

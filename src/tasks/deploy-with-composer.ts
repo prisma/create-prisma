@@ -309,7 +309,7 @@ async function getProjectDetails(options: {
     const result = await runPrismaJsonCommand<ProjectShowResult>({
       packageManager: options.packageManager,
       projectDir: options.projectDir,
-      args: ["project", "show", "--project", options.appName],
+      args: ["project", "show", options.appName],
     });
     if (!result.project) return;
     return {
@@ -388,7 +388,7 @@ export async function deployWithComposer(options: {
       await runPrismaJsonCommand<ComposerDeployCommandResult>({
         packageManager: options.packageManager,
         projectDir: options.projectDir,
-        args: ["composer", "deploy", "module.ts"],
+        args: ["deploy", "module.ts"],
         forwardStderr: options.verbose,
       }),
     );

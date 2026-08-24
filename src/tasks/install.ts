@@ -47,7 +47,7 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
     "db:update": prismaCommand("db", "update"),
     "db:verify": prismaCommand("db", "verify"),
     "migration:plan": prismaCommand("migration", "plan"),
-    migrate: prismaCommand("migrate"),
+    migrate: prismaCommand("db", "migrate"),
     "migration:status": prismaCommand("migration", "status"),
     "migration:show": prismaCommand("migration", "show"),
   };
@@ -58,19 +58,16 @@ export function getComposerScriptMap(packageManager: PackageManager): Record<str
     return {};
   }
 
-  const composerCommand = (subcommand: string, extraArgs: string[] = []) =>
+  const composerCommand = (subcommand: "dev" | "deploy") =>
     getPackageExecutionCommand(packageManager, [
       PRISMA_PLATFORM_CLI_PACKAGE,
-      "composer",
       subcommand,
       "module.ts",
-      ...extraArgs,
     ]);
 
   return {
     "composer:dev": composerCommand("dev"),
     "composer:deploy": composerCommand("deploy"),
-    "composer:destroy": composerCommand("destroy", ["--production"]),
     deploy: `${getRunScriptCommand(packageManager, "build")} && ${getRunScriptCommand(
       packageManager,
       "composer:deploy",
