@@ -72,13 +72,17 @@ export type ComposerDeployResult = {
   };
 };
 
-function redactSecrets(message: string): string {
+export function redactSecrets(message: string): string {
   return message
-    .replace(/\b((?:prisma\+)?postgres(?:ql)?:\/\/)[^\s'"]+/gi, "$1<redacted>")
     .replace(
-      /\b([A-Z0-9_]*(?:DATABASE_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=)[^\s]+/g,
+      /\b((?:(?:prisma\+)?postgres(?:ql)?|mongodb(?:\+srv)?):\/\/)[^\s'"]+/gi,
       "$1<redacted>",
-    );
+    )
+    .replace(
+      /\b([A-Z0-9_]*(?:MONGODB_(?:URL|URI)|DATABASE_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s]+)/gi,
+      "$1<redacted>",
+    )
+    .replace(/(\bAuthorization\s*:\s*Bearer\s+)[^\s'"]+/gi, "$1<redacted>");
 }
 
 function getErrorMessage(error: unknown): string {

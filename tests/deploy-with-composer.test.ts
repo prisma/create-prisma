@@ -5,7 +5,34 @@ import {
   getConsoleProjectUrl,
   parseComposerDeployResult,
   parsePrismaCliEnvelope,
+  redactSecrets,
 } from "../src/tasks/deploy-with-composer";
+
+describe("redactSecrets", () => {
+  test("redacts supported database URLs", () => {
+    expect(
+      redactSecrets(
+        "postgresql://user:pass@host/db mongodb://user:pass@host/db mongodb+srv://user:pass@host/db",
+      ),
+    ).toBe("postgresql://<redacted> mongodb://<redacted> mongodb+srv://<redacted>");
+  });
+
+  test("redacts mixed-case assignments and quoted values", () => {
+    expect(
+      redactSecrets(
+        "database_url = \"postgresql://user:pass@host/db\" MongoDb_Uri='mongodb://secret' Api_Token=token-value",
+      ),
+    ).toBe("database_url = <redacted> MongoDb_Uri=<redacted> Api_Token=<redacted>");
+  });
+
+  test("redacts bearer credentials without hiding public app URLs", () => {
+    expect(
+      redactSecrets(
+        "Authorization: Bearer header.payload.signature App: https://example.prisma.build",
+      ),
+    ).toBe("Authorization: Bearer <redacted> App: https://example.prisma.build");
+  });
+});
 
 describe("findProjectNameCollisions", () => {
   test("returns every exact project-name match", () => {
