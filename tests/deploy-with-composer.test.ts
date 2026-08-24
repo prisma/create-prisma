@@ -1,10 +1,60 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  findProjectNameCollisions,
   getConsoleProjectUrl,
   parseComposerDeployResult,
   parsePrismaCliEnvelope,
+  redactSecrets,
 } from "../src/tasks/deploy-with-composer";
+
+describe("redactSecrets", () => {
+  test("redacts supported database URLs", () => {
+    expect(
+      redactSecrets(
+        "postgresql://user:pass@host/db mongodb://user:pass@host/db mongodb+srv://user:pass@host/db",
+      ),
+    ).toBe("postgresql://<redacted> mongodb://<redacted> mongodb+srv://<redacted>");
+  });
+
+  test("redacts mixed-case assignments and quoted values", () => {
+    expect(
+      redactSecrets(
+        "database_url = \"postgresql://user:pass@host/db\" MongoDb_Uri='mongodb://secret' Api_Token=token-value",
+      ),
+    ).toBe("database_url = <redacted> MongoDb_Uri=<redacted> Api_Token=<redacted>");
+  });
+
+  test("redacts bearer credentials without hiding public app URLs", () => {
+    expect(
+      redactSecrets(
+        "Authorization: Bearer header.payload.signature App: https://example.prisma.build",
+      ),
+    ).toBe("Authorization: Bearer <redacted> App: https://example.prisma.build");
+  });
+});
+
+describe("findProjectNameCollisions", () => {
+  test("returns every exact project-name match", () => {
+    expect(
+      findProjectNameCollisions(
+        [
+          { id: "proj_first", name: "my-app" },
+          { id: "proj_other", name: "my-app-api" },
+          { id: "proj_second", name: "my-app" },
+        ],
+        "my-app",
+      ),
+    ).toEqual([
+      { id: "proj_first", name: "my-app" },
+      { id: "proj_second", name: "my-app" },
+    ]);
+  });
+
+  test("does not treat a differently-cased name as the same project", () => {
+    expect(findProjectNameCollisions([{ id: "proj_upper", name: "My-App" }], "my-app")).toEqual([]);
+  });
+});
 
 describe("getConsoleProjectUrl", () => {
   test("converts Management API resource ids to Console route ids", () => {

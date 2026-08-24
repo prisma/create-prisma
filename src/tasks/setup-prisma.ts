@@ -22,7 +22,8 @@ import {
   getPackageExecutionArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
-import { deployWithComposer, type ComposerDeployResult } from "./deploy-with-composer";
+import { deployNewProjectWithComposer, type ComposerDeployResult } from "./deploy-with-composer";
+import { initializeGitRepository, type GitInitializationResult } from "./initialize-git";
 import { installProjectDependencies, writePrismaDependencies } from "./install";
 
 const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = "postgres";
@@ -40,6 +41,7 @@ type PrismaSetupRunOptions = {
   template?: CreateTemplate;
   createdProjectPath?: string;
   includeDevNextStep?: boolean;
+  initializeGit?: boolean;
   progressSpinner?: ReturnType<typeof spinner>;
 };
 
@@ -393,6 +395,7 @@ export async function executePrismaSetupContext(
   const template = options.template ?? "minimal";
   const progress = context.verbose ? undefined : (options.progressSpinner ?? spinner());
   const ownsProgress = progress !== undefined && !options.progressSpinner;
+  let gitInitialization: GitInitializationResult | undefined;
   if (ownsProgress) progress.start("Creating Prisma 8 project...");
 
   try {
@@ -415,6 +418,10 @@ export async function executePrismaSetupContext(
     );
     await ensureComposerTypeScriptOptions(projectDir);
     if (context.databaseProvider === "mongo") await ensureMongoEnvironment(projectDir);
+    if (context.packageManager !== "deno") {
+      await ensureGitignoreEntry(projectDir, "/.alchemy");
+      await ensureGitignoreEntry(projectDir, "/.prisma-composer");
+    }
 
     progress?.message(
       `Installing dependencies with ${getInstallCommand(context.packageManager)}...`,
@@ -428,7 +435,17 @@ export async function executePrismaSetupContext(
 
     progress?.message("Generating Prisma 8 contract artifacts...");
     await emitContract(context, projectDir);
+
+    if (options.initializeGit) {
+      progress?.message("Initializing Git repository...");
+      gitInitialization = await initializeGitRepository(projectDir);
+    }
     progress?.stop("Prisma 8 project ready.");
+    if (gitInitialization?.status === "initialized" && context.verbose) {
+      log.success("Initialized Git repository with an initial commit.");
+    } else if (gitInitialization?.status === "skipped") {
+      log.warn(`Could not initialize Git repository: ${gitInitialization.reason}`);
+    }
   } catch (error) {
     progress?.error("Could not create Prisma 8 project.");
     cancel(getCommandErrorMessage(error));
@@ -437,7 +454,7 @@ export async function executePrismaSetupContext(
 
   let deployment: ComposerDeployResult | undefined;
   if (context.shouldDeploy) {
-    deployment = await deployWithComposer({
+    deployment = await deployNewProjectWithComposer({
       appName: projectName,
       packageManager: context.packageManager,
       projectDir,

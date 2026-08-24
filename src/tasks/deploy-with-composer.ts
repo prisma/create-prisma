@@ -1,5 +1,6 @@
-import { cancel, isCancel, log, select, spinner } from "@clack/prompts";
+import { cancel, isCancel, log, select, spinner, taskLog } from "@clack/prompts";
 import { execa } from "execa";
+import { createInterface } from "node:readline";
 
 import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import type { PackageManager } from "../types";
@@ -44,6 +45,13 @@ type ProjectShowResult = {
   project: { id: string; name: string } | null;
 };
 
+type ProjectListResult = {
+  items: Array<{
+    id: string;
+    name: string;
+  }>;
+};
+
 type ComposerDeployCommandResult = {
   summary: {
     app: string;
@@ -64,13 +72,17 @@ export type ComposerDeployResult = {
   };
 };
 
-function redactSecrets(message: string): string {
+export function redactSecrets(message: string): string {
   return message
-    .replace(/\b((?:prisma\+)?postgres(?:ql)?:\/\/)[^\s'"]+/gi, "$1<redacted>")
     .replace(
-      /\b([A-Z0-9_]*(?:DATABASE_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=)[^\s]+/g,
+      /\b((?:(?:prisma\+)?postgres(?:ql)?|mongodb(?:\+srv)?):\/\/)[^\s'"]+/gi,
       "$1<redacted>",
-    );
+    )
+    .replace(
+      /\b([A-Z0-9_]*(?:MONGODB_(?:URL|URI)|DATABASE_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s]+)/gi,
+      "$1<redacted>",
+    )
+    .replace(/(\bAuthorization\s*:\s*Bearer\s+)[^\s'"]+/gi, "$1<redacted>");
 }
 
 function getErrorMessage(error: unknown): string {
@@ -123,22 +135,28 @@ async function runPrismaJsonCommand<Result>(options: {
   packageManager: PackageManager;
   projectDir: string;
   args: string[];
-  forwardStderr?: boolean;
+  onStderrLine?: (line: string) => void;
 }): Promise<Result> {
   const invocation = getPrismaCliArgs(options.packageManager, [
     ...options.args,
     "--json",
     "--no-interactive",
   ]);
-  const result = await execa(invocation.command, invocation.args, {
+  const subprocess = execa(invocation.command, invocation.args, {
     cwd: options.projectDir,
     env: process.env,
     reject: false,
   });
-
-  if (options.forwardStderr && result.stderr) {
-    process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : `${result.stderr}\n`);
-  }
+  const stderrLines =
+    options.onStderrLine && subprocess.stderr
+      ? (async () => {
+          const lines = createInterface({ input: subprocess.stderr });
+          for await (const line of lines) {
+            if (line.trim()) options.onStderrLine?.(line);
+          }
+        })()
+      : Promise.resolve();
+  const [result] = await Promise.all([subprocess, stderrLines]);
 
   let envelope: PrismaCliEnvelope<Result>;
   try {
@@ -157,6 +175,36 @@ async function runPrismaJsonCommand<Result>(options: {
     );
   }
   return envelope.result;
+}
+
+export function findProjectNameCollisions(
+  projects: ProjectListResult["items"],
+  appName: string,
+): ProjectListResult["items"] {
+  return projects.filter((project) => project.name === appName);
+}
+
+async function ensureProjectNameAvailable(options: {
+  appName: string;
+  packageManager: PackageManager;
+  projectDir: string;
+  workspace: PrismaWorkspace;
+}): Promise<void> {
+  const result = await runPrismaJsonCommand<ProjectListResult>({
+    packageManager: options.packageManager,
+    projectDir: options.projectDir,
+    args: ["project", "list"],
+  });
+  const collisions = findProjectNameCollisions(result.items, options.appName);
+  if (collisions.length === 0) return;
+
+  const projectIds = collisions.map((project) => project.id).join(", ");
+  throw new Error(
+    `A Prisma project named "${options.appName}" already exists in workspace ${workspaceLabel(
+      options.workspace,
+    )} (${options.workspace.id}). Choose a different project name or delete the existing project ` +
+      `(${projectIds}) in Prisma Console, then retry.`,
+  );
 }
 
 async function ensureAuthentication(
@@ -326,7 +374,11 @@ async function getProjectDetails(options: {
   }
 }
 
-export async function deployWithComposer(options: {
+/**
+ * Performs the optional one-shot deployment at the end of a create-prisma scaffold.
+ * Generated projects use their own `deploy` script for every subsequent deployment.
+ */
+export async function deployNewProjectWithComposer(options: {
   appName: string;
   packageManager: PackageManager;
   projectDir: string;
@@ -335,6 +387,7 @@ export async function deployWithComposer(options: {
   workspace?: string;
 }): Promise<ComposerDeployResult | undefined> {
   const progress = options.verbose ? undefined : spinner();
+  let deploymentLog: ReturnType<typeof taskLog> | undefined;
   let progressRunning = false;
   const showProgress = (message: string) => {
     if (!progress) return;
@@ -373,6 +426,15 @@ export async function deployWithComposer(options: {
     });
     if (!selectedWorkspace) return;
 
+    showProgress("Checking Prisma project name...");
+    if (options.verbose) log.step("Checking Prisma project name.");
+    await ensureProjectNameAvailable({
+      appName: options.appName,
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      workspace: selectedWorkspace,
+    });
+
     showProgress("Building for deployment...");
     if (options.verbose) log.step("Building for deployment.");
     const build = getRunScriptArgs(options.packageManager, "build");
@@ -382,26 +444,48 @@ export async function deployWithComposer(options: {
       stdio: options.verbose ? "inherit" : "pipe",
     });
 
-    showProgress("Deploying to Prisma...");
-    if (options.verbose) log.step("Deploying to Prisma.");
+    clearProgress();
+    const deployCommand = getPackageExecutionCommand(options.packageManager, [
+      PRISMA_PLATFORM_CLI_PACKAGE,
+      "deploy",
+      "module.ts",
+    ]);
+    if (options.verbose) {
+      log.step(`Deploying to Prisma with ${deployCommand}.`);
+    } else {
+      deploymentLog = taskLog({ title: "Deploying to Prisma...", limit: 10 });
+      deploymentLog.message(`$ ${deployCommand}`);
+    }
     const deployment = parseComposerDeployResult(
       await runPrismaJsonCommand<ComposerDeployCommandResult>({
         packageManager: options.packageManager,
         projectDir: options.projectDir,
         args: ["deploy", "module.ts"],
-        forwardStderr: options.verbose,
+        onStderrLine: (line) => {
+          const redactedLine = redactSecrets(line);
+          if (options.verbose) {
+            process.stderr.write(`${redactedLine}\n`);
+          } else {
+            deploymentLog?.message(redactedLine);
+          }
+        },
       }),
     );
     const appName = deployment?.appName ?? options.appName;
 
-    showProgress("Loading deployment details...");
+    if (options.verbose) {
+      log.step("Loading deployment details.");
+    } else {
+      deploymentLog?.message("Loading deployment details...");
+    }
     const details = await getProjectDetails({
       packageManager: options.packageManager,
       projectDir: options.projectDir,
       appName,
     });
 
-    progress?.stop("Deployed to Prisma.");
+    deploymentLog?.success("Deployed to Prisma.");
+    deploymentLog = undefined;
     progressRunning = false;
     if (options.verbose) log.success("Deployed to Prisma.");
     const workspace = details?.workspace ?? selectedWorkspace;
@@ -412,7 +496,12 @@ export async function deployWithComposer(options: {
       project: details?.project ?? { name: appName },
     };
   } catch (error) {
-    progress?.error("Deployment failed.");
+    if (deploymentLog) {
+      deploymentLog.error("Deployment failed.");
+      deploymentLog = undefined;
+    } else {
+      progress?.error("Deployment failed.");
+    }
     progressRunning = false;
     log.error(`Deploy failed: ${getErrorMessage(error)}`);
     return;
