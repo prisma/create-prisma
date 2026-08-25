@@ -305,38 +305,33 @@ async function ensureComposerTypeScriptOptions(projectDir: string): Promise<void
   await fs.writeFile(tsconfigPath, updated, "utf8");
 }
 
-async function emitContract(context: PrismaSetupContext, projectDir: string): Promise<void> {
-  const invocation = getPrismaCliInvocation(context.packageManager, ["contract", "emit"]);
+async function runPrismaCli(
+  context: PrismaSetupContext,
+  projectDir: string,
+  args: string[],
+): Promise<void> {
+  const invocation = getPrismaCliInvocation(context.packageManager, args);
   if (context.verbose) {
     log.step([invocation.command, ...invocation.args].join(" "));
   }
   await execa(invocation.command, invocation.args, {
     cwd: projectDir,
     stdio: context.verbose ? "inherit" : "pipe",
+    env: { ...process.env, CI: "1" },
   });
 }
 
+async function emitContract(context: PrismaSetupContext, projectDir: string): Promise<void> {
+  await runPrismaCli(context, projectDir, ["contract", "emit"]);
+}
+
 // Composer deploys are replay-only: they apply committed migrations and never
-// create schema. The scaffold authors the baseline (empty → the emitted
-// contract) so the project's first deploy always has a migration path.
+// create schema, so the scaffold authors the baseline itself.
 async function planBaselineMigration(
   context: PrismaSetupContext,
   projectDir: string,
 ): Promise<void> {
-  if (context.databaseProvider !== "postgres") return;
-  const invocation = getPrismaCliInvocation(context.packageManager, [
-    "migration",
-    "plan",
-    "--name",
-    "init",
-  ]);
-  if (context.verbose) {
-    log.step([invocation.command, ...invocation.args].join(" "));
-  }
-  await execa(invocation.command, invocation.args, {
-    cwd: projectDir,
-    stdio: context.verbose ? "inherit" : "pipe",
-  });
+  await runPrismaCli(context, projectDir, ["migration", "plan", "--name", "init"]);
 }
 
 function formatNextSteps(steps: NextStep[]): string {
@@ -459,8 +454,10 @@ export async function executePrismaSetupContext(
     progress?.message("Generating Prisma 8 contract artifacts...");
     await emitContract(context, projectDir);
 
-    progress?.message("Authoring the baseline migration...");
-    await planBaselineMigration(context, projectDir);
+    if (context.databaseProvider === "postgres") {
+      progress?.message("Authoring the baseline migration...");
+      await planBaselineMigration(context, projectDir);
+    }
 
     if (options.initializeGit) {
       progress?.message("Initializing Git repository...");
