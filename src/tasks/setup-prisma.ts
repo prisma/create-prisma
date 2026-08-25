@@ -316,6 +316,29 @@ async function emitContract(context: PrismaSetupContext, projectDir: string): Pr
   });
 }
 
+// Composer deploys are replay-only: they apply committed migrations and never
+// create schema. The scaffold authors the baseline (empty → the emitted
+// contract) so the project's first deploy always has a migration path.
+async function planBaselineMigration(
+  context: PrismaSetupContext,
+  projectDir: string,
+): Promise<void> {
+  if (context.databaseProvider !== "postgres") return;
+  const invocation = getPrismaCliInvocation(context.packageManager, [
+    "migration",
+    "plan",
+    "--name",
+    "init",
+  ]);
+  if (context.verbose) {
+    log.step([invocation.command, ...invocation.args].join(" "));
+  }
+  await execa(invocation.command, invocation.args, {
+    cwd: projectDir,
+    stdio: context.verbose ? "inherit" : "pipe",
+  });
+}
+
 function formatNextSteps(steps: NextStep[]): string {
   return steps.map((step) => `${step.command}\n  ${step.description}`).join("\n\n");
 }
@@ -435,6 +458,9 @@ export async function executePrismaSetupContext(
 
     progress?.message("Generating Prisma 8 contract artifacts...");
     await emitContract(context, projectDir);
+
+    progress?.message("Authoring the baseline migration...");
+    await planBaselineMigration(context, projectDir);
 
     if (options.initializeGit) {
       progress?.message("Initializing Git repository...");
