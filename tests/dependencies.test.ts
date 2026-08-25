@@ -7,7 +7,7 @@ describe("Prisma 8 dependency versions", () => {
     expect(getDependencyVersion("@prisma/orm-postgres")).toBe("8.0.0-rc.4");
     expect(getDependencyVersion("@prisma/composer")).toBe("0.12.0");
     expect(getDependencyVersion("@prisma/composer-prisma-cloud")).toBe("0.12.0");
-    expect(getDependencyVersion("prisma")).toBe("next");
+    expect(getDependencyVersion("prisma")).toBe("8.0.0-rc.9");
     expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.74");
     expect(getDependencyVersion("effect")).toBe("4.0.0-rc.111");
   });

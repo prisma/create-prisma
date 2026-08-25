@@ -13,7 +13,7 @@ yarn dlx create-prisma@latest my-app
 bunx create-prisma@latest my-app
 ```
 
-The CLI initializes Prisma 8 with `prisma@next`, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
+The CLI initializes Prisma 8 with a tested Prisma CLI release, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
 
 The deployment prompt is:
 
