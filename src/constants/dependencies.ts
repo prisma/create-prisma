@@ -18,12 +18,15 @@ export const dependencyVersionMap = {
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
-  prisma: "next",
+  prisma: "8.0.0-rc.9",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
 
-export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@next";
+// Pinned, not `prisma@next`: the scaffold's own invocations must not float
+// with the dist-tag (rc.10 removed `orm init --skip-skills` and rejected its
+// own scaffolded schema at `contract emit`, breaking every create).
+export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@8.0.0-rc.9";
 // The consolidated CLI currently imports Node-only credential storage when Deno starts it.
 // Keep Deno on Prisma 8's ORM-only CLI entrypoint until that upstream path is Deno-compatible.
 export const PRISMA_DENO_CLI_PACKAGE = "prisma-next";
