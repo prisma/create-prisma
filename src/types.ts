@@ -45,6 +45,12 @@ export type CreateTemplate = z.infer<typeof CreateTemplateSchema>;
 export const CommonCommandOptionsSchema = z.object({
   yes: z.boolean().optional().describe("Skip prompts and accept default choices"),
   verbose: z.boolean().optional().describe("Show verbose command output during setup"),
+  json: z
+    .boolean()
+    .optional()
+    .describe(
+      "Emit one quiet JSON result for agents and automation (non-interactive; deploys unless --no-deploy)",
+    ),
 });
 
 export const PrismaSetupOptionsSchema = z.object({

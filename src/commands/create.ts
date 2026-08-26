@@ -1,7 +1,14 @@
 import { cancel, intro, isCancel, log, select, spinner, text } from "@clack/prompts";
 import fs from "fs-extra";
 import path from "node:path";
+import type { Writable } from "node:stream";
 
+import {
+  CREATE_PRISMA_RESULT_SCHEMA_VERSION,
+  createCommandFailureResult,
+  type CreateCommandResult,
+  type CreateProjectResult,
+} from "../result";
 import {
   trackCreateCompleted,
   trackCreateFailed,
@@ -18,6 +25,8 @@ import {
   type CreateTemplate,
 } from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
+import { resolveExecutionSettings } from "../ui/output";
+import { getErrorMessage } from "../utils/errors";
 import { getUnsupportedNodeMessage, supportsPrismaNext } from "../utils/node-version";
 
 const DEFAULT_PROJECT_NAME = "my-app";
@@ -39,12 +48,17 @@ export type CreatePromptContext = {
 };
 
 type ExecuteCreateContextResult =
-  | { ok: true }
+  | { ok: true; result: CreateCommandResult }
   | {
       ok: false;
       stage: CreateTelemetryFailureStage;
       error?: unknown;
+      errorReported?: boolean;
     };
+
+type CollectCreateContextResult =
+  | { ok: true; context: CreatePromptContext }
+  | { ok: false; message: string };
 
 function toPackageName(projectName: string): string {
   return (
@@ -77,23 +91,35 @@ function validateProjectName(value: string | undefined): string | undefined {
   return undefined;
 }
 
-async function promptForProjectName(): Promise<string | undefined> {
+function getProjectResult(context: CreatePromptContext): CreateProjectResult {
+  return {
+    name: context.projectPackageName,
+    path: context.targetDirectory,
+    template: context.template,
+    databaseProvider: context.prismaSetupContext.databaseProvider,
+    authoring: context.prismaSetupContext.authoring,
+    packageManager: context.prismaSetupContext.packageManager,
+  };
+}
+
+async function promptForProjectName(output: Writable): Promise<string | undefined> {
   const projectName = await text({
     message: "Project name",
     placeholder: DEFAULT_PROJECT_NAME,
     initialValue: DEFAULT_PROJECT_NAME,
     validate: validateProjectName,
+    output,
   });
 
   if (isCancel(projectName)) {
-    cancel("Operation cancelled.");
+    cancel("Operation cancelled.", { output });
     return undefined;
   }
 
   return String(projectName).trim();
 }
 
-async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
+async function promptForCreateTemplate(output: Writable): Promise<CreateTemplate | undefined> {
   const template = await select({
     message: "Select template",
     initialValue: DEFAULT_TEMPLATE,
@@ -144,10 +170,11 @@ async function promptForCreateTemplate(): Promise<CreateTemplate | undefined> {
         hint: "React app with file routes and server functions",
       },
     ],
+    output,
   });
 
   if (isCancel(template)) {
-    cancel("Operation cancelled.");
+    cancel("Operation cancelled.", { output });
     return undefined;
   }
 
@@ -180,41 +207,52 @@ async function inspectTargetPath(targetPath: string): Promise<CreateTargetPathSt
   };
 }
 
-export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promise<void> {
+export async function runCreateCommand(
+  rawInput: CreateCommandInput = {},
+): Promise<CreateCommandResult> {
   const startedAt = Date.now();
   let input: CreateCommandInput = {};
   let context: CreatePromptContext | undefined;
   let failureStage: CreateTelemetryFailureStage = "validate_input";
+  const { output } = resolveExecutionSettings(rawInput);
 
   try {
     input = CreateCommandInputSchema.parse(rawInput);
-
+    if (input.json && input.verbose) {
+      throw new Error("--verbose cannot be used with --json because JSON mode is output-only.");
+    }
     if (!supportsPrismaNext()) {
-      cancel(getUnsupportedNodeMessage());
+      const message = getUnsupportedNodeMessage();
+      cancel(message, { output });
       process.exitCode = 1;
-      return;
+      return createCommandFailureResult(failureStage, message);
     }
 
-    intro(getCreatePrismaIntro());
+    intro(getCreatePrismaIntro(), { output });
 
     failureStage = "collect_context";
-    context = await collectCreateContext(input);
-    if (!context) {
-      return;
+    const collected = await collectCreateContext(input);
+    if (!collected.ok) {
+      process.exitCode = 1;
+      const result = createCommandFailureResult(failureStage, collected.message);
+      await trackCreateFailed({
+        input,
+        durationMs: Date.now() - startedAt,
+        stage: failureStage,
+      });
+      return result;
     }
+    context = collected.context;
 
     failureStage = "unknown";
     const executionResult = await executeCreateContext(context);
     if (!executionResult.ok) {
       process.exitCode = 1;
-      if (executionResult.error) {
-        cancel(
-          `Create command failed: ${
-            executionResult.error instanceof Error
-              ? executionResult.error.message
-              : String(executionResult.error)
-          }`,
-        );
+      const message = executionResult.error
+        ? getErrorMessage(executionResult.error)
+        : "Project setup did not complete.";
+      if (executionResult.error && !executionResult.errorReported) {
+        cancel(`Create command failed: ${message}`, { output });
       }
 
       await trackCreateFailed({
@@ -224,7 +262,7 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
         error: executionResult.error,
         stage: executionResult.stage,
       });
-      return;
+      return createCommandFailureResult(executionResult.stage, message, getProjectResult(context));
     }
 
     await trackCreateCompleted({
@@ -232,9 +270,11 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
       context,
       durationMs: Date.now() - startedAt,
     });
+    return executionResult.result;
   } catch (error) {
     process.exitCode = 1;
-    cancel(`Create command failed: ${error instanceof Error ? error.message : String(error)}`);
+    const message = getErrorMessage(error);
+    cancel(`Create command failed: ${message}`, { output });
     await trackCreateFailed({
       input,
       context,
@@ -242,51 +282,54 @@ export async function runCreateCommand(rawInput: CreateCommandInput = {}): Promi
       error,
       stage: failureStage,
     });
+    return createCommandFailureResult(
+      failureStage,
+      message,
+      context ? getProjectResult(context) : undefined,
+    );
   }
 }
 
 async function collectCreateContext(
   input: CreateCommandInput,
-): Promise<CreatePromptContext | undefined> {
+): Promise<CollectCreateContextResult> {
   const force = input.force === true;
-  const useDefaults = input.yes === true;
+  const { output, useDefaults } = resolveExecutionSettings(input);
 
   const projectNameInput =
-    input.name ?? (useDefaults ? DEFAULT_PROJECT_NAME : await promptForProjectName());
+    input.name ?? (useDefaults ? DEFAULT_PROJECT_NAME : await promptForProjectName(output));
   if (projectNameInput === undefined) {
-    return;
+    return { ok: false, message: "Operation cancelled." };
   }
 
   const projectName = String(projectNameInput).trim();
   const projectNameValidationError = validateProjectName(projectName);
   if (projectNameValidationError) {
-    cancel(projectNameValidationError);
-    return;
+    cancel(projectNameValidationError, { output });
+    return { ok: false, message: projectNameValidationError };
   }
 
   const template =
-    input.template ?? (useDefaults ? DEFAULT_TEMPLATE : await promptForCreateTemplate());
+    input.template ?? (useDefaults ? DEFAULT_TEMPLATE : await promptForCreateTemplate(output));
   if (!template) {
-    return;
+    return { ok: false, message: "Operation cancelled." };
   }
 
   const targetDirectory = path.resolve(process.cwd(), projectName);
   const targetPathState = await inspectTargetPath(targetDirectory);
   if (targetPathState.exists && !targetPathState.isDirectory) {
-    cancel(
-      `Target path ${formatPathForDisplay(
-        targetDirectory,
-      )} already exists and is not a directory. Choose a different project name.`,
-    );
-    return;
+    const message = `Target path ${formatPathForDisplay(
+      targetDirectory,
+    )} already exists and is not a directory. Choose a different project name.`;
+    cancel(message, { output });
+    return { ok: false, message };
   }
   if (targetPathState.exists && !targetPathState.isEmptyDirectory && !force) {
-    cancel(
-      `Target directory ${formatPathForDisplay(
-        targetDirectory,
-      )} is not empty. Use --force to continue.`,
-    );
-    return;
+    const message = `Target directory ${formatPathForDisplay(
+      targetDirectory,
+    )} is not empty. Use --force to continue.`;
+    cancel(message, { output });
+    return { ok: false, message };
   }
 
   const prismaSetupContext = await collectPrismaSetupContext(input, {
@@ -294,28 +337,32 @@ async function collectCreateContext(
     template,
   });
   if (!prismaSetupContext) {
-    return;
+    return { ok: false, message: "Operation cancelled." };
   }
 
   return {
-    targetDirectory,
-    targetPathState,
-    force,
-    template,
-    projectPackageName: toPackageName(path.basename(targetDirectory)),
-    prismaSetupContext,
+    ok: true,
+    context: {
+      targetDirectory,
+      targetPathState,
+      force,
+      template,
+      projectPackageName: toPackageName(path.basename(targetDirectory)),
+      prismaSetupContext,
+    },
   };
 }
 
 async function executeCreateContext(
   context: CreatePromptContext,
 ): Promise<ExecuteCreateContextResult> {
-  const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner();
+  const output = context.prismaSetupContext.output;
+  const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner({ output });
   createSpinner?.start("Creating Prisma 8 project...");
 
   try {
     if (context.prismaSetupContext.verbose) {
-      log.step(`Scaffolding ${context.template} starter.`);
+      log.step(`Scaffolding ${context.template} starter.`, { output });
     }
 
     await scaffoldCreateFrameworkTemplate({
@@ -328,7 +375,7 @@ async function executeCreateContext(
     });
 
     if (context.prismaSetupContext.verbose) {
-      log.success("Starter files scaffolded.");
+      log.success("Starter files scaffolded.", { output });
     }
   } catch (error) {
     createSpinner?.error("Could not create Prisma 8 project.");
@@ -354,15 +401,11 @@ async function executeCreateContext(
     };
   }
 
-  if (
-    context.targetPathState.exists &&
-    !context.targetPathState.isEmptyDirectory &&
-    context.force
-  ) {
-    log.warn(
-      `Used --force in non-empty directory ${formatPathForDisplay(context.targetDirectory)}.`,
-    );
-  }
+  const forceWarning =
+    context.targetPathState.exists && !context.targetPathState.isEmptyDirectory && context.force
+      ? `Used --force in non-empty directory ${formatPathForDisplay(context.targetDirectory)}.`
+      : undefined;
+  if (forceWarning) log.warn(forceWarning, { output });
 
   const nextSteps =
     formatPathForDisplay(context.targetDirectory) === "."
@@ -375,7 +418,7 @@ async function executeCreateContext(
         ];
 
   try {
-    const didSetupPrisma = await executePrismaSetupContext(context.prismaSetupContext, {
+    const setupResult = await executePrismaSetupContext(context.prismaSetupContext, {
       prependNextSteps: nextSteps,
       projectDir: context.targetDirectory,
       projectName: context.projectPackageName,
@@ -386,12 +429,29 @@ async function executeCreateContext(
       progressSpinner: createSpinner,
     });
 
-    if (!didSetupPrisma) {
+    if (!setupResult.ok) {
       return {
         ok: false,
         stage: "prisma_setup",
+        error: setupResult.error,
+        errorReported: setupResult.errorReported,
       };
     }
+
+    const warnings = [...setupResult.warnings];
+    if (forceWarning) warnings.unshift(forceWarning);
+
+    return {
+      ok: true,
+      result: {
+        schemaVersion: CREATE_PRISMA_RESULT_SCHEMA_VERSION,
+        ok: true,
+        project: getProjectResult(context),
+        deployment: setupResult.deployment,
+        nextSteps: setupResult.nextSteps,
+        warnings,
+      },
+    };
   } catch (error) {
     createSpinner?.error("Could not create Prisma 8 project.");
     return {
@@ -400,6 +460,4 @@ async function executeCreateContext(
       error,
     };
   }
-
-  return { ok: true };
 }

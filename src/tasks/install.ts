@@ -1,4 +1,3 @@
-import { execa } from "execa";
 import fs from "fs-extra";
 import path from "node:path";
 
@@ -10,6 +9,7 @@ import {
 import { getDbPackages } from "../constants/db-packages";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { getInstallArgs, getRunScriptCommand } from "../utils/package-manager";
+import { runSetupCommand } from "../utils/run-command";
 
 function getPrismaScriptMap(packageManager: PackageManager): Record<string, string> {
   if (packageManager === "deno") {
@@ -194,7 +194,7 @@ export async function writeCreateTemplateDependencies(opts: {
 export async function installProjectDependencies(
   packageManager: PackageManager,
   projectDir = process.cwd(),
-  options: { verbose?: boolean } = {},
+  options: { verbose?: boolean; json?: boolean } = {},
 ): Promise<void> {
   const installCommand = getInstallArgs(packageManager);
   const env =
@@ -204,9 +204,12 @@ export async function installProjectDependencies(
         }
       : undefined;
 
-  await execa(installCommand.command, installCommand.args, {
+  await runSetupCommand({
+    command: installCommand.command,
+    args: installCommand.args,
     cwd: projectDir,
     env,
-    stdio: options.verbose === true ? "inherit" : "pipe",
+    verbose: options.verbose === true,
+    json: options.json === true,
   });
 }

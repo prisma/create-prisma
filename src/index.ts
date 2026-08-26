@@ -35,7 +35,9 @@ export const router = os.router({
     })
     .input(CreateCliInputSchema)
     .handler(async ({ input }) => {
-      await runCreateCommand(normalizeCreateCliInput(input));
+      const createInput = normalizeCreateCliInput(input);
+      const result = await runCreateCommand(createInput);
+      return createInput.json ? result : undefined;
     }),
 });
 
@@ -52,6 +54,15 @@ export async function create(input: CreateCommandInput = {}): Promise<void> {
 }
 
 export type { CreateCommandInput };
+export type {
+  CreateCommandFailureStage,
+  CreateCommandFailureResult,
+  CreateCommandResult,
+  CreateCommandSuccessResult,
+  CreateNextStep,
+  CreateProjectResult,
+} from "./result";
+export { CREATE_PRISMA_RESULT_SCHEMA_VERSION } from "./result";
 export {
   AuthoringStyleSchema,
   CreateCommandInputSchema,

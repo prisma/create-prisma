@@ -1,15 +1,18 @@
 import { cancel, isCancel, log, select, spinner, taskLog } from "@clack/prompts";
 import { execa } from "execa";
 import { createInterface } from "node:readline";
+import type { Writable } from "node:stream";
 
 import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import type { PackageManager } from "../types";
+import { getErrorMessage, redactSecrets } from "../utils/errors";
 import {
   getPackageExecutionArgs,
   getPackageExecutionCommand,
   getRunScriptArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
+import { runSetupCommand } from "../utils/run-command";
 
 type PrismaCliEnvelope<Result = unknown> = {
   ok: boolean;
@@ -64,6 +67,7 @@ type ComposerDeployCommandResult = {
 export type ComposerDeployResult = {
   appName: string;
   appUrl?: string;
+  serviceId?: string;
   workspace?: PrismaWorkspace;
   project: {
     id?: string;
@@ -71,24 +75,6 @@ export type ComposerDeployResult = {
     consoleUrl?: string;
   };
 };
-
-export function redactSecrets(message: string): string {
-  return message
-    .replace(
-      /\b((?:(?:prisma\+)?postgres(?:ql)?|mongodb(?:\+srv)?):\/\/)[^\s'"]+/gi,
-      "$1<redacted>",
-    )
-    .replace(
-      /\b([A-Z0-9_]*(?:MONGODB_(?:URL|URI)|DATABASE_URL|TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s]+)/gi,
-      "$1<redacted>",
-    )
-    .replace(/(\bAuthorization\s*:\s*Bearer\s+)[^\s'"]+/gi, "$1<redacted>");
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return redactSecrets(error.message);
-  return redactSecrets(String(error));
-}
 
 function stripResourcePrefix(id: string, prefix: "proj" | "wksp"): string {
   const marker = `${prefix}_`;
@@ -207,37 +193,39 @@ async function ensureProjectNameAvailable(options: {
   );
 }
 
-async function ensureAuthentication(
-  packageManager: PackageManager,
-  projectDir: string,
-  beforeInteractiveLogin?: () => void,
-): Promise<WhoamiResult> {
+async function ensureAuthentication(options: {
+  packageManager: PackageManager;
+  projectDir: string;
+  output: Writable;
+  allowInteractiveLogin: boolean;
+  beforeInteractiveLogin?: () => void;
+}): Promise<WhoamiResult> {
   const whoami = () =>
     runPrismaJsonCommand<WhoamiResult>({
-      packageManager,
-      projectDir,
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
       args: ["auth", "whoami"],
     });
 
   const authState = await whoami();
   if (authState.authenticated) return authState;
 
-  const loginCommand = getPackageExecutionCommand(packageManager, [
+  const loginCommand = getPackageExecutionCommand(options.packageManager, [
     PRISMA_PLATFORM_CLI_PACKAGE,
     "auth",
     "login",
   ]);
-  if (process.stdin.isTTY !== true) {
+  if (!options.allowInteractiveLogin || process.stdin.isTTY !== true) {
     throw new Error(
-      `Sign in first with ${loginCommand}, then run ${getRunScriptCommand(packageManager, "deploy")}.`,
+      `Sign in first with ${loginCommand}, then run ${getRunScriptCommand(options.packageManager, "deploy")}.`,
     );
   }
 
-  beforeInteractiveLogin?.();
-  log.info("Sign in to Prisma to deploy.");
-  const login = getPrismaCliArgs(packageManager, ["auth", "login"]);
+  options.beforeInteractiveLogin?.();
+  log.info("Sign in to Prisma to deploy.", { output: options.output });
+  const login = getPrismaCliArgs(options.packageManager, ["auth", "login"]);
   await execa(login.command, login.args, {
-    cwd: projectDir,
+    cwd: options.projectDir,
     env: process.env,
     stdio: "inherit",
   });
@@ -274,6 +262,7 @@ async function selectDeploymentWorkspace(options: {
   authState: WhoamiResult;
   beforePrompt?: () => void;
   afterPrompt?: () => void;
+  output: Writable;
 }): Promise<PrismaWorkspace | undefined> {
   const activeWorkspace = options.authState.workspace;
   if (!activeWorkspace) {
@@ -316,9 +305,10 @@ async function selectDeploymentWorkspace(options: {
       label: workspace.workspaceName ?? workspace.workspaceId,
       hint: workspace.current ? `${workspace.workspaceId}, current` : workspace.workspaceId,
     })),
+    output: options.output,
   });
   if (isCancel(selectedWorkspaceId)) {
-    cancel("Operation cancelled.");
+    cancel("Operation cancelled.", { output: options.output });
     return;
   }
   options.afterPrompt?.();
@@ -335,6 +325,7 @@ export function parseComposerDeployResult(result: ComposerDeployCommandResult):
   | {
       appName: string;
       appUrl?: string;
+      serviceId?: string;
     }
   | undefined {
   const summary = result.summary;
@@ -344,6 +335,7 @@ export function parseComposerDeployResult(result: ComposerDeployCommandResult):
     .find((entity) => entity.kind === "compute-service");
   return {
     appName: summary.app,
+    ...(computeService?.id ? { serviceId: computeService.id } : {}),
     ...(computeService?.url ? { appUrl: computeService.url.replace(/\/$/, "") } : {}),
   };
 }
@@ -384,9 +376,14 @@ export async function deployNewProjectWithComposer(options: {
   projectDir: string;
   shouldPromptForWorkspace: boolean;
   verbose: boolean;
+  output?: Writable;
+  allowInteractiveLogin?: boolean;
+  json?: boolean;
+  throwOnError?: boolean;
   workspace?: string;
 }): Promise<ComposerDeployResult | undefined> {
-  const progress = options.verbose ? undefined : spinner();
+  const output = options.output ?? process.stdout;
+  const progress = options.verbose ? undefined : spinner({ output });
   let deploymentLog: ReturnType<typeof taskLog> | undefined;
   let progressRunning = false;
   const showProgress = (message: string) => {
@@ -406,20 +403,23 @@ export async function deployNewProjectWithComposer(options: {
 
   try {
     showProgress("Checking Prisma account...");
-    if (options.verbose) log.step("Checking Prisma account.");
-    const authState = await ensureAuthentication(
-      options.packageManager,
-      options.projectDir,
-      clearProgress,
-    );
+    if (options.verbose) log.step("Checking Prisma account.", { output });
+    const authState = await ensureAuthentication({
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      output,
+      allowInteractiveLogin: options.allowInteractiveLogin ?? true,
+      beforeInteractiveLogin: clearProgress,
+    });
 
     showProgress("Checking Prisma workspace...");
-    if (options.verbose) log.step("Checking Prisma workspace.");
+    if (options.verbose) log.step("Checking Prisma workspace.", { output });
     const selectedWorkspace = await selectDeploymentWorkspace({
       packageManager: options.packageManager,
       projectDir: options.projectDir,
       shouldPrompt: options.shouldPromptForWorkspace,
       authState,
+      output,
       beforePrompt: clearProgress,
       afterPrompt: () => showProgress("Selecting Prisma workspace..."),
       ...(options.workspace ? { workspace: options.workspace } : {}),
@@ -427,7 +427,7 @@ export async function deployNewProjectWithComposer(options: {
     if (!selectedWorkspace) return;
 
     showProgress("Checking Prisma project name...");
-    if (options.verbose) log.step("Checking Prisma project name.");
+    if (options.verbose) log.step("Checking Prisma project name.", { output });
     await ensureProjectNameAvailable({
       appName: options.appName,
       packageManager: options.packageManager,
@@ -436,12 +436,15 @@ export async function deployNewProjectWithComposer(options: {
     });
 
     showProgress("Building for deployment...");
-    if (options.verbose) log.step("Building for deployment.");
+    if (options.verbose) log.step("Building for deployment.", { output });
     const build = getRunScriptArgs(options.packageManager, "build");
-    await execa(build.command, build.args, {
+    await runSetupCommand({
+      command: build.command,
+      args: build.args,
       cwd: options.projectDir,
       env: process.env,
-      stdio: options.verbose ? "inherit" : "pipe",
+      verbose: options.verbose,
+      json: options.json === true,
     });
 
     clearProgress();
@@ -451,9 +454,9 @@ export async function deployNewProjectWithComposer(options: {
       "module.ts",
     ]);
     if (options.verbose) {
-      log.step(`Deploying to Prisma with ${deployCommand}.`);
+      log.step(`Deploying to Prisma with ${deployCommand}.`, { output });
     } else {
-      deploymentLog = taskLog({ title: "Deploying to Prisma...", limit: 10 });
+      deploymentLog = taskLog({ title: "Deploying to Prisma...", limit: 10, output });
       deploymentLog.message(`$ ${deployCommand}`);
     }
     const deployment = parseComposerDeployResult(
@@ -464,7 +467,7 @@ export async function deployNewProjectWithComposer(options: {
         onStderrLine: (line) => {
           const redactedLine = redactSecrets(line);
           if (options.verbose) {
-            process.stderr.write(`${redactedLine}\n`);
+            output.write(`${redactedLine}\n`);
           } else {
             deploymentLog?.message(redactedLine);
           }
@@ -474,7 +477,7 @@ export async function deployNewProjectWithComposer(options: {
     const appName = deployment?.appName ?? options.appName;
 
     if (options.verbose) {
-      log.step("Loading deployment details.");
+      log.step("Loading deployment details.", { output });
     } else {
       deploymentLog?.message("Loading deployment details...");
     }
@@ -487,11 +490,12 @@ export async function deployNewProjectWithComposer(options: {
     deploymentLog?.success("Deployed to Prisma.");
     deploymentLog = undefined;
     progressRunning = false;
-    if (options.verbose) log.success("Deployed to Prisma.");
+    if (options.verbose) log.success("Deployed to Prisma.", { output });
     const workspace = details?.workspace ?? selectedWorkspace;
     return {
       appName,
       ...(deployment?.appUrl ? { appUrl: deployment.appUrl } : {}),
+      ...(deployment?.serviceId ? { serviceId: deployment.serviceId } : {}),
       ...(workspace ? { workspace } : {}),
       project: details?.project ?? { name: appName },
     };
@@ -503,7 +507,8 @@ export async function deployNewProjectWithComposer(options: {
       progress?.error("Deployment failed.");
     }
     progressRunning = false;
-    log.error(`Deploy failed: ${getErrorMessage(error)}`);
+    log.error(`Deploy failed: ${getErrorMessage(error)}`, { output });
+    if (options.throwOnError) throw error;
     return;
   }
 }
