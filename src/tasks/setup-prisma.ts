@@ -183,7 +183,7 @@ export async function collectPrismaSetupContext(
   const shouldDeploy =
     packageManager === "deno"
       ? false
-      : (input.deploy ?? (useDefaults ? false : await promptForDeployment(output)));
+      : (input.deploy ?? (json ? true : useDefaults ? false : await promptForDeployment(output)));
   if (shouldDeploy === undefined) return;
 
   return {

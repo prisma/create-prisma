@@ -49,7 +49,7 @@ export const CommonCommandOptionsSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      "Emit one quiet JSON result for agents and automation (implies non-interactive defaults)",
+      "Emit one quiet JSON result for agents and automation (non-interactive; deploys unless --no-deploy)",
     ),
 });
 
