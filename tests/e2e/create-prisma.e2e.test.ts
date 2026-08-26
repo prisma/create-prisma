@@ -312,7 +312,7 @@ describe("create-prisma e2e", () => {
       const packageJson = JSON.parse(
         await readFile(path.join(projectDir, "package.json"), "utf8"),
       ) as Record<string, any>;
-      const configSource = await readFile(path.join(projectDir, "prisma-next.config.ts"), "utf8");
+      const configSource = await readFile(path.join(projectDir, "prisma.config.ts"), "utf8");
       const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
 
       expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(true);
@@ -321,7 +321,7 @@ describe("create-prisma e2e", () => {
       expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "module.ts"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "service.ts"))).toBe(false);
-      expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(false);
+      expect(await pathExists(path.join(projectDir, "prisma-next.config.ts"))).toBe(false);
       expect(configSource).toContain("dotenv/config");
       expect(dbSource).toContain('Deno.env.get("DATABASE_URL")');
       expect(packageJson.scripts).toMatchObject({

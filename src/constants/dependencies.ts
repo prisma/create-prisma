@@ -30,9 +30,11 @@ export const dependencyVersionMap = {
 // @prisma/orm-toolchain, and those must match the @prisma/composer* and
 // @prisma/orm-* versions this map installs into the project.
 export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@8.0.0-rc.11";
-// The consolidated CLI currently imports Node-only credential storage when Deno starts it.
-// Keep Deno on Prisma 8's ORM-only CLI entrypoint until that upstream path is Deno-compatible.
-export const PRISMA_DENO_CLI_PACKAGE = "prisma-next";
+// Deno runs the same pinned consolidated CLI. The former `prisma-next`
+// fallback is dead: under Deno the bare `npm:prisma-next` specifier resolves
+// to the highest non-prerelease version (0.12.0, frozen), which cannot emit
+// against the ORM releases pinned above.
+export const PRISMA_DENO_CLI_PACKAGE = PRISMA_PLATFORM_CLI_PACKAGE;
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 

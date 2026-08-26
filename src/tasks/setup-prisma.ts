@@ -202,34 +202,19 @@ function getPrismaCliInvocation(packageManager: PackageManager, args: string[]) 
 }
 
 async function runPrismaInit(context: PrismaSetupContext, projectDir: string): Promise<void> {
-  const args =
-    context.packageManager === "deno"
-      ? [
-          "init",
-          "--yes",
-          "--no-interactive",
-          "--target",
-          getInitTarget(context.databaseProvider),
-          "--authoring",
-          context.authoring,
-          "--schema-path",
-          getContractPath(context.authoring),
-          "--no-install",
-          "--no-skill",
-        ]
-      : [
-          "orm",
-          "init",
-          "--yes",
-          "--no-interactive",
-          "--target",
-          getInitTarget(context.databaseProvider),
-          "--authoring",
-          context.authoring,
-          "--schema-path",
-          getContractPath(context.authoring),
-          "--skip-install",
-        ];
+  const args = [
+    "orm",
+    "init",
+    "--yes",
+    "--no-interactive",
+    "--target",
+    getInitTarget(context.databaseProvider),
+    "--authoring",
+    context.authoring,
+    "--schema-path",
+    getContractPath(context.authoring),
+    "--skip-install",
+  ];
   const invocation = getPrismaCliInvocation(context.packageManager, args);
   if (context.verbose) log.step(`Running ${[invocation.command, ...invocation.args].join(" ")}`);
   await execa(invocation.command, invocation.args, {

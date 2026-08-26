@@ -27,7 +27,7 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
       "db:update": prismaCommand(true, "db", "update"),
       "db:verify": prismaCommand(true, "db", "verify"),
       "migration:plan": prismaCommand(true, "migration", "plan"),
-      migrate: prismaCommand(true, "migrate"),
+      migrate: prismaCommand(true, "db", "migrate"),
       "migration:status": prismaCommand(true, "migration", "status"),
       "migration:show": prismaCommand(true, "migration", "show"),
     };
@@ -147,7 +147,7 @@ export async function writePrismaDependencies(
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
   if (packageManager === "deno") dependencies.push("dotenv");
 
-  const devDependencies = packageManager === "deno" ? ["@types/node"] : ["@types/node", "prisma"];
+  const devDependencies = ["@types/node", "prisma"];
 
   await addPackageDependency({
     dependencies,

@@ -54,8 +54,8 @@ const users = await listUsers(10).catch(() => undefined);
                   <p>{user.username ? `@${user.username}` : user.email}</p>
                 </div>
                 {user.createdAt ? (
-                  <time datetime={user.createdAt.toISOString()}>
-                    {formatter.format(user.createdAt)}
+                  <time datetime={user.createdAt}>
+                    {formatter.format(new Date(user.createdAt))}
                   </time>
                 ) : (
                   <span class="muted">No timestamp</span>

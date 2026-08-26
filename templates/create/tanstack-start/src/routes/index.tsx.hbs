@@ -8,7 +8,7 @@ const listUsers = createServerFn({ method: "GET" }).handler(async () => {
     .then((rows) =>
       rows.map((user) => ({
         ...user,
-        createdAt: user.createdAt?.toISOString() ?? null,
+        createdAt: user.createdAt ?? null,
       }))
     )
     .catch(() => undefined);

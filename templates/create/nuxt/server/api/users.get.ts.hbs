@@ -5,7 +5,7 @@ export default defineEventHandler(async () => {
     .then((rows) =>
       rows.map((user) => ({
         ...user,
-        createdAt: user.createdAt?.toISOString() ?? null,
+        createdAt: user.createdAt ?? null,
       }))
     )
     .catch((error) => {
