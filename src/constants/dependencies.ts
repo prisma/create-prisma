@@ -3,30 +3,33 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@prisma/composer": "0.14.0",
-  "@prisma/composer-prisma-cloud": "0.14.0",
-  "@prisma/orm-mongo": "8.0.0-rc.6",
+  "@prisma/composer": "0.15.0",
+  "@prisma/composer-prisma-cloud": "0.15.0",
+  "@prisma/orm-mongo": "8.0.0-rc.8",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency.
-  "@prisma/orm-postgres": "8.0.0-rc.4",
+  "@prisma/orm-postgres": "8.0.0-rc.8",
   "@sveltejs/adapter-node": "^5.3.2",
   "@types/node": "^25.6.2",
   alchemy: "2.0.0-beta.74",
   arktype: "^2.2.3",
   dotenv: "^17.4.2",
   esbuild: "^0.28.1",
-  effect: "4.0.0-rc.111",
+  effect: "4.0.0-rc.112",
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
-  prisma: "8.0.0-rc.9",
+  prisma: "8.0.0-rc.11",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
 
 // Pinned, not `prisma@next`: the scaffold's own invocations must not float
-// with the dist-tag (rc.10 removed `orm init --skip-skills` and rejected its
-// own scaffolded schema at `contract emit`, breaking every create).
-export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@8.0.0-rc.9";
+// with the dist-tag — the rc line ships breaking changes between releases
+// (rc.10 broke every create). The pin must move in lockstep with the pins
+// above: the CLI bundles its own copies of @prisma/composer-cli and
+// @prisma/orm-toolchain, and those must match the @prisma/composer* and
+// @prisma/orm-* versions this map installs into the project.
+export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@8.0.0-rc.11";
 // The consolidated CLI currently imports Node-only credential storage when Deno starts it.
 // Keep Deno on Prisma 8's ORM-only CLI entrypoint until that upstream path is Deno-compatible.
 export const PRISMA_DENO_CLI_PACKAGE = "prisma-next";

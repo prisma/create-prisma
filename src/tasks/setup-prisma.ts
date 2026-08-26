@@ -229,7 +229,6 @@ async function runPrismaInit(context: PrismaSetupContext, projectDir: string): P
           "--schema-path",
           getContractPath(context.authoring),
           "--skip-install",
-          "--skip-skills",
         ];
   const invocation = getPrismaCliInvocation(context.packageManager, args);
   if (context.verbose) log.step(`Running ${[invocation.command, ...invocation.args].join(" ")}`);
