@@ -44,10 +44,12 @@ PostgreSQL and MongoDB are supported with PSL or TypeScript contract authoring. 
 Deno is supported for local minimal PostgreSQL apps:
 
 ```bash
-deno run -A npm:create-prisma@latest my-deno-app --template minimal --provider postgres --package-manager deno --no-deploy
+deno run -A --minimum-dependency-age=0 npm:create-prisma@latest my-deno-app --template minimal --provider postgres --package-manager deno --no-deploy
 ```
 
-Prisma Compute does not support Deno deployments yet.
+Deno 2.9 blocks packages published within the previous 24 hours by default. The explicit
+dependency-age flag ensures a newly published `create-prisma` release is selected instead of an
+older cached version. Prisma Compute does not support Deno deployments yet.
 
 ## Options
 

@@ -8,19 +8,19 @@ export async function listUsers(limit = 10) {
 {{#if (eq provider "mongo")}}
   const users = [];
 
-  for await (const user of db.orm.users.select("_id", "email", "username", "name").take(limit).all()) {
+  for await (const user of db.orm.users.select("_id", "email", "username", "name").limit(limit).all()) {
     users.push({
       id: String(user._id),
       email: user.email,
       username: user.username ?? null,
       name: user.name ?? null,
-      createdAt: null as Date | null,
+      createdAt: null as string | null,
     });
   }
 
   return users;
 {{else}}
-  const users = await db.orm.public.User.select("id", "email", "username", "name", "createdAt").take(limit).all();
+  const users = await db.orm.public.User.select("id", "email", "username", "name", "createdAt").limit(limit).all();
 
   return users.map((user) => ({
     id: String(user.id),

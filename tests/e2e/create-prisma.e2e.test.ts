@@ -194,11 +194,12 @@ describe("create-prisma e2e", () => {
     async () => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-e2e-"));
       tempRoots.push(rootDir);
+      const appName = `composer-app-${path.basename(rootDir).toLowerCase()}`;
       const previousCwd = process.cwd();
       process.chdir(rootDir);
       try {
         await runCreateCommand({
-          name: "composer-app",
+          name: appName,
           template: "minimal",
           provider: "postgres",
           authoring: "psl",
@@ -210,7 +211,7 @@ describe("create-prisma e2e", () => {
         process.chdir(previousCwd);
       }
 
-      const projectDir = path.join(rootDir, "composer-app");
+      const projectDir = path.join(rootDir, appName);
       const packageJson = JSON.parse(
         await readFile(path.join(projectDir, "package.json"), "utf8"),
       ) as Record<string, any>;
@@ -228,10 +229,10 @@ describe("create-prisma e2e", () => {
       expect(
         await pathExists(path.join(projectDir, ".claude/skills/prisma-composer/SKILL.md")),
       ).toBe(true);
-      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.9");
+      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.11");
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
-      expect(packageJson.overrides.effect).toBe("4.0.0-rc.111");
+      expect(packageJson.overrides.effect).toBe("4.0.0-rc.112");
       expect(moduleSource).toContain("pnPostgres({");
       expect(dbSource).toContain("service.load().database.client");
 
@@ -312,7 +313,7 @@ describe("create-prisma e2e", () => {
       const packageJson = JSON.parse(
         await readFile(path.join(projectDir, "package.json"), "utf8"),
       ) as Record<string, any>;
-      const configSource = await readFile(path.join(projectDir, "prisma-next.config.ts"), "utf8");
+      const configSource = await readFile(path.join(projectDir, "prisma.config.ts"), "utf8");
       const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
 
       expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(true);
@@ -321,7 +322,7 @@ describe("create-prisma e2e", () => {
       expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "module.ts"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "service.ts"))).toBe(false);
-      expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(false);
+      expect(await pathExists(path.join(projectDir, "prisma-next.config.ts"))).toBe(false);
       expect(configSource).toContain("dotenv/config");
       expect(dbSource).toContain('Deno.env.get("DATABASE_URL")');
       expect(packageJson.scripts).toMatchObject({

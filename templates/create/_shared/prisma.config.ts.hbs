@@ -1,4 +1,20 @@
-{{#unless (eq packageManager "deno")}}
+{{#if (eq packageManager "deno")}}
+import "dotenv/config";
+import { definePrismaConfig } from "prisma/config";
+import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
+
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: "./src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",
+{{#if (eq authoring "typescript")}}
+    output: "./src/prisma/generated",
+{{/if}}
+    db: {
+      connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
+    },
+  }),
+});
+{{else}}
 import { definePrismaConfig } from "prisma/config";
 import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
 
@@ -19,4 +35,4 @@ export default definePrismaConfig({
     configPath: "./prisma-composer.config.ts",
   },
 });
-{{/unless}}
+{{/if}}
