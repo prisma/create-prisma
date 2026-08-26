@@ -31,7 +31,8 @@ function getBaseCreateProperties(
 ): Record<string, boolean | number | string | string[] | null> {
   return {
     command: "create",
-    "uses-defaults": input.yes === true,
+    "uses-defaults": input.yes === true || input.json === true,
+    json: input.json === true,
     verbose: input.verbose === true,
     force: input.force === true,
     template: context?.template ?? input.template ?? null,

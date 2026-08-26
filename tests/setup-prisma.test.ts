@@ -32,6 +32,25 @@ describe("collectPrismaSetupContext", () => {
     });
   });
 
+  test("--json is non-interactive and uses Prisma Postgres defaults", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { json: true, packageManager: "bun" },
+        { projectDir },
+      );
+
+      expect(context).toMatchObject({
+        json: true,
+        databaseProvider: "postgres",
+        authoring: "psl",
+        packageManager: "bun",
+        shouldDeploy: false,
+        shouldPromptForWorkspace: false,
+      });
+      expect(context?.output).not.toBe(process.stdout);
+    });
+  });
+
   test("honors an explicit immediate deployment", async () => {
     await withTempProject(async (projectDir) => {
       const context = await collectPrismaSetupContext(

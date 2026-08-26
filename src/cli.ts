@@ -1,6 +1,8 @@
 import { createCreatePrismaCli } from "./index";
+import { createJsonOutputLogger, isJsonOutputRequested } from "./ui/json-output";
 
 createCreatePrismaCli().run({
+  ...(isJsonOutputRequested(process.argv) ? { logger: createJsonOutputLogger() } : {}),
   process: {
     exit(code): never {
       const commandExitCode =

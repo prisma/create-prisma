@@ -63,6 +63,21 @@ older cached version. Prisma Compute does not support Deno deployments yet.
 - `--yes`
 - `--force`
 - `--verbose`
+- `--json`
+
+### JSON output for agents and automation
+
+Use `--json` when another program is driving `create-prisma`:
+
+```bash
+bunx create-prisma@latest my-app --template next --package-manager bun --no-deploy --json
+```
+
+JSON mode is non-interactive and uses the same defaults as `--yes`. It writes exactly one compact
+result object to stdout and suppresses all human UI and subprocess output. Successful results include
+the generated project, deployment metadata when `--deploy` is used, next steps, and warnings. Errors
+use the same envelope with `ok: false`, an actionable message, and the stage that failed. `--verbose`
+is intentionally incompatible with `--json` so the machine-readable contract stays deterministic.
 
 This branch intentionally targets Prisma 8 only. It does not generate a Prisma 7 compatibility path.
 

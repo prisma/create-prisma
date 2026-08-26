@@ -5,8 +5,8 @@ import {
   getConsoleProjectUrl,
   parseComposerDeployResult,
   parsePrismaCliEnvelope,
-  redactSecrets,
 } from "../src/tasks/deploy-with-composer";
+import { getErrorMessage, redactSecrets } from "../src/utils/errors";
 
 describe("redactSecrets", () => {
   test("redacts supported database URLs", () => {
@@ -31,6 +31,14 @@ describe("redactSecrets", () => {
         "Authorization: Bearer header.payload.signature App: https://example.prisma.build",
       ),
     ).toBe("Authorization: Bearer <redacted> App: https://example.prisma.build");
+  });
+
+  test("redacts captured subprocess stderr", () => {
+    const error = Object.assign(new Error("Command failed"), {
+      stderr: "DATABASE_URL=postgresql://user:password@host/database",
+    });
+
+    expect(getErrorMessage(error)).toBe("DATABASE_URL=<redacted>");
   });
 });
 
@@ -106,6 +114,7 @@ describe("parseComposerDeployResult", () => {
     ).toEqual({
       appName: "my-app",
       appUrl: "https://abc123.ewr.prisma.build",
+      serviceId: "cps_abc123",
     });
   });
 

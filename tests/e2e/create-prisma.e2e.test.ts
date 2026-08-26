@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { runCreateCommand } from "../../src/commands/create";
+import type { CreateCommandResult } from "../../src/result";
 
 const TEST_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_TIMEOUT_MS ?? 300_000);
 const tempRoots: string[] = [];
@@ -34,6 +35,40 @@ async function runCommand(projectDir: string, args: string[]) {
     throw new Error([`Command failed: ${args.join(" ")}`, stdout, stderr].join("\n"));
   }
   return `${stdout}\n${stderr}`;
+}
+
+async function runCreatePrismaJson(rootDir: string, args: string[]) {
+  const child = Bun.spawn({
+    cmd: [process.execPath, path.join(import.meta.dir, "../../src/cli.ts"), "create", ...args],
+    cwd: rootDir,
+    env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  let result: CreateCommandResult;
+  try {
+    result = JSON.parse(stdout) as CreateCommandResult;
+  } catch (error) {
+    throw new Error(
+      [
+        `Could not parse create-prisma JSON output (exit ${exitCode}).`,
+        `stdout:\n${stdout}`,
+        `stderr:\n${stderr}`,
+      ].join("\n"),
+      { cause: error },
+    );
+  }
+  return {
+    result,
+    stderr,
+    stdout,
+    exitCode,
+  };
 }
 
 function findAppEndpoint(output: string): string | undefined {
@@ -133,6 +168,7 @@ describe("create-prisma e2e", () => {
         "npm",
         "--no-deploy",
         "--yes",
+        "--json",
       ],
       cwd: rootDir,
       env: {
@@ -145,8 +181,19 @@ describe("create-prisma e2e", () => {
       stderr: "pipe",
     });
 
-    const exitCode = await child.exited;
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
     expect(exitCode).toBe(1);
+    expect(stdout.trim().split(/\r?\n/)).toHaveLength(1);
+    expect(JSON.parse(stdout)).toMatchObject({
+      schemaVersion: 1,
+      ok: false,
+      error: { stage: "prisma_setup" },
+    });
+    expect(stderr).toBe("");
     expect(await pathExists(path.join(rootDir, "failed-app", "package.json"))).toBe(true);
   });
 
@@ -169,7 +216,7 @@ describe("create-prisma e2e", () => {
         "--package-manager",
         "deno",
         "--no-deploy",
-        "--yes",
+        "--json",
       ],
       cwd: rootDir,
       env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
@@ -183,10 +230,60 @@ describe("create-prisma e2e", () => {
       child.exited,
     ]);
     expect(exitCode).toBe(1);
-    expect(`${stdout}\n${stderr}`).toContain(
-      "Deno support currently requires the minimal template",
-    );
+    expect(JSON.parse(stdout)).toEqual({
+      schemaVersion: 1,
+      ok: false,
+      error: {
+        stage: "collect_context",
+        message: "Deno support currently requires the minimal template.",
+      },
+    });
+    expect(stderr).toBe("");
     expect(await pathExists(path.join(rootDir, "unsupported-deno-app"))).toBe(false);
+  });
+
+  test("returns structured JSON for invalid arguments", async () => {
+    const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-json-invalid-e2e-"));
+    tempRoots.push(rootDir);
+
+    const { result, stderr, stdout, exitCode } = await runCreatePrismaJson(rootDir, [
+      "invalid-app",
+      "--template",
+      "not-a-template",
+      "--json",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe("");
+    expect(stdout.trim().split(/\r?\n/)).toHaveLength(1);
+    expect(result).toMatchObject({
+      schemaVersion: 1,
+      ok: false,
+      error: { stage: "parse_arguments" },
+    });
+  });
+
+  test("keeps JSON mode deterministic by rejecting verbose output", async () => {
+    const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-json-verbose-e2e-"));
+    tempRoots.push(rootDir);
+
+    const { result, stderr, stdout, exitCode } = await runCreatePrismaJson(rootDir, [
+      "verbose-app",
+      "--json",
+      "--verbose",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe("");
+    expect(stdout.trim().split(/\r?\n/)).toHaveLength(1);
+    expect(result).toEqual({
+      schemaVersion: 1,
+      ok: false,
+      error: {
+        stage: "validate_input",
+        message: "--verbose cannot be used with --json because JSON mode is output-only.",
+      },
+    });
   });
 
   test(
@@ -195,23 +292,51 @@ describe("create-prisma e2e", () => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-e2e-"));
       tempRoots.push(rootDir);
       const appName = `composer-app-${path.basename(rootDir).toLowerCase()}`;
-      const previousCwd = process.cwd();
-      process.chdir(rootDir);
-      try {
-        await runCreateCommand({
-          name: appName,
-          template: "minimal",
-          provider: "postgres",
-          authoring: "psl",
-          packageManager: "bun",
-          deploy: false,
-          yes: true,
-        });
-      } finally {
-        process.chdir(previousCwd);
-      }
+      const { result, stdout, exitCode } = await runCreatePrismaJson(rootDir, [
+        appName,
+        "--template",
+        "minimal",
+        "--provider",
+        "postgres",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "bun",
+        "--no-deploy",
+        "--json",
+      ]);
 
       const projectDir = path.join(rootDir, appName);
+      expect(exitCode).toBe(0);
+      expect(stdout.trim().split(/\r?\n/)).toHaveLength(1);
+      expect(result).toMatchObject({
+        schemaVersion: 1,
+        ok: true,
+        project: {
+          name: appName,
+          path: await realpath(projectDir),
+          template: "minimal",
+          databaseProvider: "postgres",
+          authoring: "psl",
+          packageManager: "bun",
+        },
+        deployment: null,
+        nextSteps: [
+          {
+            command: `cd ${appName}`,
+            description: "Enter your new project directory.",
+          },
+          {
+            command: "bun run dev:composer",
+            description: "Build and start the app with Prisma Composer locally.",
+          },
+          {
+            command: "bun run deploy",
+            description: "Build and deploy the app with Prisma Composer.",
+          },
+        ],
+      });
+      expect(result.ok && Array.isArray(result.warnings)).toBe(true);
       const packageJson = JSON.parse(
         await readFile(path.join(projectDir, "package.json"), "utf8"),
       ) as Record<string, any>;
