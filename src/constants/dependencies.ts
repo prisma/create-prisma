@@ -19,6 +19,9 @@ export const dependencyVersionMap = {
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
   prisma: "8.0.0-rc.12",
+  // The ORM runtime's timestamp columns need a global Temporal, which no
+  // stable Node or Bun ships yet.
+  "temporal-polyfill": "^1.0.4",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;

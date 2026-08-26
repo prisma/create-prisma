@@ -144,6 +144,7 @@ export async function writePrismaDependencies(
   projectDir = process.cwd(),
 ): Promise<void> {
   const dependencies = [getDbPackages(provider)];
+  if (provider === "postgres" && packageManager !== "deno") dependencies.push("temporal-polyfill");
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
   if (packageManager === "deno") dependencies.push("dotenv");
 

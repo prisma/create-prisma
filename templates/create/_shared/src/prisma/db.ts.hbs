@@ -12,6 +12,8 @@ if (!databaseUrl) {
 
 export const db = postgres<Contract>({ contractJson, url: databaseUrl });
 {{else}}
+import "temporal-polyfill/global";
+
 import service from "../../service.ts";
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
