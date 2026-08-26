@@ -1,10 +1,10 @@
 {{#unless (eq packageManager "deno")}}
 {{#if (eq provider "postgres")}}
-import { pnContract } from "@prisma/composer-prisma-cloud/prisma-next";
+import { dataContract } from "@prisma/composer-prisma-cloud/orm";
 
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
 
-export const appContract = pnContract<Contract>(contractJson);
+export const appContract = dataContract<Contract>(contractJson);
 {{/if}}
 {{/unless}}

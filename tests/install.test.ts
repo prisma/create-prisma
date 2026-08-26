@@ -240,7 +240,7 @@ describe("generated templates", () => {
                 );
               }
               if (provider === "postgres") {
-                expect(moduleSource).toContain("pnPostgres({");
+                expect(moduleSource).toContain("postgres({");
                 expect(moduleSource).toContain('config: "./prisma.config.ts"');
                 expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).toContain("conflictOn: { email: user.email }");
@@ -259,7 +259,7 @@ describe("generated templates", () => {
                   expect(composerSource).toContain(
                     'import type { Contract } from "./contract.d.ts";',
                   );
-                  expect(composerSource).toContain("pnContract<Contract>(contractJson)");
+                  expect(composerSource).toContain("dataContract<Contract>(contractJson)");
                 }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');

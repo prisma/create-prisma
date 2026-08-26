@@ -84,6 +84,18 @@ function findAppEndpoint(output: string): string | undefined {
   }
 }
 
+async function fetchUntilReady(url: string, deadline: number): Promise<Response> {
+  while (true) {
+    try {
+      const response = await fetch(url);
+      if (response.status === 200 || Date.now() >= deadline) return response;
+    } catch (error) {
+      if (Date.now() >= deadline) throw error;
+    }
+    await Bun.sleep(1_000);
+  }
+}
+
 async function verifyComposerDev(projectDir: string) {
   const process = Bun.spawn({
     cmd: ["bun", "run", "dev:composer"],
@@ -123,7 +135,9 @@ async function verifyComposerDev(projectDir: string) {
       const appUrl = findAppEndpoint(output);
       if (!appUrl) continue;
 
-      const response = await fetch(appUrl);
+      // The endpoint frame can precede the app process binding its port, so
+      // retry connection refusals until the deadline.
+      const response = await fetchUntilReady(appUrl, deadline);
       expect(response.status).toBe(200);
       const body = (await response.json()) as { users: Array<{ name: string }> };
       expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
@@ -354,11 +368,11 @@ describe("create-prisma e2e", () => {
       expect(
         await pathExists(path.join(projectDir, ".claude/skills/prisma-composer/SKILL.md")),
       ).toBe(true);
-      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.11");
+      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.12");
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
       expect(packageJson.overrides.effect).toBe("4.0.0-rc.112");
-      expect(moduleSource).toContain("pnPostgres({");
+      expect(moduleSource).toContain("postgres({");
       expect(dbSource).toContain("service.load().database.client");
 
       await runCommand(projectDir, ["bun", "run", "build"]);
