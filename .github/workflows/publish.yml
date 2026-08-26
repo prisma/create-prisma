@@ -97,6 +97,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Unit tests
+        run: bun run test:unit
+
       - name: Build
         run: bun run build
         env:
@@ -130,7 +133,7 @@ jobs:
               `- Run with npm: \`npx create-prisma@${process.env.DIST_TAG}\``,
               `- Run with Yarn: \`yarn dlx create-prisma@${process.env.DIST_TAG}\``,
               `- Run with pnpm: \`pnpm dlx create-prisma@${process.env.DIST_TAG}\``,
-              `- Run with Deno: \`deno run -A npm:create-prisma@${process.env.DIST_TAG}\``,
+              `- Run with Deno: \`deno run -A --minimum-dependency-age=0 npm:create-prisma@${process.env.DIST_TAG}\``,
               `- Workflow run: ${process.env.RUN_URL}`,
             ].join("\n");
 
@@ -179,7 +182,7 @@ jobs:
           echo "- Run with npm: \`npx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Run with Yarn: \`yarn dlx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Run with pnpm: \`pnpm dlx create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Run with Deno: \`deno run -A npm:create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run with Deno: \`deno run -A --minimum-dependency-age=0 npm:create-prisma@${{ steps.preview.outputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Release to npm
@@ -264,6 +267,10 @@ jobs:
       - name: Typecheck
         if: steps.check-version.outputs.exists == 'false'
         run: bun run typecheck
+
+      - name: Unit tests
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun run test:unit
 
       - name: Build
         if: steps.check-version.outputs.exists == 'false'

@@ -11,7 +11,11 @@ import {
   writePrismaDependencies,
 } from "../src/tasks/install";
 import { authoringStyles, createTemplates, databaseProviders, packageManagers } from "../src/types";
-import { getInstallArgs, getRunScriptCommand } from "../src/utils/package-manager";
+import {
+  getInstallArgs,
+  getPackageExecutionArgs,
+  getRunScriptCommand,
+} from "../src/utils/package-manager";
 
 type PackageJson = {
   dependencies?: Record<string, string>;
@@ -89,9 +93,9 @@ describe("writePrismaDependencies", () => {
       });
       expect(packageJson.devDependencies).toMatchObject({
         "@types/node": dependencyVersionMap["@types/node"],
+        prisma: dependencyVersionMap.prisma,
       });
       expect(packageJson.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
-      expect(packageJson.devDependencies?.prisma).toBeUndefined();
       expect(packageJson.scripts).toMatchObject({
         "contract:emit": `deno run -A npm:${PRISMA_DENO_CLI_PACKAGE} contract emit`,
         "db:init": `deno run -A --env-file=.env npm:${PRISMA_DENO_CLI_PACKAGE} db init`,
@@ -116,9 +120,16 @@ describe("Composer package-manager commands", () => {
     for (const packageManager of packageManagers) {
       expect(getInstallArgs(packageManager)).toEqual({
         command: packageManager,
-        args: ["install"],
+        args: packageManager === "deno" ? ["install", "--minimum-dependency-age=0"] : ["install"],
       });
     }
+  });
+
+  test("allows create-prisma to resolve freshly published packages with Deno", () => {
+    expect(getPackageExecutionArgs("deno", ["prisma@8.0.0-rc.11", "orm", "init"])).toEqual({
+      command: "deno",
+      args: ["run", "-A", "--minimum-dependency-age=0", "npm:prisma@8.0.0-rc.11", "orm", "init"],
+    });
   });
 });
 
@@ -160,7 +171,7 @@ describe("generated templates", () => {
                 expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(true);
                 expect(await pathExists(path.join(projectDir, "module.ts"))).toBe(false);
                 expect(await pathExists(path.join(projectDir, "service.ts"))).toBe(false);
-                expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(false);
+                expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(true);
                 expect(await pathExists(path.join(projectDir, "prisma-composer.config.ts"))).toBe(
                   false,
                 );
@@ -286,14 +297,14 @@ describe("generated templates", () => {
                     "minimumReleaseAgeExclude:",
                     '  - "@prisma/*"',
                     "overrides:",
-                    '  effect: "4.0.0-rc.111"',
+                    `  effect: "${dependencyVersionMap.effect}"`,
                     "",
                   ].join("\n"),
                 );
               } else if (packageManager === "yarn") {
-                expect(packageJson.resolutions?.effect).toBe("4.0.0-rc.111");
+                expect(packageJson.resolutions?.effect).toBe(dependencyVersionMap.effect);
               } else {
-                expect(packageJson.overrides?.effect).toBe("4.0.0-rc.111");
+                expect(packageJson.overrides?.effect).toBe(dependencyVersionMap.effect);
               }
             } finally {
               await rm(projectDir, { recursive: true, force: true });

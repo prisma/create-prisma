@@ -194,11 +194,12 @@ describe("create-prisma e2e", () => {
     async () => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-e2e-"));
       tempRoots.push(rootDir);
+      const appName = `composer-app-${path.basename(rootDir).toLowerCase()}`;
       const previousCwd = process.cwd();
       process.chdir(rootDir);
       try {
         await runCreateCommand({
-          name: "composer-app",
+          name: appName,
           template: "minimal",
           provider: "postgres",
           authoring: "psl",
@@ -210,7 +211,7 @@ describe("create-prisma e2e", () => {
         process.chdir(previousCwd);
       }
 
-      const projectDir = path.join(rootDir, "composer-app");
+      const projectDir = path.join(rootDir, appName);
       const packageJson = JSON.parse(
         await readFile(path.join(projectDir, "package.json"), "utf8"),
       ) as Record<string, any>;

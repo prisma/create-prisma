@@ -14,6 +14,10 @@ type RuntimeScriptOptions = {
   builtEntrypoint?: string;
 };
 
+// Deno 2.9 rejects packages published within the previous 24 hours by default.
+// Scaffolding must be able to resolve the freshly published, explicitly pinned Prisma release.
+const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
+
 const packageManagerManifestValues = {
   npm: "npm@10.9.0",
   pnpm: "pnpm@11.21.0",
@@ -200,7 +204,7 @@ export function getInstallArgs(packageManager: PackageManager): CommandAndArgs {
   if (packageManager === "deno") {
     return {
       command: "deno",
-      args: ["install"],
+      args: ["install", DENO_ALLOW_FRESH_DEPENDENCIES],
     };
   }
 
@@ -220,7 +224,10 @@ export function getPackageExecutionArgs(
       if (!packageName) {
         throw new Error("Package execution requires a package name.");
       }
-      return { command: "deno", args: ["run", "-A", `npm:${packageName}`, ...args] };
+      return {
+        command: "deno",
+        args: ["run", "-A", DENO_ALLOW_FRESH_DEPENDENCIES, `npm:${packageName}`, ...args],
+      };
     }
     case "pnpm":
       return { command: "pnpm", args: ["dlx", ...commandArgs] };
@@ -249,7 +256,10 @@ export function getLocalPackageBinaryArgs(
 ): CommandAndArgs {
   switch (packageManager) {
     case "deno":
-      return { command: "deno", args: ["run", "-A", `npm:${binaryName}`, ...binaryArgs] };
+      return {
+        command: "deno",
+        args: ["run", "-A", DENO_ALLOW_FRESH_DEPENDENCIES, `npm:${binaryName}`, ...binaryArgs],
+      };
     case "pnpm":
       return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
     case "yarn":
@@ -271,21 +281,6 @@ export function getLocalPackageBinaryCommand(
   return [execution.command, ...execution.args].join(" ");
 }
 
-export function getPrismaCliArgs(
-  packageManager: PackageManager,
-  prismaArgs: string[],
-): CommandAndArgs {
-  if (packageManager === "bun") {
-    return getPackageExecutionArgs(packageManager, ["--bun", "prisma", ...prismaArgs]);
-  }
-
-  if (packageManager === "deno") {
-    return getPackageExecutionArgs(packageManager, ["prisma-next", ...prismaArgs]);
-  }
-
-  return getPackageExecutionArgs(packageManager, ["prisma", ...prismaArgs]);
-}
-
 export function getRunScriptArgs(
   packageManager: PackageManager,
   scriptName: string,
@@ -303,9 +298,4 @@ export function getRunScriptArgs(
     default:
       return { command: "npm", args: ["run", scriptName] };
   }
-}
-
-export function getPrismaCliCommand(packageManager: PackageManager, prismaArgs: string[]): string {
-  const execution = getPrismaCliArgs(packageManager, prismaArgs);
-  return [execution.command, ...execution.args].join(" ");
 }
