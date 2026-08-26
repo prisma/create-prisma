@@ -3,8 +3,8 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@prisma/composer": "0.15.0",
-  "@prisma/composer-prisma-cloud": "0.15.0",
+  "@prisma/composer": "0.16.0",
+  "@prisma/composer-prisma-cloud": "0.16.0",
   "@prisma/orm-mongo": "8.0.0-rc.8",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency.
   "@prisma/orm-postgres": "8.0.0-rc.8",
@@ -18,7 +18,7 @@ export const dependencyVersionMap = {
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
-  prisma: "8.0.0-rc.11",
+  prisma: "8.0.0-rc.12",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
@@ -29,7 +29,7 @@ export const dependencyVersionMap = {
 // above: the CLI bundles its own copies of @prisma/composer-cli and
 // @prisma/orm-toolchain, and those must match the @prisma/composer* and
 // @prisma/orm-* versions this map installs into the project.
-export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@8.0.0-rc.11";
+export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@8.0.0-rc.12";
 // Deno runs the same pinned consolidated CLI. The former `prisma-next`
 // fallback is dead: under Deno the bare `npm:prisma-next` specifier resolves
 // to the highest non-prerelease version (0.12.0, frozen), which cannot emit

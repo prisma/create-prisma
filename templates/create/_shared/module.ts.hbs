@@ -1,7 +1,7 @@
 {{#unless (eq packageManager "deno")}}
 import { module } from "@prisma/composer";
 {{#if (eq provider "postgres")}}
-import { pnPostgres } from "@prisma/composer-prisma-cloud/prisma-next";
+import { postgres } from "@prisma/composer-prisma-cloud/orm";
 
 import { appContract } from "./src/prisma/composer.ts";
 {{else}}
@@ -12,7 +12,7 @@ import app from "./service.ts";
 export default module("{{projectName}}", ({ provision }) => {
 {{#if (eq provider "postgres")}}
   const database = provision(
-    pnPostgres({
+    postgres({
       name: "database",
       contract: appContract,
       config: "./prisma.config.ts",

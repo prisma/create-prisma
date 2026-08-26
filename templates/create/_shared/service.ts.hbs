@@ -10,7 +10,7 @@ import { type } from "arktype";
 {{/if}}
 import { compute } from "@prisma/composer-prisma-cloud";
 {{#if (eq provider "postgres")}}
-import { pnPostgres } from "@prisma/composer-prisma-cloud/prisma-next";
+import { postgres } from "@prisma/composer-prisma-cloud/orm";
 
 import { appContract } from "./src/prisma/composer.ts";
 {{/if}}
@@ -19,7 +19,7 @@ export default compute({
   name: "app",
   deps: {
 {{#if (eq provider "postgres")}}
-    database: pnPostgres(appContract),
+    database: postgres(appContract),
 {{/if}}
   },
 {{#if (eq provider "mongo")}}

@@ -27,7 +27,7 @@ import {
 import { getCreatePrismaIntro } from "../ui/branding";
 import { resolveExecutionSettings } from "../ui/output";
 import { getErrorMessage } from "../utils/errors";
-import { getUnsupportedNodeMessage, supportsPrismaNext } from "../utils/node-version";
+import { getUnsupportedNodeMessage, supportsPrisma } from "../utils/node-version";
 
 const DEFAULT_PROJECT_NAME = "my-app";
 const DEFAULT_TEMPLATE: CreateTemplate = "minimal";
@@ -221,7 +221,7 @@ export async function runCreateCommand(
     if (input.json && input.verbose) {
       throw new Error("--verbose cannot be used with --json because JSON mode is output-only.");
     }
-    if (!supportsPrismaNext()) {
+    if (!supportsPrisma()) {
       const message = getUnsupportedNodeMessage();
       cancel(message, { output });
       process.exitCode = 1;

@@ -354,11 +354,11 @@ describe("create-prisma e2e", () => {
       expect(
         await pathExists(path.join(projectDir, ".claude/skills/prisma-composer/SKILL.md")),
       ).toBe(true);
-      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.11");
+      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.12");
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
       expect(packageJson.overrides.effect).toBe("4.0.0-rc.112");
-      expect(moduleSource).toContain("pnPostgres({");
+      expect(moduleSource).toContain("postgres({");
       expect(dbSource).toContain("service.load().database.client");
 
       await runCommand(projectDir, ["bun", "run", "build"]);

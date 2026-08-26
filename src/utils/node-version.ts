@@ -5,7 +5,7 @@ function parseVersion(version: string): [number, number, number] {
   return [Number(major), Number(minor), Number.parseInt(patch, 10)];
 }
 
-export function supportsPrismaNext(nodeVersion = process.versions.node): boolean {
+export function supportsPrisma(nodeVersion = process.versions.node): boolean {
   const current = parseVersion(nodeVersion);
   for (let index = 0; index < MINIMUM_NODE_VERSION.length; index += 1) {
     if (current[index]! > MINIMUM_NODE_VERSION[index]!) return true;
