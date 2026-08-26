@@ -208,17 +208,15 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Extract version from commit message
-        id: version
         env:
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           VERSION=$(printf '%s\n' "$COMMIT_MESSAGE" | sed -nE '1s/^chore\(release\): ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Releasing version: $VERSION"
 
       - name: Validate version format
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Error: Invalid version format '$VERSION'. Expected x.y.z"
             exit 1
@@ -226,7 +224,6 @@ jobs:
 
       - name: Verify package version matches commit
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           PACKAGE_VERSION=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));process.stdout.write(p.version)")
           if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then
             echo "Error: package.json version is '$PACKAGE_VERSION' but commit version is '$VERSION'"
@@ -236,7 +233,6 @@ jobs:
       - name: Check if version already exists on npm
         id: check-version
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if npm view create-prisma@$VERSION version >/dev/null 2>&1; then
             echo "Version $VERSION already exists on npm"
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -285,7 +281,6 @@ jobs:
       - name: Create and push git tag
         if: steps.check-version.outputs.exists == 'false'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
@@ -298,7 +293,6 @@ jobs:
       - name: Create GitHub Release
         if: steps.check-version.outputs.exists == 'false'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if ! gh release view "v$VERSION" >/dev/null 2>&1; then
             bunx changelogithub
           else
@@ -310,7 +304,6 @@ jobs:
       - name: Release summary
         if: steps.check-version.outputs.exists == 'false'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           echo "## Release v$VERSION complete" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- https://www.npmjs.com/package/create-prisma/v/$VERSION" >> "$GITHUB_STEP_SUMMARY"
