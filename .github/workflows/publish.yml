@@ -186,6 +186,8 @@ jobs:
 
   release:
     name: Release to npm
+    # Squash-merge release PRs: the merge-commit message of a plain merge does
+    # not start with the marker, and the release silently skips.
     if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     timeout-minutes: 15
