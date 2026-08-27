@@ -1,4 +1,4 @@
-import type { CreateTelemetryFailureStage } from "./telemetry";
+import type { CreateCancellationStage, CreateFailureStage } from "./create-outcome";
 import type { ComposerDeployResult } from "./tasks/deploy-with-composer";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "./types";
 
@@ -18,7 +18,10 @@ export type CreateProjectResult = {
   packageManager: PackageManager;
 };
 
-export type CreateCommandFailureStage = CreateTelemetryFailureStage | "parse_arguments";
+export type CreateCommandFailureStage =
+  | CreateFailureStage
+  | CreateCancellationStage
+  | "parse_arguments";
 
 export type CreateCommandSuccessResult = {
   schemaVersion: typeof CREATE_PRISMA_RESULT_SCHEMA_VERSION;

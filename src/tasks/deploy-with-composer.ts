@@ -4,6 +4,12 @@ import { createInterface } from "node:readline";
 import type { Writable } from "node:stream";
 
 import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
+import {
+  ClassifiedCreateError,
+  getCreateFailureReason,
+  type CreateFailureReason,
+  type CreateFailureStage,
+} from "../create-outcome";
 import type { PackageManager } from "../types";
 import { getErrorMessage, redactSecrets } from "../utils/errors";
 import {
@@ -75,6 +81,21 @@ export type ComposerDeployResult = {
     consoleUrl?: string;
   };
 };
+
+export type ComposerDeployExecutionResult =
+  | { ok: true; deployment: ComposerDeployResult }
+  | { ok: false; cancelled: true; stage: "select_workspace" }
+  | {
+      ok: false;
+      cancelled?: false;
+      stage: CreateFailureStage;
+      reason: CreateFailureReason;
+      error: unknown;
+    };
+
+type WorkspaceSelectionResult =
+  | { ok: true; workspace: PrismaWorkspace }
+  | { ok: false; cancelled: true };
 
 function stripResourcePrefix(id: string, prefix: "proj" | "wksp"): string {
   const marker = `${prefix}_`;
@@ -185,7 +206,8 @@ async function ensureProjectNameAvailable(options: {
   if (collisions.length === 0) return;
 
   const projectIds = collisions.map((project) => project.id).join(", ");
-  throw new Error(
+  throw new ClassifiedCreateError(
+    "project_name_collision",
     `A Prisma project named "${options.appName}" already exists in workspace ${workspaceLabel(
       options.workspace,
     )} (${options.workspace.id}). Choose a different project name or delete the existing project ` +
@@ -216,7 +238,8 @@ async function ensureAuthentication(options: {
     "login",
   ]);
   if (!options.allowInteractiveLogin || process.stdin.isTTY !== true) {
-    throw new Error(
+    throw new ClassifiedCreateError(
+      "not_authenticated",
       `Sign in first with ${loginCommand}, then run ${getRunScriptCommand(options.packageManager, "deploy")}.`,
     );
   }
@@ -232,7 +255,10 @@ async function ensureAuthentication(options: {
 
   const authenticatedState = await whoami();
   if (!authenticatedState.authenticated) {
-    throw new Error("Prisma sign-in completed without an active workspace session.");
+    throw new ClassifiedCreateError(
+      "authentication_failed",
+      "Prisma sign-in completed without an active workspace session.",
+    );
   }
   return authenticatedState;
 }
@@ -263,38 +289,47 @@ async function selectDeploymentWorkspace(options: {
   beforePrompt?: () => void;
   afterPrompt?: () => void;
   output: Writable;
-}): Promise<PrismaWorkspace | undefined> {
+}): Promise<WorkspaceSelectionResult> {
   const activeWorkspace = options.authState.workspace;
   if (!activeWorkspace) {
-    throw new Error("The active Prisma credential does not specify a workspace.");
+    throw new ClassifiedCreateError(
+      "workspace_missing",
+      "The active Prisma credential does not specify a workspace.",
+    );
   }
 
   if (options.workspace) {
     if (options.authState.source === "environment") {
       if (options.workspace === activeWorkspace.id || options.workspace === activeWorkspace.name) {
-        return activeWorkspace;
+        return { ok: true, workspace: activeWorkspace };
       }
-      throw new Error(
+      throw new ClassifiedCreateError(
+        "workspace_mismatch",
         `The environment credential is fixed to workspace ${workspaceLabel(
           activeWorkspace,
         )}. Unset it before using --workspace ${options.workspace}.`,
       );
     }
-    return useWorkspace({
-      packageManager: options.packageManager,
-      projectDir: options.projectDir,
-      workspace: options.workspace,
-    });
+    return {
+      ok: true,
+      workspace: await useWorkspace({
+        packageManager: options.packageManager,
+        projectDir: options.projectDir,
+        workspace: options.workspace,
+      }),
+    };
   }
 
-  if (!options.shouldPrompt || process.stdin.isTTY !== true) return activeWorkspace;
+  if (!options.shouldPrompt || process.stdin.isTTY !== true) {
+    return { ok: true, workspace: activeWorkspace };
+  }
 
   const available = await runPrismaJsonCommand<WorkspaceListResult>({
     packageManager: options.packageManager,
     projectDir: options.projectDir,
     args: ["auth", "workspace", "list"],
   });
-  if (available.items.length <= 1) return activeWorkspace;
+  if (available.items.length <= 1) return { ok: true, workspace: activeWorkspace };
 
   options.beforePrompt?.();
   const selectedWorkspaceId = await select({
@@ -309,16 +344,21 @@ async function selectDeploymentWorkspace(options: {
   });
   if (isCancel(selectedWorkspaceId)) {
     cancel("Operation cancelled.", { output: options.output });
-    return;
+    return { ok: false, cancelled: true };
   }
   options.afterPrompt?.();
-  if (selectedWorkspaceId === activeWorkspace.id) return activeWorkspace;
+  if (selectedWorkspaceId === activeWorkspace.id) {
+    return { ok: true, workspace: activeWorkspace };
+  }
 
-  return useWorkspace({
-    packageManager: options.packageManager,
-    projectDir: options.projectDir,
-    workspace: selectedWorkspaceId,
-  });
+  return {
+    ok: true,
+    workspace: await useWorkspace({
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      workspace: selectedWorkspaceId,
+    }),
+  };
 }
 
 export function parseComposerDeployResult(result: ComposerDeployCommandResult):
@@ -379,13 +419,14 @@ export async function deployNewProjectWithComposer(options: {
   output?: Writable;
   allowInteractiveLogin?: boolean;
   json?: boolean;
-  throwOnError?: boolean;
   workspace?: string;
-}): Promise<ComposerDeployResult | undefined> {
+}): Promise<ComposerDeployExecutionResult> {
   const output = options.output ?? process.stdout;
   const progress = options.verbose ? undefined : spinner({ output });
   let deploymentLog: ReturnType<typeof taskLog> | undefined;
   let progressRunning = false;
+  let failureStage: CreateFailureStage = "authenticate";
+  let failureReason: CreateFailureReason = "prisma_auth_command_failed";
   const showProgress = (message: string) => {
     if (!progress) return;
     if (progressRunning) {
@@ -413,8 +454,10 @@ export async function deployNewProjectWithComposer(options: {
     });
 
     showProgress("Checking Prisma workspace...");
+    failureStage = "select_workspace";
+    failureReason = "workspace_selection_failed";
     if (options.verbose) log.step("Checking Prisma workspace.", { output });
-    const selectedWorkspace = await selectDeploymentWorkspace({
+    const workspaceResult = await selectDeploymentWorkspace({
       packageManager: options.packageManager,
       projectDir: options.projectDir,
       shouldPrompt: options.shouldPromptForWorkspace,
@@ -424,9 +467,12 @@ export async function deployNewProjectWithComposer(options: {
       afterPrompt: () => showProgress("Selecting Prisma workspace..."),
       ...(options.workspace ? { workspace: options.workspace } : {}),
     });
-    if (!selectedWorkspace) return;
+    if (!workspaceResult.ok) return { ok: false, cancelled: true, stage: "select_workspace" };
+    const selectedWorkspace = workspaceResult.workspace;
 
     showProgress("Checking Prisma project name...");
+    failureStage = "check_project_name";
+    failureReason = "project_lookup_failed";
     if (options.verbose) log.step("Checking Prisma project name.", { output });
     await ensureProjectNameAvailable({
       appName: options.appName,
@@ -436,6 +482,8 @@ export async function deployNewProjectWithComposer(options: {
     });
 
     showProgress("Building for deployment...");
+    failureStage = "build";
+    failureReason = "build_failed";
     if (options.verbose) log.step("Building for deployment.", { output });
     const build = getRunScriptArgs(options.packageManager, "build");
     await runSetupCommand({
@@ -448,6 +496,8 @@ export async function deployNewProjectWithComposer(options: {
     });
 
     clearProgress();
+    failureStage = "composer_deploy";
+    failureReason = "composer_deploy_failed";
     const deployCommand = getPackageExecutionCommand(options.packageManager, [
       PRISMA_PLATFORM_CLI_PACKAGE,
       "deploy",
@@ -493,11 +543,14 @@ export async function deployNewProjectWithComposer(options: {
     if (options.verbose) log.success("Deployed to Prisma.", { output });
     const workspace = details?.workspace ?? selectedWorkspace;
     return {
-      appName,
-      ...(deployment?.appUrl ? { appUrl: deployment.appUrl } : {}),
-      ...(deployment?.serviceId ? { serviceId: deployment.serviceId } : {}),
-      ...(workspace ? { workspace } : {}),
-      project: details?.project ?? { name: appName },
+      ok: true,
+      deployment: {
+        appName,
+        ...(deployment?.appUrl ? { appUrl: deployment.appUrl } : {}),
+        ...(deployment?.serviceId ? { serviceId: deployment.serviceId } : {}),
+        ...(workspace ? { workspace } : {}),
+        project: details?.project ?? { name: appName },
+      },
     };
   } catch (error) {
     if (deploymentLog) {
@@ -508,7 +561,11 @@ export async function deployNewProjectWithComposer(options: {
     }
     progressRunning = false;
     log.error(`Deploy failed: ${getErrorMessage(error)}`, { output });
-    if (options.throwOnError) throw error;
-    return;
+    return {
+      ok: false,
+      stage: failureStage,
+      reason: getCreateFailureReason(error, failureReason),
+      error,
+    };
   }
 }

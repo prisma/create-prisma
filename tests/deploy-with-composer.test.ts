@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { PassThrough } from "node:stream";
 
 import {
+  deployNewProjectWithComposer,
   findProjectNameCollisions,
   getConsoleProjectUrl,
   parseComposerDeployResult,
@@ -131,5 +133,38 @@ describe("parseComposerDeployResult", () => {
 
   test("returns undefined when Composer has no deployment summary", () => {
     expect(parseComposerDeployResult({ summary: null })).toBeUndefined();
+  });
+});
+
+describe("deployNewProjectWithComposer", () => {
+  test("returns the authentication failure instead of swallowing it", async () => {
+    const originalPath = process.env.PATH;
+    process.env.PATH = "";
+    try {
+      const result = await deployNewProjectWithComposer({
+        appName: "test-app",
+        packageManager: "npm",
+        projectDir: process.cwd(),
+        shouldPromptForWorkspace: false,
+        verbose: false,
+        output: new PassThrough(),
+        allowInteractiveLogin: false,
+        json: true,
+      });
+
+      expect(result).toMatchObject({
+        ok: false,
+        stage: "authenticate",
+        reason: "prisma_auth_command_failed",
+      });
+      if (result.ok || result.cancelled) throw new Error("Expected a classified failure.");
+      expect(result.error).toBeDefined();
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = originalPath;
+      }
+    }
   });
 });
