@@ -4,6 +4,13 @@ import path from "node:path";
 import type { Writable } from "node:stream";
 
 import { PRISMA_DENO_CLI_PACKAGE, PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
+import {
+  ClassifiedCreateError,
+  CreateCancellationError,
+  getCreateFailureReason,
+  type CreateFailureReason,
+  type CreateFailureStage,
+} from "../create-outcome";
 import type { CreateNextStep } from "../result";
 import { scaffoldCreateSharedTemplates } from "../templates/render-create-template";
 import {
@@ -65,9 +72,22 @@ export type PrismaSetupExecutionResult =
       gitInitialization?: GitInitializationResult;
       warnings: string[];
     }
-  | { ok: false; error?: unknown; errorReported?: boolean };
+  | {
+      ok: false;
+      cancelled: true;
+      stage: "select_workspace";
+      errorReported?: boolean;
+    }
+  | {
+      ok: false;
+      cancelled?: false;
+      stage: CreateFailureStage;
+      reason: CreateFailureReason;
+      error?: unknown;
+      errorReported?: boolean;
+    };
 
-async function promptForDatabaseProvider(output: Writable): Promise<DatabaseProvider | undefined> {
+async function promptForDatabaseProvider(output: Writable): Promise<DatabaseProvider> {
   const databaseProvider = await select({
     message: "Select your database",
     initialValue: DEFAULT_DATABASE_PROVIDER,
@@ -79,12 +99,12 @@ async function promptForDatabaseProvider(output: Writable): Promise<DatabaseProv
   });
   if (isCancel(databaseProvider)) {
     cancel("Operation cancelled.", { output });
-    return;
+    throw new CreateCancellationError("database_provider");
   }
   return DatabaseProviderSchema.parse(databaseProvider);
 }
 
-async function promptForAuthoringStyle(output: Writable): Promise<AuthoringStyle | undefined> {
+async function promptForAuthoringStyle(output: Writable): Promise<AuthoringStyle> {
   const authoring = await select({
     message: "Choose contract authoring style",
     initialValue: DEFAULT_AUTHORING,
@@ -96,7 +116,7 @@ async function promptForAuthoringStyle(output: Writable): Promise<AuthoringStyle
   });
   if (isCancel(authoring)) {
     cancel("Operation cancelled.", { output });
-    return;
+    throw new CreateCancellationError("authoring_style");
   }
   return AuthoringStyleSchema.parse(authoring);
 }
@@ -115,7 +135,7 @@ function getPackageManagerHint(option: PackageManager, detected: PackageManager)
 async function promptForPackageManager(
   detected: PackageManager,
   output: Writable,
-): Promise<PackageManager | undefined> {
+): Promise<PackageManager> {
   const packageManager = await select({
     message: "Choose package manager",
     initialValue: detected,
@@ -128,12 +148,12 @@ async function promptForPackageManager(
   });
   if (isCancel(packageManager)) {
     cancel("Operation cancelled.", { output });
-    return;
+    throw new CreateCancellationError("package_manager");
   }
   return PackageManagerSchema.parse(packageManager);
 }
 
-async function promptForDeployment(output: Writable): Promise<boolean | undefined> {
+async function promptForDeployment(output: Writable): Promise<boolean> {
   const shouldDeploy = await confirm({
     message: "Deploy to Prisma now?",
     initialValue: true,
@@ -141,7 +161,7 @@ async function promptForDeployment(output: Writable): Promise<boolean | undefine
   });
   if (isCancel(shouldDeploy)) {
     cancel("Operation cancelled.", { output });
-    return;
+    throw new CreateCancellationError("deployment_intent");
   }
   return Boolean(shouldDeploy);
 }
@@ -149,43 +169,44 @@ async function promptForDeployment(output: Writable): Promise<boolean | undefine
 export async function collectPrismaSetupContext(
   input: PrismaSetupCommandInput,
   options: { projectDir?: string; template?: CreateTemplate } = {},
-): Promise<PrismaSetupContext | undefined> {
+): Promise<PrismaSetupContext> {
   const projectDir = path.resolve(options.projectDir ?? process.cwd());
   const { json, output, useDefaults } = resolveExecutionSettings(input);
 
   const databaseProvider =
     input.provider ??
     (useDefaults ? DEFAULT_DATABASE_PROVIDER : await promptForDatabaseProvider(output));
-  if (!databaseProvider) return;
-
   const authoring =
     input.authoring ?? (useDefaults ? DEFAULT_AUTHORING : await promptForAuthoringStyle(output));
-  if (!authoring) return;
-
   const detectedPackageManager = await detectPackageManager(projectDir);
   const packageManager =
     input.packageManager ??
     (useDefaults
       ? detectedPackageManager
       : await promptForPackageManager(detectedPackageManager, output));
-  if (!packageManager) return;
-
   if (packageManager === "deno" && databaseProvider !== "postgres") {
-    throw new Error("Deno support currently requires PostgreSQL.");
+    throw new ClassifiedCreateError(
+      "unsupported_configuration",
+      "Deno support currently requires PostgreSQL.",
+    );
   }
   if (packageManager === "deno" && options.template && options.template !== "minimal") {
-    throw new Error("Deno support currently requires the minimal template.");
+    throw new ClassifiedCreateError(
+      "unsupported_configuration",
+      "Deno support currently requires the minimal template.",
+    );
   }
   if (packageManager === "deno" && input.deploy === true) {
-    throw new Error("Prisma Compute does not support Deno deployments yet. Use --no-deploy.");
+    throw new ClassifiedCreateError(
+      "unsupported_configuration",
+      "Prisma Compute does not support Deno deployments yet. Use --no-deploy.",
+    );
   }
 
   const shouldDeploy =
     packageManager === "deno"
       ? false
       : (input.deploy ?? (json ? true : useDefaults ? false : await promptForDeployment(output)));
-  if (shouldDeploy === undefined) return;
-
   return {
     projectDir,
     verbose: input.verbose === true,
@@ -433,12 +454,16 @@ export async function executePrismaSetupContext(
     : (options.progressSpinner ?? spinner({ output: context.output }));
   const ownsProgress = progress !== undefined && !options.progressSpinner;
   let gitInitialization: GitInitializationResult | undefined;
+  let setupStage: CreateFailureStage = "initialize_prisma";
+  let setupReason: CreateFailureReason = "prisma_init_failed";
   if (ownsProgress) progress.start("Creating Prisma 8 project...");
 
   try {
     progress?.message("Preparing Prisma 8 project files...");
     await runPrismaInit(context, projectDir);
 
+    setupStage = "configure_project";
+    setupReason = "project_configuration_failed";
     await scaffoldCreateSharedTemplates({
       projectDir,
       projectName,
@@ -463,24 +488,34 @@ export async function executePrismaSetupContext(
     progress?.message(
       `Installing dependencies with ${getInstallCommand(context.packageManager)}...`,
     );
+    setupStage = "install_dependencies";
+    setupReason = "dependency_install_failed";
     await installProjectDependencies(context.packageManager, projectDir, {
       verbose: context.verbose,
       json: context.json,
     });
 
     progress?.message("Installing Prisma agent skills...");
+    setupStage = "initialize_agent_skills";
+    setupReason = "agent_skills_init_failed";
     await initializeAgentSkills(context, projectDir);
 
     progress?.message("Generating Prisma 8 contract artifacts...");
+    setupStage = "emit_contract";
+    setupReason = "contract_emit_failed";
     await emitContract(context, projectDir);
 
     if (context.databaseProvider === "postgres") {
       progress?.message("Authoring the baseline migration...");
+      setupStage = "plan_migration";
+      setupReason = "migration_plan_failed";
       await planBaselineMigration(context, projectDir);
     }
 
     if (options.initializeGit) {
       progress?.message("Initializing Git repository...");
+      setupStage = "initialize_git";
+      setupReason = "git_initialization_failed";
       gitInitialization = await initializeGitRepository(projectDir);
     }
     progress?.stop("Prisma 8 project ready.");
@@ -494,12 +529,18 @@ export async function executePrismaSetupContext(
   } catch (error) {
     progress?.error("Could not create Prisma 8 project.");
     cancel(getErrorMessage(error), { output: context.output });
-    return { ok: false, error, errorReported: true };
+    return {
+      ok: false,
+      stage: setupStage,
+      reason: getCreateFailureReason(error, setupReason),
+      error,
+      errorReported: true,
+    };
   }
 
   let deployment: ComposerDeployResult | undefined;
   if (context.shouldDeploy) {
-    deployment = await deployNewProjectWithComposer({
+    const deploymentResult = await deployNewProjectWithComposer({
       appName: projectName,
       packageManager: context.packageManager,
       projectDir,
@@ -508,10 +549,26 @@ export async function executePrismaSetupContext(
       output: context.output,
       allowInteractiveLogin: !context.json,
       json: context.json,
-      throwOnError: context.json,
       ...(context.workspace ? { workspace: context.workspace } : {}),
     });
-    if (!deployment) return { ok: false, errorReported: true };
+    if (!deploymentResult.ok) {
+      if (deploymentResult.cancelled) {
+        return {
+          ok: false,
+          cancelled: true,
+          stage: deploymentResult.stage,
+          errorReported: true,
+        };
+      }
+      return {
+        ok: false,
+        stage: deploymentResult.stage,
+        reason: deploymentResult.reason,
+        error: deploymentResult.error,
+        errorReported: true,
+      };
+    }
+    deployment = deploymentResult.deployment;
   }
 
   const nextSteps = buildNextSteps(context, options);

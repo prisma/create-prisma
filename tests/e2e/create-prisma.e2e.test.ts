@@ -205,7 +205,7 @@ describe("create-prisma e2e", () => {
     expect(JSON.parse(stdout)).toMatchObject({
       schemaVersion: 1,
       ok: false,
-      error: { stage: "prisma_setup" },
+      error: { stage: "initialize_prisma" },
     });
     expect(stderr).toBe("");
     expect(await pathExists(path.join(rootDir, "failed-app", "package.json"))).toBe(true);

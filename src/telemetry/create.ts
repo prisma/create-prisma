@@ -1,17 +1,18 @@
 import type { CreatePromptContext } from "../commands/create";
+import type {
+  CreateCancellationStage,
+  CreateFailureReason,
+  CreateFailureStage,
+} from "../create-outcome";
 import type { CreateCommandInput } from "../types";
 
 import { trackCliTelemetry } from "./client";
 
 export const CREATE_PRISMA_NEXT_COMPLETED_EVENT = "cli:create_prisma_next_command_completed";
 export const CREATE_PRISMA_NEXT_FAILED_EVENT = "cli:create_prisma_next_command_failed";
+export const CREATE_PRISMA_NEXT_CANCELLED_EVENT = "cli:create_prisma_next_command_cancelled";
 
-export type CreateTelemetryFailureStage =
-  | "validate_input"
-  | "collect_context"
-  | "scaffold_template"
-  | "prisma_setup"
-  | "unknown";
+export type CreateTelemetryFailureStage = CreateFailureStage;
 
 function getTargetDirectoryState(context: CreatePromptContext): string {
   if (!context.targetPathState.exists) {
@@ -30,6 +31,7 @@ function getBaseCreateProperties(
   context?: CreatePromptContext,
 ): Record<string, boolean | number | string | string[] | null> {
   return {
+    "telemetry-schema-version": 2,
     command: "create",
     "uses-defaults": input.yes === true || input.json === true,
     json: input.json === true,
@@ -83,12 +85,27 @@ export async function trackCreateFailed(params: {
   durationMs: number;
   error?: unknown;
   stage: CreateTelemetryFailureStage;
+  reason: CreateFailureReason;
 }): Promise<void> {
   await trackCliTelemetry(CREATE_PRISMA_NEXT_FAILED_EVENT, {
     ...getBaseCreateProperties(params.input, params.context),
     "duration-ms": params.durationMs,
     "failure-stage": params.stage,
+    "failure-reason": params.reason,
     "error-name": getErrorName(params.error),
     "error-code": getErrorCode(params.error),
+  });
+}
+
+export async function trackCreateCancelled(params: {
+  input: CreateCommandInput;
+  context?: CreatePromptContext;
+  durationMs: number;
+  stage: CreateCancellationStage;
+}): Promise<void> {
+  await trackCliTelemetry(CREATE_PRISMA_NEXT_CANCELLED_EVENT, {
+    ...getBaseCreateProperties(params.input, params.context),
+    "duration-ms": params.durationMs,
+    "cancellation-stage": params.stage,
   });
 }
