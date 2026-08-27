@@ -127,7 +127,8 @@ async function main(): Promise<void> {
 
 This PR bumps \`create-prisma\` to \`${newVersion}\`.
 
-When this PR merges, GitHub Actions publishes to npm using trusted publishing.
+**Squash-merge this PR.** The release workflow reads the squash commit title to
+publish to npm using trusted publishing; a merge commit will skip the release.
 `;
 
   await $`gh pr create --title ${prTitle} --body ${prBody} --base main --head ${branchName}`;
