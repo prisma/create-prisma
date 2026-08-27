@@ -314,7 +314,7 @@ export async function runCreateCommand(
         stage: error.stage,
       });
       return createCommandFailureResult(
-        failureStage,
+        error.stage,
         error.message,
         context ? getProjectResult(context) : undefined,
       );
