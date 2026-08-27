@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
 
-  const { listUsers } = await import("../prisma/users");
+  const { listUsers } = await import("{{#if (eq template "turborepo")}}@repo/database{{else}}../prisma/users{{/if}}");
   const formatter = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -12,12 +12,12 @@ export default async function Home() {
   return (
     <main className="shell">
       <div className="hero">
-        <p className="eyebrow">Next.js + Prisma 8</p>
+        <p className="eyebrow">{{#if (eq template "turborepo")}}Turborepo + {{/if}}Next.js + Prisma 8</p>
 
         <h1>Users from your database, loaded on the server.</h1>
         <p className="lede">
-          This page reads from <code>src/app/page.tsx</code> using the Prisma 8 helper in{" "}
-          <code>src/prisma/users.ts</code>.
+          This page reads from <code>{{#if (eq template "turborepo")}}apps/web/{{/if}}src/app/page.tsx</code> using the Prisma 8 helper in{" "}
+          <code>{{#if (eq template "turborepo")}}packages/database/src/users.ts{{else}}src/prisma/users.ts{{/if}}</code>.
         </p>
       </div>
 

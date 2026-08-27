@@ -3,7 +3,7 @@ import { module } from "@prisma/composer";
 {{#if (eq provider "postgres")}}
 import { postgres } from "@prisma/composer-prisma-cloud/orm";
 
-import { appContract } from "./src/prisma/composer.ts";
+import { appContract } from "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/composer.ts";
 {{else}}
 import { envSecret } from "@prisma/composer-prisma-cloud";
 {{/if}}

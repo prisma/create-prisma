@@ -12,6 +12,7 @@ import {
 } from "../utils/package-manager";
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
+Handlebars.registerHelper("or", (...args: unknown[]) => args.slice(0, -1).some(Boolean));
 Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>
@@ -126,13 +127,17 @@ export async function renderTemplateTree<TContext>(opts: {
   templateRoot: string;
   outputDir: string;
   context: TContext;
+  mapRelativeOutputPath?: (relativePath: string) => string;
 }): Promise<void> {
-  const { templateRoot, outputDir, context } = opts;
+  const { templateRoot, outputDir, context, mapRelativeOutputPath } = opts;
   const templateFiles = await getTemplateFilesRecursively(templateRoot);
 
   for (const templateFilePath of templateFiles) {
     const relativeTemplatePath = path.relative(templateRoot, templateFilePath);
-    const relativeOutputPath = stripHbsExtension(relativeTemplatePath);
+    const renderedRelativePath = stripHbsExtension(relativeTemplatePath);
+    const relativeOutputPath = mapRelativeOutputPath
+      ? mapRelativeOutputPath(renderedRelativePath)
+      : renderedRelativePath;
     const outputPath = path.join(outputDir, relativeOutputPath);
     await renderTemplateFile({
       templateFilePath,

@@ -1,13 +1,13 @@
 {{#unless (eq packageManager "deno")}}
 import { defineConfig } from "@prisma/composer/config";
 import { nodeBuild } from "@prisma/composer/node/control";
-{{#if (eq template "next")}}
+{{#if (or (eq template "next") (eq template "turborepo"))}}
 import { nextjsBuild } from "@prisma/composer/nextjs/control";
 {{/if}}
 import { prismaCloud, prismaState } from "@prisma/composer-prisma-cloud/control";
 
 export default defineConfig({
-  extensions: [prismaCloud(), nodeBuild(){{#if (eq template "next")}}, nextjsBuild(){{/if}}],
+  extensions: [prismaCloud(), nodeBuild(){{#if (or (eq template "next") (eq template "turborepo"))}}, nextjsBuild(){{/if}}],
   state: prismaState(),
 });
 {{/unless}}

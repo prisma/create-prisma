@@ -1,8 +1,13 @@
 {{#if (eq packageManager "pnpm")}}
+{{#if (eq template "turborepo")}}
+packages:
+  - "apps/*"
+  - "packages/*"
+{{/if}}
 allowBuilds:
   esbuild: true
   msgpackr-extract: true
-{{#if (eq template "next")}}
+{{#if (or (eq template "next") (eq template "turborepo"))}}
   sharp: true
   unrs-resolver: true
 {{else if (eq template "astro")}}

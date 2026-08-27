@@ -142,6 +142,7 @@ export async function writePrismaDependencies(
   packageManager: PackageManager,
   _authoring: AuthoringStyle,
   projectDir = process.cwd(),
+  template?: CreateTemplate,
 ): Promise<void> {
   const dependencies = [getDbPackages(provider)];
   if (provider === "postgres" && packageManager !== "deno") dependencies.push("temporal-polyfill");
@@ -149,6 +150,7 @@ export async function writePrismaDependencies(
   if (packageManager === "deno") dependencies.push("dotenv");
 
   const devDependencies = ["@types/node", "prisma"];
+  if (packageManager !== "deno") devDependencies.push("@prisma/dev");
 
   await addPackageDependency({
     dependencies,
@@ -156,6 +158,15 @@ export async function writePrismaDependencies(
     scripts: getPrismaScriptMap(packageManager),
     projectDir,
   });
+
+  if (template === "turborepo" && packageManager !== "deno") {
+    const databaseDependencies = [getDbPackages(provider)];
+    if (provider === "postgres") databaseDependencies.push("temporal-polyfill");
+    await addPackageDependency({
+      dependencies: databaseDependencies,
+      projectDir: path.join(projectDir, "packages/database"),
+    });
+  }
 }
 
 export async function writeCreateTemplateDependencies(opts: {

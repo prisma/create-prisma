@@ -8,9 +8,11 @@ describe("Prisma 8 dependency versions", () => {
     expect(getDependencyVersion("@prisma/orm-mongo")).toBe("8.0.0-rc.8");
     expect(getDependencyVersion("@prisma/composer")).toBe("0.16.0");
     expect(getDependencyVersion("@prisma/composer-prisma-cloud")).toBe("0.16.0");
+    expect(getDependencyVersion("@prisma/dev")).toBe("0.24.7");
     expect(getDependencyVersion("prisma")).toBe("8.0.0-rc.12");
     expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.74");
     expect(getDependencyVersion("effect")).toBe("4.0.0-rc.112");
+    expect(getDependencyVersion("turbo")).toBe("2.10.12");
   });
 
   test("returns undefined for dependencies missing from the version map", () => {

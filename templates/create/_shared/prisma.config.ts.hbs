@@ -5,9 +5,9 @@ import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postg
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: "./src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",
+    contract: "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",
 {{#if (eq authoring "typescript")}}
-    output: "./src/prisma/generated",
+    output: "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/generated",
 {{/if}}
     db: {
       connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
@@ -23,9 +23,9 @@ export default definePrismaConfig({
     agents: ["claude", "cursor", "agents", "devin"],
   },
   orm: ormConfig({
-    contract: "./src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",
+    contract: "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",
 {{#if (eq authoring "typescript")}}
-    output: "./src/prisma/generated",
+    output: "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/generated",
 {{/if}}
     db: {
       connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
