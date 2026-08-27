@@ -18,6 +18,8 @@ import {
 } from "../src/utils/package-manager";
 
 type PackageJson = {
+  name?: string;
+  workspaces?: string[];
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
@@ -156,15 +158,13 @@ describe("generated templates", () => {
               await writeCreateTemplateDependencies({ template, packageManager, projectDir });
 
               const packageJson = await readPackageJson(projectDir);
-              const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
-              const seedSource = await readFile(
-                path.join(projectDir, "src/prisma/seed.ts"),
-                "utf8",
+              const prismaSourceDir = path.join(
+                projectDir,
+                template === "turborepo" ? "packages/database/src" : "src/prisma",
               );
-              const usersSource = await readFile(
-                path.join(projectDir, "src/prisma/users.ts"),
-                "utf8",
-              );
+              const dbSource = await readFile(path.join(prismaSourceDir, "db.ts"), "utf8");
+              const seedSource = await readFile(path.join(prismaSourceDir, "seed.ts"), "utf8");
+              const usersSource = await readFile(path.join(prismaSourceDir, "users.ts"), "utf8");
               const tsconfig = await readFile(path.join(projectDir, "tsconfig.json"), "utf8");
 
               if (packageManager === "deno") {
@@ -209,9 +209,41 @@ describe("generated templates", () => {
               expect(seedSource).toContain("await connectDatabase()");
               expect(seedSource).toContain("export function seed()");
               expect(usersSource).toContain("await seed()");
-              expect(await pathExists(path.join(projectDir, "src/prisma/starter-data.ts"))).toBe(
-                false,
-              );
+              expect(await pathExists(path.join(prismaSourceDir, "starter-data.ts"))).toBe(false);
+              if (template === "turborepo") {
+                const webPackageJson = await readPackageJson(path.join(projectDir, "apps/web"));
+                const databasePackageJson = await readPackageJson(
+                  path.join(projectDir, "packages/database"),
+                );
+                const nextConfig = await readFile(
+                  path.join(projectDir, "apps/web/next.config.ts"),
+                  "utf8",
+                );
+                const pageSource = await readFile(
+                  path.join(projectDir, "apps/web/src/app/page.tsx"),
+                  "utf8",
+                );
+
+                expect(packageJson.workspaces).toEqual(["apps/*", "packages/*"]);
+                expect(packageJson.devDependencies?.turbo).toBe(dependencyVersionMap.turbo);
+                expect(webPackageJson.name).toBe("@repo/web");
+                expect(webPackageJson.dependencies?.["@repo/database"]).toBe(
+                  packageManager === "npm" ? "*" : "workspace:*",
+                );
+                expect(databasePackageJson.name).toBe("@repo/database");
+                expect(databasePackageJson.devDependencies?.typescript).toBe(
+                  dependencyVersionMap.typescript,
+                );
+                expect(databasePackageJson.scripts).toEqual({
+                  typecheck: "tsc --noEmit --project tsconfig.json",
+                });
+                expect(nextConfig).toContain("outputFileTracingRoot: monorepoRoot");
+                expect(nextConfig).toContain('transpilePackages: ["@repo/database"]');
+                expect(pageSource).toContain('import("@repo/database")');
+                expect(serviceSource).toContain('appDir: "./apps/web"');
+                expect(dbSource).toContain('import service from "../../../service.ts"');
+                expect(await pathExists(path.join(projectDir, "src/prisma"))).toBe(false);
+              }
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
                 expect(serverSource).toContain('adapter: "Bun" in globalThis ? undefined : node()');
@@ -245,7 +277,7 @@ describe("generated templates", () => {
                 expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
-                  path.join(projectDir, "src/prisma/composer.ts"),
+                  path.join(prismaSourceDir, "composer.ts"),
                   "utf8",
                 );
                 if (authoring === "typescript") {
@@ -267,7 +299,13 @@ describe("generated templates", () => {
                 expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {
-                expect(prismaConfig).toContain('output: "./src/prisma/generated"');
+                expect(prismaConfig).toContain(
+                  `output: "./${
+                    template === "turborepo"
+                      ? "packages/database/src/generated"
+                      : "src/prisma/generated"
+                  }"`,
+                );
                 expect(dbSource).toContain(
                   'import type { Contract } from "./generated/contract.d.ts";',
                 );
@@ -282,13 +320,16 @@ describe("generated templates", () => {
               if (packageManager === "pnpm") {
                 expect(packageJson.pnpm).toBeUndefined();
                 const frameworkBuildAllowances =
-                  template === "next"
+                  template === "next" || template === "turborepo"
                     ? ["  sharp: true", "  unrs-resolver: true"]
                     : template === "astro"
                       ? ["  sharp: true"]
                       : [];
                 expect(await readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8")).toBe(
                   [
+                    ...(template === "turborepo"
+                      ? ["packages:", '  - "apps/*"', '  - "packages/*"']
+                      : []),
                     "allowBuilds:",
                     "  esbuild: true",
                     "  msgpackr-extract: true",

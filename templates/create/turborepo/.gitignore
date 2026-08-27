@@ -1,0 +1,10 @@
+node_modules
+.turbo
+apps/web/.next
+apps/web/out
+coverage
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store

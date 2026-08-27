@@ -142,9 +142,12 @@ export async function writePrismaDependencies(
   packageManager: PackageManager,
   _authoring: AuthoringStyle,
   projectDir = process.cwd(),
+  template?: CreateTemplate,
 ): Promise<void> {
   const dependencies = [getDbPackages(provider)];
-  if (provider === "postgres" && packageManager !== "deno") dependencies.push("temporal-polyfill");
+  if (provider === "postgres" && packageManager !== "deno" && template !== "turborepo") {
+    dependencies.push("temporal-polyfill");
+  }
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
   if (packageManager === "deno") dependencies.push("dotenv");
 
@@ -156,6 +159,15 @@ export async function writePrismaDependencies(
     scripts: getPrismaScriptMap(packageManager),
     projectDir,
   });
+
+  if (template === "turborepo" && packageManager !== "deno") {
+    const databaseDependencies = [getDbPackages(provider)];
+    if (provider === "postgres") databaseDependencies.push("temporal-polyfill");
+    await addPackageDependency({
+      dependencies: databaseDependencies,
+      projectDir: path.join(projectDir, "packages/database"),
+    });
+  }
 }
 
 export async function writeCreateTemplateDependencies(opts: {
@@ -174,7 +186,10 @@ export async function writeCreateTemplateDependencies(opts: {
       dependencies: target.dependencies,
       devDependencies: target.devDependencies,
       customDependencies: target.customDependencies,
-      scripts: getComposerScriptMap(packageManager),
+      scripts:
+        target.packageJsonPath === "package.json"
+          ? getComposerScriptMap(packageManager)
+          : undefined,
       projectDir: path.join(projectDir, path.dirname(target.packageJsonPath)),
     });
   }

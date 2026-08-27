@@ -31,6 +31,50 @@ deno task contract:emit
 ```
 
 Prisma Compute does not support Deno deployments yet.
+{{else if (eq template "turborepo")}}
+A Prisma 8 monorepo powered by Turborepo, Next.js, and Prisma Composer.
+
+## Workspace layout
+
+- `apps/web` — Next.js application
+- `packages/database` — Prisma contract, generated artifacts, runtime client, and seed data
+- `module.ts` and `service.ts` — Composer deployment topology
+
+## Run locally
+
+```bash
+{{runScriptCommand packageManager "dev:composer"}}
+```
+
+This builds the workspace and starts it with Composer. PostgreSQL projects get a local Prisma Postgres database and apply the committed migrations automatically.
+
+## Deploy
+
+```bash
+{{runScriptCommand packageManager "deploy"}}
+```
+
+The deploy script runs the Turborepo build, provisions Prisma Postgres when selected, applies migrations, and deploys the Next.js app to Prisma Compute.
+
+The starter users are inserted idempotently from `packages/database/src/seed.ts` on the first database query through the Composer service binding.
+
+{{#if (eq provider "mongo")}}
+MongoDB is not provisioned by Composer. Set `MONGODB_URL` before running Composer locally or deploying.
+{{/if}}
+
+## Prisma
+
+- Contract: `packages/database/src/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}`
+- Prisma and Composer config: `prisma.config.ts`
+- Composer app: `module.ts` and `service.ts`
+
+After changing the contract, run:
+
+```bash
+{{runScriptCommand packageManager "contract:emit"}}
+```
+
+To run the workspace's development tasks directly, use `{{runScriptCommand packageManager "dev"}}`. This direct mode requires `{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}`.
 {{else}}
 A minimal {{template}} app with Prisma 8 and Prisma Composer.
 

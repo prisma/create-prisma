@@ -1,11 +1,11 @@
 {{#if (eq authoring "typescript")}}
-src/prisma/generated/contract.json linguist-generated
-src/prisma/generated/contract.d.ts linguist-generated
+{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/generated/contract.json linguist-generated
+{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/generated/contract.d.ts linguist-generated
 {{else}}
-src/prisma/contract.json linguist-generated
-src/prisma/contract.d.ts linguist-generated
+{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/contract.json linguist-generated
+{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/contract.d.ts linguist-generated
 {{/if}}
-src/prisma/ops.json linguist-generated
-src/prisma/migration.json linguist-generated
+{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/ops.json linguist-generated
+{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/migration.json linguist-generated
 migrations/snapshots/**/contract.json linguist-generated
 migrations/snapshots/**/contract.d.ts linguist-generated

@@ -96,7 +96,13 @@ async function fetchUntilReady(url: string, deadline: number): Promise<Response>
   }
 }
 
-async function verifyComposerDev(projectDir: string) {
+async function verifyComposerDev(
+  projectDir: string,
+  verifyResponse: (response: Response) => Promise<void> = async (response) => {
+    const body = (await response.json()) as { users: Array<{ name: string }> };
+    expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
+  },
+) {
   const process = Bun.spawn({
     cmd: ["bun", "run", "dev:composer"],
     cwd: projectDir,
@@ -139,8 +145,7 @@ async function verifyComposerDev(projectDir: string) {
       // retry connection refusals until the deadline.
       const response = await fetchUntilReady(appUrl, deadline);
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { users: Array<{ name: string }> };
-      expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
+      await verifyResponse(response);
       return;
     }
   } finally {
@@ -423,6 +428,68 @@ describe("create-prisma e2e", () => {
 
       await runCommand(projectDir, ["bun", "run", "build"]);
       await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
+    },
+    TEST_TIMEOUT,
+  );
+
+  test(
+    "builds and runs a Composer-backed Turborepo monorepo",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-turborepo-e2e-"));
+      tempRoots.push(rootDir);
+      const previousCwd = process.cwd();
+      process.chdir(rootDir);
+      try {
+        await runCreateCommand({
+          name: "turborepo-app",
+          template: "turborepo",
+          provider: "postgres",
+          authoring: "psl",
+          packageManager: "bun",
+          deploy: false,
+          yes: true,
+        });
+      } finally {
+        process.chdir(previousCwd);
+      }
+
+      const projectDir = path.join(rootDir, "turborepo-app");
+      const rootPackageJson = JSON.parse(
+        await readFile(path.join(projectDir, "package.json"), "utf8"),
+      ) as Record<string, any>;
+      const webPackageJson = JSON.parse(
+        await readFile(path.join(projectDir, "apps/web/package.json"), "utf8"),
+      ) as Record<string, any>;
+      const databasePackageJson = JSON.parse(
+        await readFile(path.join(projectDir, "packages/database/package.json"), "utf8"),
+      ) as Record<string, any>;
+      const serviceSource = await readFile(path.join(projectDir, "service.ts"), "utf8");
+
+      expect(rootPackageJson.workspaces).toEqual(["apps/*", "packages/*"]);
+      expect(rootPackageJson.devDependencies.turbo).toBe("2.10.12");
+      expect(webPackageJson.dependencies["@repo/database"]).toBe("workspace:*");
+      expect(databasePackageJson.dependencies["@prisma/orm-postgres"]).toBe("8.0.0-rc.8");
+      expect(databasePackageJson.dependencies["temporal-polyfill"]).toBe("^1.0.4");
+      expect(serviceSource).toContain('appDir: "./apps/web"');
+      expect(await pathExists(path.join(projectDir, "packages/database/src/contract.json"))).toBe(
+        true,
+      );
+      expect(await pathExists(path.join(projectDir, "migrations/app"))).toBe(true);
+
+      await runCommand(projectDir, ["bun", "run", "build"]);
+      await runCommand(projectDir, ["bun", "run", "typecheck"]);
+
+      const requiredServerFiles = JSON.parse(
+        await readFile(path.join(projectDir, "apps/web/.next/required-server-files.json"), "utf8"),
+      ) as { relativeAppDir?: string };
+      expect(requiredServerFiles.relativeAppDir).toBe("apps/web");
+
+      await verifyComposerDev(projectDir, async (response) => {
+        const body = await response.text();
+        expect(body).toContain("Alice");
+        expect(body).toContain("Bob");
+        expect(body).toContain("Carol");
+      });
     },
     TEST_TIMEOUT,
   );

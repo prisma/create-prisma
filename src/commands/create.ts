@@ -160,6 +160,11 @@ async function promptForCreateTemplate(output: Writable): Promise<CreateTemplate
         hint: "Full-stack React app with App Router",
       },
       {
+        value: "turborepo",
+        label: "Monorepo (Turborepo)",
+        hint: "Next.js app with a shared Prisma database package",
+      },
+      {
         value: "svelte",
         label: "SvelteKit",
         hint: "Full-stack Svelte 5 app with Vite",

@@ -1,0 +1,21 @@
+{
+  "name": "{{projectName}}",
+  "version": "0.1.0",
+  "private": true,
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "start": "turbo run start --parallel",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {}
+}

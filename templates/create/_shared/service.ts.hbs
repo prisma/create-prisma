@@ -1,5 +1,5 @@
 {{#unless (eq packageManager "deno")}}
-{{#if (eq template "next")}}
+{{#if (or (eq template "next") (eq template "turborepo"))}}
 import nextjs from "@prisma/composer/nextjs";
 {{else}}
 import node from "@prisma/composer/node";
@@ -12,7 +12,7 @@ import { compute } from "@prisma/composer-prisma-cloud";
 {{#if (eq provider "postgres")}}
 import { postgres } from "@prisma/composer-prisma-cloud/orm";
 
-import { appContract } from "./src/prisma/composer.ts";
+import { appContract } from "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/composer.ts";
 {{/if}}
 
 export default compute({
@@ -29,6 +29,8 @@ export default compute({
 {{/if}}
 {{#if (eq template "next")}}
   build: nextjs({ module: import.meta.url, appDir: "." }),
+{{else if (eq template "turborepo")}}
+  build: nextjs({ module: import.meta.url, appDir: "./apps/web" }),
 {{else if (eq template "svelte")}}
   build: node({ module: import.meta.url, dir: "./build", entry: "index.js" }),
 {{else if (eq template "astro")}}

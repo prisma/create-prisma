@@ -22,6 +22,7 @@ export const dependencyVersionMap = {
   // The ORM runtime's timestamp columns need a global Temporal, which no
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
+  turbo: "2.10.12",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
@@ -87,12 +88,23 @@ export function getCreateTemplateDependencies(
   if (template === "tanstack-start") {
     devDependencies.push("nitro");
   }
+  if (template === "turborepo") {
+    devDependencies.push("turbo");
+  }
 
-  return [
+  const targets: CreateTemplateDependencyTarget[] = [
     {
       packageJsonPath: "package.json",
       dependencies,
       devDependencies,
     },
   ];
+  if (template === "turborepo") {
+    targets.push({
+      packageJsonPath: "packages/database/package.json",
+      dependencies: [],
+      devDependencies: ["typescript"],
+    });
+  }
+  return targets;
 }

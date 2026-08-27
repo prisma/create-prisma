@@ -1,18 +1,24 @@
 {
-  "name": "{{projectName}}",
+  "name": "{{#if (eq template "turborepo")}}@repo/web{{else}}{{projectName}}{{/if}}",
   "version": "0.1.0",
   "private": true,
+  {{#unless (eq template "turborepo")}}
   {{#if (packageManagerManifestValue packageManager)}}
   "packageManager": "{{packageManagerManifestValue packageManager}}",
   {{/if}}
+  {{/unless}}
   "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    {{#if (eq template "turborepo")}}
+    "@repo/database": "{{#if (eq packageManager "npm")}}*{{else}}workspace:*{{/if}}",
+    {{/if}}
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"

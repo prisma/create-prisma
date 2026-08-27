@@ -12,7 +12,10 @@ import {
   type CreateFailureStage,
 } from "../create-outcome";
 import type { CreateNextStep } from "../result";
-import { scaffoldCreateSharedTemplates } from "../templates/render-create-template";
+import {
+  getCreatePrismaSourceDir,
+  scaffoldCreateSharedTemplates,
+} from "../templates/render-create-template";
 import {
   AuthoringStyleSchema,
   DatabaseProviderSchema,
@@ -221,8 +224,10 @@ export async function collectPrismaSetupContext(
   };
 }
 
-function getContractPath(authoring: AuthoringStyle) {
-  return `src/prisma/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
+function getContractPath(authoring: AuthoringStyle, template: CreateTemplate) {
+  return `${getCreatePrismaSourceDir(template)}/contract${
+    authoring === "typescript" ? ".ts" : ".prisma"
+  }`;
 }
 
 function getInitTarget(provider: DatabaseProvider): "postgres" | "mongodb" {
@@ -235,7 +240,11 @@ function getPrismaCliInvocation(packageManager: PackageManager, args: string[]) 
   return getPackageExecutionArgs(packageManager, [packageName, ...args]);
 }
 
-async function runPrismaInit(context: PrismaSetupContext, projectDir: string): Promise<void> {
+async function runPrismaInit(
+  context: PrismaSetupContext,
+  projectDir: string,
+  template: CreateTemplate,
+): Promise<void> {
   const args = [
     "orm",
     "init",
@@ -246,7 +255,7 @@ async function runPrismaInit(context: PrismaSetupContext, projectDir: string): P
     "--authoring",
     context.authoring,
     "--schema-path",
-    getContractPath(context.authoring),
+    getContractPath(context.authoring, template),
     "--skip-install",
   ];
   const invocation = getPrismaCliInvocation(context.packageManager, args);
@@ -460,7 +469,7 @@ export async function executePrismaSetupContext(
 
   try {
     progress?.message("Preparing Prisma 8 project files...");
-    await runPrismaInit(context, projectDir);
+    await runPrismaInit(context, projectDir, template);
 
     setupStage = "configure_project";
     setupReason = "project_configuration_failed";
@@ -477,6 +486,7 @@ export async function executePrismaSetupContext(
       context.packageManager,
       context.authoring,
       projectDir,
+      template,
     );
     await ensureComposerTypeScriptOptions(projectDir);
     if (context.databaseProvider === "mongo") await ensureMongoEnvironment(projectDir);
