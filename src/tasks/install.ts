@@ -145,12 +145,13 @@ export async function writePrismaDependencies(
   template?: CreateTemplate,
 ): Promise<void> {
   const dependencies = [getDbPackages(provider)];
-  if (provider === "postgres" && packageManager !== "deno") dependencies.push("temporal-polyfill");
+  if (provider === "postgres" && packageManager !== "deno" && template !== "turborepo") {
+    dependencies.push("temporal-polyfill");
+  }
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
   if (packageManager === "deno") dependencies.push("dotenv");
 
   const devDependencies = ["@types/node", "prisma"];
-  if (packageManager !== "deno") devDependencies.push("@prisma/dev");
 
   await addPackageDependency({
     dependencies,
@@ -185,7 +186,10 @@ export async function writeCreateTemplateDependencies(opts: {
       dependencies: target.dependencies,
       devDependencies: target.devDependencies,
       customDependencies: target.customDependencies,
-      scripts: getComposerScriptMap(packageManager),
+      scripts:
+        target.packageJsonPath === "package.json"
+          ? getComposerScriptMap(packageManager)
+          : undefined,
       projectDir: path.join(projectDir, path.dirname(target.packageJsonPath)),
     });
   }

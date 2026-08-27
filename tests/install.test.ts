@@ -59,7 +59,6 @@ describe("writePrismaDependencies", () => {
       });
       expect(packageJson.dependencies?.dotenv).toBeUndefined();
       expect(packageJson.devDependencies).toMatchObject({
-        "@prisma/dev": dependencyVersionMap["@prisma/dev"],
         prisma: dependencyVersionMap.prisma,
       });
       expect(packageJson.scripts).toMatchObject({
@@ -98,7 +97,6 @@ describe("writePrismaDependencies", () => {
         "@types/node": dependencyVersionMap["@types/node"],
         prisma: dependencyVersionMap.prisma,
       });
-      expect(packageJson.devDependencies?.["@prisma/dev"]).toBeUndefined();
       expect(packageJson.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
       expect(packageJson.scripts).toMatchObject({
         "contract:emit": `deno run -A npm:${PRISMA_DENO_CLI_PACKAGE} contract emit`,
@@ -236,6 +234,9 @@ describe("generated templates", () => {
                 expect(databasePackageJson.devDependencies?.typescript).toBe(
                   dependencyVersionMap.typescript,
                 );
+                expect(databasePackageJson.scripts).toEqual({
+                  typecheck: "tsc --noEmit --project tsconfig.json",
+                });
                 expect(nextConfig).toContain("outputFileTracingRoot: monorepoRoot");
                 expect(nextConfig).toContain('transpilePackages: ["@repo/database"]');
                 expect(pageSource).toContain('import("@repo/database")');

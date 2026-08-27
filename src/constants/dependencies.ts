@@ -5,7 +5,6 @@ export const dependencyVersionMap = {
   "@elysiajs/node": "^1.4.5",
   "@prisma/composer": "0.16.0",
   "@prisma/composer-prisma-cloud": "0.16.0",
-  "@prisma/dev": "0.24.7",
   "@prisma/orm-mongo": "8.0.0-rc.8",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency.
   "@prisma/orm-postgres": "8.0.0-rc.8",
