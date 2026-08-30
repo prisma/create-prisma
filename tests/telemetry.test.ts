@@ -69,12 +69,47 @@ describe("create telemetry", () => {
     expect(properties).toEqual(
       expect.objectContaining({
         "duration-ms": 456,
+        "failure-class": "technical_failure",
         "error-code": "ERR_TEST",
         "failure-stage": "plan_migration",
         "failure-reason": "migration_plan_failed",
       }),
     );
     expect(properties).not.toHaveProperty("error-message");
+    expect(JSON.stringify(properties)).not.toContain("secret");
+  });
+
+  test("separates expected guard rejections from technical failures", async () => {
+    await trackCreateFailed({
+      input: createInput,
+      context: createContext,
+      durationMs: 10,
+      stage: "collect_context",
+      reason: "target_directory_not_empty",
+    });
+    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
+    expect(properties["failure-class"]).toBe("expected_rejection");
+  });
+
+  test("tracks stable Prisma CLI failure fields without raw output", async () => {
+    await trackCreateFailed({
+      input: createInput,
+      context: createContext,
+      durationMs: 456,
+      error: Object.assign(new Error("token=secret"), {
+        prismaCliCommand: "app.deploy",
+        prismaCliErrorCode: "APP.DEPLOY_FAILED",
+      }),
+      stage: "composer_deploy",
+      reason: "composer_deploy_failed",
+    });
+    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
+    expect(properties).toEqual(
+      expect.objectContaining({
+        "prisma-cli-command": "app.deploy",
+        "prisma-cli-error-code": "APP.DEPLOY_FAILED",
+      }),
+    );
     expect(JSON.stringify(properties)).not.toContain("secret");
   });
 

@@ -7,6 +7,7 @@ import {
   getConsoleProjectUrl,
   parseComposerDeployResult,
   parsePrismaCliEnvelope,
+  PrismaCliCommandError,
 } from "../src/tasks/deploy-with-composer";
 import { getErrorMessage, redactSecrets } from "../src/utils/errors";
 
@@ -90,6 +91,46 @@ describe("parsePrismaCliEnvelope", () => {
         ].join("\n"),
       ),
     ).toEqual({ ok: true, result: { summary: null } });
+  });
+
+  test("preserves stable command and error codes from a failure envelope", () => {
+    const envelope = parsePrismaCliEnvelope(
+      JSON.stringify({
+        kind: "result",
+        envelope: {
+          ok: false,
+          commandId: "app.deploy",
+          error: {
+            code: "APP.DEPLOY_FAILED",
+            summary: "Deployment failed",
+            why: "The compute service was not created",
+          },
+        },
+      }),
+    );
+
+    expect(envelope).toMatchObject({
+      ok: false,
+      commandId: "app.deploy",
+      error: { code: "APP.DEPLOY_FAILED" },
+    });
+  });
+});
+
+describe("PrismaCliCommandError", () => {
+  test("exposes only stable structured fields for telemetry", () => {
+    const error = new PrismaCliCommandError({
+      message: "Deployment failed",
+      command: "app.deploy",
+      code: "APP.DEPLOY_FAILED",
+    });
+
+    expect(error).toMatchObject({
+      name: "PrismaCliCommandError",
+      message: "Deployment failed",
+      prismaCliCommand: "app.deploy",
+      prismaCliErrorCode: "APP.DEPLOY_FAILED",
+    });
   });
 });
 

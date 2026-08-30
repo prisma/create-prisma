@@ -14,6 +14,22 @@ export const CREATE_PRISMA_NEXT_CANCELLED_EVENT = "cli:create_prisma_next_comman
 
 export type CreateTelemetryFailureStage = CreateFailureStage;
 
+const expectedRejectionReasons = new Set<CreateFailureReason>([
+  "invalid_input",
+  "unsupported_node_version",
+  "invalid_project_name",
+  "target_path_not_directory",
+  "target_directory_not_empty",
+  "unsupported_configuration",
+  "not_authenticated",
+  "workspace_mismatch",
+  "project_name_collision",
+]);
+
+function getFailureClass(reason: CreateFailureReason): "expected_rejection" | "technical_failure" {
+  return expectedRejectionReasons.has(reason) ? "expected_rejection" : "technical_failure";
+}
+
 function getTargetDirectoryState(context: CreatePromptContext): string {
   if (!context.targetPathState.exists) {
     return "new";
@@ -68,6 +84,18 @@ function getErrorCode(error: unknown): number | string | null {
   return typeof code === "number" || typeof code === "string" ? code : null;
 }
 
+function getPrismaCliFailureProperty(
+  error: unknown,
+  property: "prismaCliCommand" | "prismaCliErrorCode",
+): string | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+
+  const value = Reflect.get(error, property);
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 export async function trackCreateCompleted(params: {
   input: CreateCommandInput;
   context: CreatePromptContext;
@@ -90,10 +118,13 @@ export async function trackCreateFailed(params: {
   await trackCliTelemetry(CREATE_PRISMA_NEXT_FAILED_EVENT, {
     ...getBaseCreateProperties(params.input, params.context),
     "duration-ms": params.durationMs,
+    "failure-class": getFailureClass(params.reason),
     "failure-stage": params.stage,
     "failure-reason": params.reason,
     "error-name": getErrorName(params.error),
     "error-code": getErrorCode(params.error),
+    "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
+    "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
   });
 }
 

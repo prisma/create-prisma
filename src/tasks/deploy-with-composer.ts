@@ -22,9 +22,23 @@ import { runSetupCommand } from "../utils/run-command";
 
 type PrismaCliEnvelope<Result = unknown> = {
   ok: boolean;
+  command?: string;
+  commandId?: string;
   result?: Result;
-  error?: { summary?: string; message?: string; why?: string };
+  error?: { code?: string; summary?: string; message?: string; why?: string };
 };
+
+export class PrismaCliCommandError extends Error {
+  readonly prismaCliCommand?: string;
+  readonly prismaCliErrorCode?: string;
+
+  constructor(options: { message: string; command?: string; code?: string }) {
+    super(options.message);
+    this.name = "PrismaCliCommandError";
+    this.prismaCliCommand = options.command;
+    this.prismaCliErrorCode = options.code;
+  }
+}
 
 type PrismaWorkspace = {
   id: string;
@@ -175,11 +189,16 @@ async function runPrismaJsonCommand<Result>(options: {
 
   if (result.exitCode !== 0 || !envelope.ok || envelope.result === undefined) {
     const summary = envelope.error?.summary ?? envelope.error?.message;
-    throw new Error(
-      [summary, envelope.error?.why].filter(Boolean).join(": ") ||
+    throw new PrismaCliCommandError({
+      message:
+        [summary, envelope.error?.why].filter(Boolean).join(": ") ||
         result.stderr.trim() ||
         "Prisma CLI command failed.",
-    );
+      ...(envelope.commandId || envelope.command
+        ? { command: envelope.commandId ?? envelope.command }
+        : {}),
+      ...(envelope.error?.code ? { code: envelope.error.code } : {}),
+    });
   }
   return envelope.result;
 }
