@@ -22,6 +22,7 @@ const expectedRejectionReasons = new Set<CreateFailureReason>([
   "target_directory_not_empty",
   "unsupported_configuration",
   "not_authenticated",
+  "workspace_missing",
   "workspace_mismatch",
   "project_name_collision",
 ]);

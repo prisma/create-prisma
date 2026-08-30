@@ -79,16 +79,21 @@ describe("create telemetry", () => {
     expect(JSON.stringify(properties)).not.toContain("secret");
   });
 
-  test("separates expected guard rejections from technical failures", async () => {
-    await trackCreateFailed({
-      input: createInput,
-      context: createContext,
-      durationMs: 10,
-      stage: "collect_context",
-      reason: "target_directory_not_empty",
-    });
-    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
-    expect(properties["failure-class"]).toBe("expected_rejection");
+  test("separates expected input and environment rejections from technical failures", async () => {
+    for (const reason of ["target_directory_not_empty", "workspace_missing"] as const) {
+      await trackCreateFailed({
+        input: createInput,
+        context: createContext,
+        durationMs: 10,
+        stage: reason === "workspace_missing" ? "select_workspace" : "collect_context",
+        reason,
+      });
+    }
+    for (const [, properties] of trackCliTelemetry.mock.calls as Array<
+      [string, Record<string, unknown>]
+    >) {
+      expect(properties["failure-class"]).toBe("expected_rejection");
+    }
   });
 
   test("tracks stable Prisma CLI failure fields without raw output", async () => {
