@@ -13,7 +13,6 @@ export const dependencyVersionMap = {
   alchemy: "2.0.0-beta.74",
   arktype: "^2.2.3",
   dotenv: "^17.4.2",
-  esbuild: "^0.28.1",
   effect: "4.0.0-rc.112",
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
@@ -47,8 +46,10 @@ export function getDependencyVersion(packageName: string): string | undefined {
   return dependencyVersionMap[packageName as AvailableDependency];
 }
 
-function usesEsbuild(template: CreateTemplate): boolean {
-  return template === "minimal" || template === "hono" || template === "elysia";
+function usesTsdown(template: CreateTemplate): boolean {
+  return (
+    template === "minimal" || template === "hono" || template === "elysia" || template === "nest"
+  );
 }
 
 export function getCreateTemplateDependencies(
@@ -58,13 +59,8 @@ export function getCreateTemplateDependencies(
   const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud", "alchemy"];
   const devDependencies: string[] = [];
 
-  if (usesEsbuild(template)) {
-    devDependencies.push("esbuild");
-  }
-  if (template === "nest") {
+  if (usesTsdown(template)) {
     devDependencies.push("tsdown");
-  }
-  if (template === "minimal" || template === "nest" || usesEsbuild(template)) {
     devDependencies.push("tsx");
   }
   if (template === "minimal") {

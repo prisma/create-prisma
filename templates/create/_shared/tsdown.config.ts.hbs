@@ -1,6 +1,9 @@
+{{#unless (eq packageManager "deno")}}
+{{#if tsdownEntry}}
 import { isBuiltin } from "node:module";
 import { defineConfig } from "tsdown";
 
+{{#if (eq template "nest")}}
 const optionalNestDependencies = [
   /^@nestjs\/microservices(?:\/|$)/,
   /^@nestjs\/platform-socket\.io(?:\/|$)/,
@@ -9,18 +12,26 @@ const optionalNestDependencies = [
   /^class-validator(?:\/|$)/,
 ];
 
+{{/if}}
 export default defineConfig({
-  entry: { server: "src/main.ts" },
+  entry: { server: "{{tsdownEntry}}" },
   platform: "node",
   target: "node22.18",
   format: "esm",
   clean: true,
   hash: false,
-  banner:
-    "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+  outputOptions: {
+    codeSplitting: false,
+  },
   deps: {
+    onlyBundle: false,
     alwaysBundle: (id) =>
-      !isBuiltin(id) && !optionalNestDependencies.some((pattern) => pattern.test(id)),
+      !isBuiltin(id){{#if (eq template "nest")}} &&
+      !optionalNestDependencies.some((pattern) => pattern.test(id)){{/if}},
+{{#if (eq template "nest")}}
     neverBundle: optionalNestDependencies,
+{{/if}}
   },
 });
+{{/if}}
+{{/unless}}

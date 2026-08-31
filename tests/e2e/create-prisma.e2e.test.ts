@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,6 +19,14 @@ import { writeCreateTemplateDependencies, writePrismaDependencies } from "../../
 
 const TEST_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_TIMEOUT_MS ?? 300_000);
 const tempRoots: string[] = [];
+const TEST_PSL_CONTRACT = `// use prisma-next
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String?
+}
+`;
 
 async function pathExists(filePath: string) {
   try {
@@ -95,6 +112,49 @@ async function fetchUntilReady(url: string, deadline: number): Promise<Response>
       if (Date.now() >= deadline) throw error;
     }
     await Bun.sleep(1_000);
+  }
+}
+
+async function fetchUntilResponding(url: string, deadline: number): Promise<Response> {
+  while (true) {
+    try {
+      return await fetch(url);
+    } catch (error) {
+      if (Date.now() >= deadline) throw error;
+    }
+    await Bun.sleep(100);
+  }
+}
+
+async function verifyBuiltServer(projectDir: string, port: number, expectedStatus: number) {
+  const process = Bun.spawn({
+    cmd: ["node", "dist/server.mjs"],
+    cwd: projectDir,
+    env: { ...Bun.env, PORT: String(port) },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const output = Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+  ]);
+  let failure: unknown;
+
+  try {
+    const response = await fetchUntilResponding(`http://127.0.0.1:${port}`, Date.now() + 10_000);
+    expect(response.status).toBe(expectedStatus);
+  } catch (error) {
+    failure = error;
+  } finally {
+    process.kill();
+    await process.exited;
+  }
+
+  const [stdout, stderr] = await output;
+  if (failure) {
+    throw new Error(`Built server did not start correctly.\n${stdout}\n${stderr}`, {
+      cause: failure,
+    });
   }
 }
 
@@ -438,44 +498,41 @@ describe("create-prisma e2e", () => {
   );
 
   test(
-    "builds the generated Nest template with npm",
+    "builds every raw Node template with tsdown through npm",
     async () => {
-      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-nest-npm-e2e-"));
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-tsdown-npm-e2e-"));
       tempRoots.push(rootDir);
-      const projectDir = path.join(rootDir, "nest-npm-app");
-      await mkdir(projectDir);
-      await scaffoldCreateTemplate({
-        projectDir,
-        projectName: "nest-npm-app",
-        template: "nest",
-        provider: "postgres",
-        authoring: "psl",
-        packageManager: "npm",
-      });
-      await writePrismaDependencies("postgres", "npm", "psl", projectDir);
-      await writeCreateTemplateDependencies({
-        template: "nest",
-        packageManager: "npm",
-        projectDir,
-      });
-      await writeFile(path.join(projectDir, "src/prisma/contract.json"), "{}\n");
-      await writeFile(
-        path.join(projectDir, "src/prisma/contract.d.ts"),
-        "export type Contract = never;\n",
-      );
 
-      const packageJson = JSON.parse(
-        await readFile(path.join(projectDir, "package.json"), "utf8"),
-      ) as Record<string, any>;
+      for (const [index, template] of (["minimal", "hono", "elysia", "nest"] as const).entries()) {
+        const projectName = `${template}-npm-app`;
+        const projectDir = path.join(rootDir, projectName);
+        await mkdir(projectDir);
+        await scaffoldCreateTemplate({
+          projectDir,
+          projectName,
+          template,
+          provider: "postgres",
+          authoring: "psl",
+          packageManager: "npm",
+        });
+        await writePrismaDependencies("postgres", "npm", "psl", projectDir);
+        await writeCreateTemplateDependencies({ template, packageManager: "npm", projectDir });
+        await writeFile(path.join(projectDir, "src/prisma/contract.prisma"), TEST_PSL_CONTRACT);
+        const packageJson = JSON.parse(
+          await readFile(path.join(projectDir, "package.json"), "utf8"),
+        ) as Record<string, any>;
 
-      expect(packageJson.scripts.build).toBe("tsdown");
-      expect(packageJson.devDependencies.tsdown).toBeDefined();
-      expect(packageJson.devDependencies.esbuild).toBeUndefined();
-      expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(true);
+        expect(packageJson.scripts.build).toBe("tsdown");
+        expect(packageJson.devDependencies.tsdown).toBeDefined();
+        expect(packageJson.devDependencies.esbuild).toBeUndefined();
+        expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(true);
 
-      await runCommand(projectDir, ["bun", "install", "--ignore-scripts"]);
-      await runCommand(projectDir, ["npm", "run", "build"]);
-      expect(await pathExists(path.join(projectDir, "dist/server.mjs"))).toBe(true);
+        await runCommand(projectDir, ["bun", "install", "--ignore-scripts"]);
+        await runCommand(projectDir, ["npm", "run", "contract:emit"]);
+        await runCommand(projectDir, ["npm", "run", "build"]);
+        expect(await readdir(path.join(projectDir, "dist"))).toEqual(["server.mjs"]);
+        await verifyBuiltServer(projectDir, 46_100 + index, template === "minimal" ? 500 : 200);
+      }
     },
     TEST_TIMEOUT,
   );
