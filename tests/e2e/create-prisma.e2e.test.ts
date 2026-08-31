@@ -498,7 +498,7 @@ describe("create-prisma e2e", () => {
   );
 
   test(
-    "builds every raw Node template with tsdown through npm",
+    "builds every raw Node template with tsdown",
     async () => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-tsdown-npm-e2e-"));
       tempRoots.push(rootDir);
