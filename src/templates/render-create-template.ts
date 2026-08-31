@@ -7,6 +7,14 @@ type CreateTemplateContext = {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  tsdownEntry: string | null;
+};
+
+const tsdownEntries: Partial<Record<CreateTemplate, string>> = {
+  minimal: "src/index.ts",
+  hono: "src/index.ts",
+  elysia: "src/index.ts",
+  nest: "src/main.ts",
 };
 
 function getCreateTemplateDir(template: CreateTemplate): string {
@@ -30,6 +38,7 @@ function createTemplateContext(
     provider,
     authoring,
     packageManager,
+    tsdownEntry: tsdownEntries[template] ?? null,
   };
 }
 

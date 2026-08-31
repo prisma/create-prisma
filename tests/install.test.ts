@@ -20,8 +20,11 @@ import {
 type PackageJson = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  engines?: Record<string, string>;
   scripts?: Record<string, string>;
 };
+
+const tsdownTemplates: ReadonlySet<string> = new Set(["minimal", "hono", "elysia", "nest"]);
 
 async function withPackageJson<T>(run: (projectDir: string) => Promise<T>): Promise<T> {
   const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-install-"));
@@ -212,13 +215,36 @@ describe("generated templates", () => {
               expect(await pathExists(path.join(projectDir, "src/prisma/starter-data.ts"))).toBe(
                 false,
               );
+              if (tsdownTemplates.has(template)) {
+                expect(packageJson.engines?.node).toBe("^22.18.0 || >=24.11.0");
+                expect(packageJson.scripts?.build).toBe("tsdown");
+                expect(packageJson.devDependencies).toHaveProperty("tsdown");
+                expect(packageJson.devDependencies).not.toHaveProperty("esbuild");
+                const buildSource = await readFile(
+                  path.join(projectDir, "tsdown.config.ts"),
+                  "utf8",
+                );
+                expect(buildSource).toContain("defineConfig({");
+                expect(buildSource).toContain(
+                  `entry: { server: "${template === "nest" ? "src/main.ts" : "src/index.ts"}" }`,
+                );
+                expect(buildSource).toContain("alwaysBundle: (id)");
+                expect(buildSource).toContain("onlyBundle: false");
+                expect(buildSource).toContain("codeSplitting: false");
+                if (template === "nest") {
+                  expect(buildSource).toContain("neverBundle: optionalNestDependencies");
+                } else {
+                  expect(buildSource).not.toContain("optionalNestDependencies");
+                }
+              } else {
+                expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(false);
+              }
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
                 expect(serverSource).toContain('adapter: "Bun" in globalThis ? undefined : node()');
                 expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
               }
               if (template === "nest") {
-                expect(packageJson.scripts?.build).toContain("--external:'@nestjs/websockets/*'");
                 const usersServiceSource = await readFile(
                   path.join(projectDir, "src/users.service.ts"),
                   "utf8",

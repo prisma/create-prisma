@@ -13,7 +13,6 @@ export const dependencyVersionMap = {
   alchemy: "2.0.0-beta.74",
   arktype: "^2.2.3",
   dotenv: "^17.4.2",
-  esbuild: "^0.28.1",
   effect: "4.0.0-rc.112",
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
@@ -22,6 +21,7 @@ export const dependencyVersionMap = {
   // The ORM runtime's timestamp columns need a global Temporal, which no
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
+  tsdown: "^0.22.14",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
@@ -46,7 +46,7 @@ export function getDependencyVersion(packageName: string): string | undefined {
   return dependencyVersionMap[packageName as AvailableDependency];
 }
 
-function usesEsbuild(template: CreateTemplate): boolean {
+function usesTsdown(template: CreateTemplate): boolean {
   return (
     template === "minimal" || template === "hono" || template === "elysia" || template === "nest"
   );
@@ -59,10 +59,8 @@ export function getCreateTemplateDependencies(
   const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud", "alchemy"];
   const devDependencies: string[] = [];
 
-  if (usesEsbuild(template)) {
-    devDependencies.push("esbuild");
-  }
-  if (template === "minimal" || usesEsbuild(template)) {
+  if (usesTsdown(template)) {
+    devDependencies.push("tsdown");
     devDependencies.push("tsx");
   }
   if (template === "minimal") {

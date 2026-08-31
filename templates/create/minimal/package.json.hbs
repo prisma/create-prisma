@@ -5,6 +5,11 @@
   "packageManager": "{{packageManagerManifestValue packageManager}}",
   {{/if}}
   "type": "module",
+  {{#unless (eq packageManager "deno")}}
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
+  {{/unless}}
   "scripts": {
     {{#if (eq packageManager "deno")}}
     "dev": "{{runtimeScript packageManager "dev" "src/index.ts" "dist/server.mjs"}}",
@@ -12,7 +17,7 @@
     "start": "{{runtimeScript packageManager "start" "src/index.ts" "dist/server.mjs"}}"
     {{else}}
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs",
+    "build": "tsdown",
     "start": "node dist/server.mjs"
     {{/if}}
   },
