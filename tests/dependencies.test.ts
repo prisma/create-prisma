@@ -16,5 +16,6 @@ describe("Prisma 8 dependency versions", () => {
   test("returns undefined for dependencies missing from the version map", () => {
     expect(getDependencyVersion("not-a-package")).toBeUndefined();
     expect(dependencyVersionMap.esbuild).toMatch(/^\^/);
+    expect(dependencyVersionMap.tsdown).toMatch(/^\^/);
   });
 });

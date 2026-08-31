@@ -461,8 +461,10 @@ describe("create-prisma e2e", () => {
         await readFile(path.join(projectDir, "package.json"), "utf8"),
       ) as Record<string, any>;
 
-      expect(packageJson.scripts.build).toBe("node scripts/build.mjs");
-      expect(await pathExists(path.join(projectDir, "scripts/build.mjs"))).toBe(true);
+      expect(packageJson.scripts.build).toBe("tsdown");
+      expect(packageJson.devDependencies.tsdown).toBeDefined();
+      expect(packageJson.devDependencies.esbuild).toBeUndefined();
+      expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(true);
 
       await runCommand(projectDir, ["npm", "run", "build"]);
       expect(await pathExists(path.join(projectDir, "dist/server.mjs"))).toBe(true);

@@ -22,6 +22,7 @@ export const dependencyVersionMap = {
   // The ORM runtime's timestamp columns need a global Temporal, which no
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
+  tsdown: "^0.22.14",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
@@ -47,9 +48,7 @@ export function getDependencyVersion(packageName: string): string | undefined {
 }
 
 function usesEsbuild(template: CreateTemplate): boolean {
-  return (
-    template === "minimal" || template === "hono" || template === "elysia" || template === "nest"
-  );
+  return template === "minimal" || template === "hono" || template === "elysia";
 }
 
 export function getCreateTemplateDependencies(
@@ -62,7 +61,10 @@ export function getCreateTemplateDependencies(
   if (usesEsbuild(template)) {
     devDependencies.push("esbuild");
   }
-  if (template === "minimal" || usesEsbuild(template)) {
+  if (template === "nest") {
+    devDependencies.push("tsdown");
+  }
+  if (template === "minimal" || template === "nest" || usesEsbuild(template)) {
     devDependencies.push("tsx");
   }
   if (template === "minimal") {

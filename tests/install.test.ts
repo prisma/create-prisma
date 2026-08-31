@@ -218,13 +218,15 @@ describe("generated templates", () => {
                 expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
               }
               if (template === "nest") {
-                expect(packageJson.scripts?.build).toBe("node scripts/build.mjs");
+                expect(packageJson.scripts?.build).toBe("tsdown");
+                expect(packageJson.devDependencies).toHaveProperty("tsdown");
+                expect(packageJson.devDependencies).not.toHaveProperty("esbuild");
                 const buildSource = await readFile(
-                  path.join(projectDir, "scripts/build.mjs"),
+                  path.join(projectDir, "tsdown.config.ts"),
                   "utf8",
                 );
-                expect(buildSource).toContain('"@nestjs/websockets/*"');
-                expect(buildSource).toContain('"@nestjs/microservices/*"');
+                expect(buildSource).toContain("defineConfig({");
+                expect(buildSource).toContain("neverBundle: optionalNestDependencies");
                 const usersServiceSource = await readFile(
                   path.join(projectDir, "src/users.service.ts"),
                   "utf8",
