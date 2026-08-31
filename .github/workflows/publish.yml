@@ -36,7 +36,7 @@ jobs:
           - name: Next.js + Bun
             test_name: builds a Next.js app with a TypeScript-authored contract
           - name: Nest + npm
-            test_name: builds a Nest app with npm
+            test_name: builds the generated Nest template with npm
     permissions:
       contents: read
     steps:

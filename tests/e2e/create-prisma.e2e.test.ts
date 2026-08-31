@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { access, mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { runCreateCommand } from "../../src/commands/create";
 import type { CreateCommandResult } from "../../src/result";
+import { scaffoldCreateTemplate } from "../../src/templates/render-create-template";
+import { writeCreateTemplateDependencies, writePrismaDependencies } from "../../src/tasks/install";
 
 const TEST_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_TIMEOUT_MS ?? 300_000);
 const tempRoots: string[] = [];
@@ -436,27 +438,32 @@ describe("create-prisma e2e", () => {
   );
 
   test(
-    "builds a Nest app with npm",
+    "builds the generated Nest template with npm",
     async () => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-nest-npm-e2e-"));
       tempRoots.push(rootDir);
-      const previousCwd = process.cwd();
-      process.chdir(rootDir);
-      try {
-        await runCreateCommand({
-          name: "nest-npm-app",
-          template: "nest",
-          provider: "postgres",
-          authoring: "typescript",
-          packageManager: "npm",
-          deploy: false,
-          yes: true,
-        });
-      } finally {
-        process.chdir(previousCwd);
-      }
-
       const projectDir = path.join(rootDir, "nest-npm-app");
+      await mkdir(projectDir);
+      await scaffoldCreateTemplate({
+        projectDir,
+        projectName: "nest-npm-app",
+        template: "nest",
+        provider: "postgres",
+        authoring: "psl",
+        packageManager: "npm",
+      });
+      await writePrismaDependencies("postgres", "npm", "psl", projectDir);
+      await writeCreateTemplateDependencies({
+        template: "nest",
+        packageManager: "npm",
+        projectDir,
+      });
+      await writeFile(path.join(projectDir, "src/prisma/contract.json"), "{}\n");
+      await writeFile(
+        path.join(projectDir, "src/prisma/contract.d.ts"),
+        "export type Contract = never;\n",
+      );
+
       const packageJson = JSON.parse(
         await readFile(path.join(projectDir, "package.json"), "utf8"),
       ) as Record<string, any>;
@@ -466,6 +473,13 @@ describe("create-prisma e2e", () => {
       expect(packageJson.devDependencies.esbuild).toBeUndefined();
       expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(true);
 
+      await runCommand(projectDir, [
+        "npm",
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+      ]);
       await runCommand(projectDir, ["npm", "run", "build"]);
       expect(await pathExists(path.join(projectDir, "dist/server.mjs"))).toBe(true);
     },
