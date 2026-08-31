@@ -473,13 +473,7 @@ describe("create-prisma e2e", () => {
       expect(packageJson.devDependencies.esbuild).toBeUndefined();
       expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(true);
 
-      await runCommand(projectDir, [
-        "npm",
-        "install",
-        "--ignore-scripts",
-        "--no-audit",
-        "--no-fund",
-      ]);
+      await runCommand(projectDir, ["bun", "install", "--ignore-scripts"]);
       await runCommand(projectDir, ["npm", "run", "build"]);
       expect(await pathExists(path.join(projectDir, "dist/server.mjs"))).toBe(true);
     },
