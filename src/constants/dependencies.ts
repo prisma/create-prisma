@@ -18,7 +18,7 @@ export const dependencyVersionMap = {
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
-  prisma: "8.0.0-rc.12",
+  prisma: "latest",
   // The ORM runtime's timestamp columns need a global Temporal, which no
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
@@ -26,17 +26,11 @@ export const dependencyVersionMap = {
   typescript: "^5.9.3",
 } as const;
 
-// Pinned, not `prisma@next`: the scaffold's own invocations must not float
-// with the dist-tag — the rc line ships breaking changes between releases
-// (rc.10 broke every create). The pin must move in lockstep with the pins
-// above: the CLI bundles its own copies of @prisma/composer-cli and
-// @prisma/orm-toolchain, and those must match the @prisma/composer* and
-// @prisma/orm-* versions this map installs into the project.
-export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@8.0.0-rc.12";
-// Deno runs the same pinned consolidated CLI. The former `prisma-next`
-// fallback is dead: under Deno the bare `npm:prisma-next` specifier resolves
-// to the highest non-prerelease version (0.12.0, frozen), which cannot emit
-// against the ORM releases pinned above.
+// `prisma@next` is a compatibility tag that may intentionally lag behind the
+// current release. New scaffolds and every delegated command use `latest`.
+export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@latest";
+// Deno runs the same consolidated CLI. The former `prisma-next` fallback is
+// frozen and cannot emit against the current ORM releases.
 export const PRISMA_DENO_CLI_PACKAGE = PRISMA_PLATFORM_CLI_PACKAGE;
 
 export type AvailableDependency = keyof typeof dependencyVersionMap;
