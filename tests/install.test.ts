@@ -20,6 +20,7 @@ import {
 type PackageJson = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  engines?: Record<string, string>;
   scripts?: Record<string, string>;
 };
 
@@ -218,6 +219,7 @@ describe("generated templates", () => {
                 expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
               }
               if (template === "nest") {
+                expect(packageJson.engines?.node).toBe("^22.18.0 || >=24.11.0");
                 expect(packageJson.scripts?.build).toBe("tsdown");
                 expect(packageJson.devDependencies).toHaveProperty("tsdown");
                 expect(packageJson.devDependencies).not.toHaveProperty("esbuild");

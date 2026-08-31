@@ -5,6 +5,9 @@
   "packageManager": "{{packageManagerManifestValue packageManager}}",
   {{/if}}
   "type": "module",
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "scripts": {
     "dev": "{{runtimeScript packageManager "dev" "src/main.ts" "dist/main.js"}}",
     "build": "tsdown",
