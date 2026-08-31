@@ -89,9 +89,13 @@ describe("create telemetry", () => {
         reason,
       });
     }
-    for (const [, properties] of trackCliTelemetry.mock.calls as Array<
-      [string, Record<string, unknown>]
-    >) {
+    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
+    expect(calls).toHaveLength(2);
+    expect(calls.map(([, properties]) => properties["failure-reason"])).toEqual([
+      "target_directory_not_empty",
+      "workspace_missing",
+    ]);
+    for (const [, properties] of calls) {
       expect(properties["failure-class"]).toBe("expected_rejection");
     }
   });
