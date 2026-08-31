@@ -218,7 +218,13 @@ describe("generated templates", () => {
                 expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
               }
               if (template === "nest") {
-                expect(packageJson.scripts?.build).toContain("--external:'@nestjs/websockets/*'");
+                expect(packageJson.scripts?.build).toBe("node scripts/build.mjs");
+                const buildSource = await readFile(
+                  path.join(projectDir, "scripts/build.mjs"),
+                  "utf8",
+                );
+                expect(buildSource).toContain('"@nestjs/websockets/*"');
+                expect(buildSource).toContain('"@nestjs/microservices/*"');
                 const usersServiceSource = await readFile(
                   path.join(projectDir, "src/users.service.ts"),
                   "utf8",

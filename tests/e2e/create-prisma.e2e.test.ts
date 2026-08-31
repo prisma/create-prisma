@@ -436,6 +436,41 @@ describe("create-prisma e2e", () => {
   );
 
   test(
+    "builds a Nest app with npm",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-nest-npm-e2e-"));
+      tempRoots.push(rootDir);
+      const previousCwd = process.cwd();
+      process.chdir(rootDir);
+      try {
+        await runCreateCommand({
+          name: "nest-npm-app",
+          template: "nest",
+          provider: "postgres",
+          authoring: "typescript",
+          packageManager: "npm",
+          deploy: false,
+          yes: true,
+        });
+      } finally {
+        process.chdir(previousCwd);
+      }
+
+      const projectDir = path.join(rootDir, "nest-npm-app");
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectDir, "package.json"), "utf8"),
+      ) as Record<string, any>;
+
+      expect(packageJson.scripts.build).toBe("node scripts/build.mjs");
+      expect(await pathExists(path.join(projectDir, "scripts/build.mjs"))).toBe(true);
+
+      await runCommand(projectDir, ["npm", "run", "build"]);
+      expect(await pathExists(path.join(projectDir, "dist/server.mjs"))).toBe(true);
+    },
+    TEST_TIMEOUT,
+  );
+
+  test(
     "generates and checks a minimal Deno Prisma Postgres app",
     async () => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-deno-e2e-"));
