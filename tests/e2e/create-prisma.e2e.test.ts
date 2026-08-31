@@ -368,7 +368,7 @@ describe("create-prisma e2e", () => {
       expect(
         await pathExists(path.join(projectDir, ".claude/skills/prisma-composer/SKILL.md")),
       ).toBe(true);
-      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.12");
+      expect(packageJson.devDependencies.prisma).toBe("latest");
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
       expect(packageJson.overrides.effect).toBe("4.0.0-rc.112");
@@ -420,6 +420,14 @@ describe("create-prisma e2e", () => {
       expect(await pathExists(path.join(projectDir, "src/prisma/generated/contract.d.ts"))).toBe(
         true,
       );
+      expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "migrations/app"))).toBe(true);
+      expect(
+        await pathExists(path.join(projectDir, ".agents/skills/prisma-composer/SKILL.md")),
+      ).toBe(true);
+      expect(
+        await pathExists(path.join(projectDir, ".claude/skills/prisma-composer/SKILL.md")),
+      ).toBe(true);
 
       await runCommand(projectDir, ["bun", "run", "build"]);
       await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
