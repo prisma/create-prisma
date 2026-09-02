@@ -13,6 +13,7 @@ import {
 import { authoringStyles, createTemplates, databaseProviders, packageManagers } from "../src/types";
 import {
   getInstallArgs,
+  getLocalPackageBinaryArgs,
   getPackageExecutionArgs,
   getRunScriptCommand,
 } from "../src/utils/package-manager";
@@ -132,6 +133,17 @@ describe("Composer package-manager commands", () => {
     expect(getPackageExecutionArgs("deno", ["prisma@8.0.0-rc.11", "orm", "init"])).toEqual({
       command: "deno",
       args: ["run", "-A", "--minimum-dependency-age=0", "npm:prisma@8.0.0-rc.11", "orm", "init"],
+    });
+  });
+
+  test("runs the installed Prisma CLI without registry fallback", () => {
+    expect(getLocalPackageBinaryArgs("npm", "prisma", ["contract", "emit"])).toEqual({
+      command: "npm",
+      args: ["exec", "--offline", "--yes=false", "--", "prisma", "contract", "emit"],
+    });
+    expect(getLocalPackageBinaryArgs("deno", "prisma", ["contract", "emit"])).toEqual({
+      command: "deno",
+      args: ["run", "-A", "--frozen", "npm:prisma@latest", "contract", "emit"],
     });
   });
 });

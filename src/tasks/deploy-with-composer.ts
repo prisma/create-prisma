@@ -3,7 +3,6 @@ import { execa } from "execa";
 import { createInterface } from "node:readline";
 import type { Writable } from "node:stream";
 
-import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import {
   ClassifiedCreateError,
   getCreateFailureReason,
@@ -13,8 +12,8 @@ import {
 import type { PackageManager } from "../types";
 import { getErrorMessage, redactSecrets } from "../utils/errors";
 import {
-  getPackageExecutionArgs,
-  getPackageExecutionCommand,
+  getLocalPackageBinaryArgs,
+  getLocalPackageBinaryCommand,
   getRunScriptArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
@@ -149,7 +148,7 @@ export function parsePrismaCliEnvelope<Result = unknown>(
 }
 
 function getPrismaCliArgs(packageManager: PackageManager, args: string[]) {
-  return getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
+  return getLocalPackageBinaryArgs(packageManager, "prisma", args);
 }
 
 async function runPrismaJsonCommand<Result>(options: {
@@ -251,8 +250,7 @@ async function ensureAuthentication(options: {
   const authState = await whoami();
   if (authState.authenticated) return authState;
 
-  const loginCommand = getPackageExecutionCommand(options.packageManager, [
-    PRISMA_PLATFORM_CLI_PACKAGE,
+  const loginCommand = getLocalPackageBinaryCommand(options.packageManager, "prisma", [
     "auth",
     "login",
   ]);
@@ -517,8 +515,7 @@ export async function deployNewProjectWithComposer(options: {
     clearProgress();
     failureStage = "composer_deploy";
     failureReason = "composer_deploy_failed";
-    const deployCommand = getPackageExecutionCommand(options.packageManager, [
-      PRISMA_PLATFORM_CLI_PACKAGE,
+    const deployCommand = getLocalPackageBinaryCommand(options.packageManager, "prisma", [
       "deploy",
       "module.ts",
     ]);

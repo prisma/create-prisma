@@ -3,7 +3,6 @@ import fs from "fs-extra";
 import path from "node:path";
 import type { Writable } from "node:stream";
 
-import { PRISMA_DENO_CLI_PACKAGE, PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import {
   ClassifiedCreateError,
   CreateCancellationError,
@@ -29,7 +28,7 @@ import { getErrorMessage } from "../utils/errors";
 import {
   detectPackageManager,
   getInstallCommand,
-  getPackageExecutionArgs,
+  getLocalPackageBinaryArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
 import { runSetupCommand } from "../utils/run-command";
@@ -229,10 +228,8 @@ function getInitTarget(provider: DatabaseProvider): "postgres" | "mongodb" {
   return provider === "mongo" ? "mongodb" : "postgres";
 }
 
-function getPrismaCliInvocation(packageManager: PackageManager, args: string[]) {
-  const packageName =
-    packageManager === "deno" ? PRISMA_DENO_CLI_PACKAGE : PRISMA_PLATFORM_CLI_PACKAGE;
-  return getPackageExecutionArgs(packageManager, [packageName, ...args]);
+function getInstalledPrismaCliInvocation(packageManager: PackageManager, args: string[]) {
+  return getLocalPackageBinaryArgs(packageManager, "prisma", args);
 }
 
 async function runPrismaInit(context: PrismaSetupContext, projectDir: string): Promise<void> {
@@ -249,7 +246,7 @@ async function runPrismaInit(context: PrismaSetupContext, projectDir: string): P
     getContractPath(context.authoring),
     "--skip-install",
   ];
-  const invocation = getPrismaCliInvocation(context.packageManager, args);
+  const invocation = getInstalledPrismaCliInvocation(context.packageManager, args);
   if (context.verbose) {
     log.step(`Running ${[invocation.command, ...invocation.args].join(" ")}`, {
       output: context.output,
@@ -272,7 +269,7 @@ async function initializeAgentSkills(
 ): Promise<void> {
   if (context.packageManager === "deno") return;
 
-  const invocation = getPrismaCliInvocation(context.packageManager, [
+  const invocation = getInstalledPrismaCliInvocation(context.packageManager, [
     "init",
     "--yes",
     "--no-interactive",
@@ -342,7 +339,7 @@ async function runPrismaCli(
   projectDir: string,
   args: string[],
 ): Promise<void> {
-  const invocation = getPrismaCliInvocation(context.packageManager, args);
+  const invocation = getInstalledPrismaCliInvocation(context.packageManager, args);
   if (context.verbose) {
     log.step([invocation.command, ...invocation.args].join(" "), { output: context.output });
   }
@@ -454,12 +451,31 @@ export async function executePrismaSetupContext(
     : (options.progressSpinner ?? spinner({ output: context.output }));
   const ownsProgress = progress !== undefined && !options.progressSpinner;
   let gitInitialization: GitInitializationResult | undefined;
-  let setupStage: CreateFailureStage = "initialize_prisma";
-  let setupReason: CreateFailureReason = "prisma_init_failed";
+  let setupStage: CreateFailureStage = "configure_project";
+  let setupReason: CreateFailureReason = "project_configuration_failed";
   if (ownsProgress) progress.start("Creating Prisma 8 project...");
 
   try {
+    await writePrismaDependencies(
+      context.databaseProvider,
+      context.packageManager,
+      context.authoring,
+      projectDir,
+    );
+
+    progress?.message(
+      `Installing dependencies with ${getInstallCommand(context.packageManager)}...`,
+    );
+    setupStage = "install_dependencies";
+    setupReason = "dependency_install_failed";
+    await installProjectDependencies(context.packageManager, projectDir, {
+      verbose: context.verbose,
+      json: context.json,
+    });
+
     progress?.message("Preparing Prisma 8 project files...");
+    setupStage = "initialize_prisma";
+    setupReason = "prisma_init_failed";
     await runPrismaInit(context, projectDir);
 
     setupStage = "configure_project";
@@ -472,28 +488,12 @@ export async function executePrismaSetupContext(
       authoring: context.authoring,
       packageManager: context.packageManager,
     });
-    await writePrismaDependencies(
-      context.databaseProvider,
-      context.packageManager,
-      context.authoring,
-      projectDir,
-    );
     await ensureComposerTypeScriptOptions(projectDir);
     if (context.databaseProvider === "mongo") await ensureMongoEnvironment(projectDir);
     if (context.packageManager !== "deno") {
       await ensureGitignoreEntry(projectDir, "/.alchemy");
       await ensureGitignoreEntry(projectDir, "/.prisma-composer");
     }
-
-    progress?.message(
-      `Installing dependencies with ${getInstallCommand(context.packageManager)}...`,
-    );
-    setupStage = "install_dependencies";
-    setupReason = "dependency_install_failed";
-    await installProjectDependencies(context.packageManager, projectDir, {
-      verbose: context.verbose,
-      json: context.json,
-    });
 
     progress?.message("Installing Prisma agent skills...");
     setupStage = "initialize_agent_skills";
