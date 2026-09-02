@@ -264,11 +264,11 @@ describe("create-prisma e2e", () => {
     ]);
     expect(exitCode).toBe(1);
     expect(stdout.trim().split(/\r?\n/)).toHaveLength(1);
-      expect(JSON.parse(stdout)).toMatchObject({
-        schemaVersion: 1,
-        ok: false,
-        error: { stage: "install_dependencies" },
-      });
+    expect(JSON.parse(stdout)).toMatchObject({
+      schemaVersion: 1,
+      ok: false,
+      error: { stage: "install_dependencies" },
+    });
     expect(stderr).toBe("");
     expect(await pathExists(path.join(rootDir, "failed-app", "package.json"))).toBe(true);
   });
