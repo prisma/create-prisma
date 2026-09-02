@@ -29,6 +29,7 @@ import { getErrorMessage } from "../utils/errors";
 import {
   detectPackageManager,
   getInstallCommand,
+  getLocalPackageBinaryArgs,
   getPackageExecutionArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
@@ -235,6 +236,10 @@ function getPrismaCliInvocation(packageManager: PackageManager, args: string[]) 
   return getPackageExecutionArgs(packageManager, [packageName, ...args]);
 }
 
+function getInstalledPrismaCliInvocation(packageManager: PackageManager, args: string[]) {
+  return getLocalPackageBinaryArgs(packageManager, "prisma", args);
+}
+
 async function runPrismaInit(context: PrismaSetupContext, projectDir: string): Promise<void> {
   const args = [
     "orm",
@@ -272,7 +277,7 @@ async function initializeAgentSkills(
 ): Promise<void> {
   if (context.packageManager === "deno") return;
 
-  const invocation = getPrismaCliInvocation(context.packageManager, [
+  const invocation = getInstalledPrismaCliInvocation(context.packageManager, [
     "init",
     "--yes",
     "--no-interactive",
@@ -342,7 +347,7 @@ async function runPrismaCli(
   projectDir: string,
   args: string[],
 ): Promise<void> {
-  const invocation = getPrismaCliInvocation(context.packageManager, args);
+  const invocation = getInstalledPrismaCliInvocation(context.packageManager, args);
   if (context.verbose) {
     log.step([invocation.command, ...invocation.args].join(" "), { output: context.output });
   }
