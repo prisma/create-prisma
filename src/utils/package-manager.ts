@@ -258,7 +258,7 @@ export function getLocalPackageBinaryArgs(
     case "deno":
       return {
         command: "deno",
-        args: ["run", "-A", "--frozen", `npm:${binaryName}`, ...binaryArgs],
+        args: ["run", "-A", "--frozen", `npm:${binaryName}@latest`, ...binaryArgs],
       };
     case "pnpm":
       return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
