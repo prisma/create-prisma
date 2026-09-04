@@ -73,10 +73,9 @@ const detectFromPackageJson = Effect.fn("PackageManager.detectFromPackageJson")(
   const packageJsonSource = yield* fs
     .readFileString(packageJsonPath)
     .pipe(Effect.catch(() => Effect.succeed("")));
-  const packageJson = yield* Effect.try({
-    try: () => JSON.parse(packageJsonSource) as Record<string, unknown>,
-    catch: () => null,
-  });
+  const packageJson = yield* Effect.try(
+    () => JSON.parse(packageJsonSource) as Record<string, unknown>,
+  ).pipe(Effect.catch(() => Effect.succeed(null)));
   return packageJson ? parsePackageManagerField(packageJson.packageManager) : null;
 });
 

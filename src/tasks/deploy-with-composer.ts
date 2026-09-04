@@ -1,5 +1,5 @@
 import { cancel, isCancel, log, select, spinner, taskLog } from "@clack/prompts";
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Exit, Schema } from "effect";
 import type { Writable } from "node:stream";
 
 import {
@@ -575,8 +575,9 @@ export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")
   });
 
   return yield* program.pipe(
-    Effect.tapError((error) =>
+    Effect.tapCause((cause) =>
       Effect.sync(() => {
+        const error = Cause.squash(cause);
         if (deploymentLog) {
           deploymentLog.error("Deployment failed.");
           deploymentLog = undefined;
@@ -606,31 +607,34 @@ export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")
 export async function deployNewProjectWithComposer(
   options: DeployOptions,
 ): Promise<ComposerDeployExecutionResult> {
-  try {
+  const exit = await applicationRuntime.runPromiseExit(deployNewProjectWithComposerEffect(options));
+  if (Exit.isSuccess(exit)) {
     return {
       ok: true,
-      deployment: await applicationRuntime.runPromise(deployNewProjectWithComposerEffect(options)),
-    };
-  } catch (error) {
-    if (error instanceof CreateCancellationError) {
-      return { ok: false, cancelled: true, stage: "select_workspace" };
-    }
-    const failure =
-      error instanceof CreateFailure
-        ? error
-        : new CreateFailure({
-            stage: "unknown",
-            reason: "unexpected_error",
-            message: getErrorMessage(error),
-            cause: error,
-          });
-    return {
-      ok: false,
-      stage: failure.stage,
-      reason: failure.reason,
-      error: failure.cause ?? failure,
+      deployment: exit.value,
     };
   }
+
+  const failureReason = exit.cause.reasons.find(Cause.isFailReason);
+  const error = failureReason?.error ?? Cause.squash(exit.cause);
+  if (error instanceof CreateCancellationError) {
+    return { ok: false, cancelled: true, stage: "select_workspace" };
+  }
+  const failure =
+    error instanceof CreateFailure
+      ? error
+      : new CreateFailure({
+          stage: "unknown",
+          reason: "unexpected_error",
+          message: getErrorMessage(error),
+          cause: error,
+        });
+  return {
+    ok: false,
+    stage: failure.stage,
+    reason: failure.reason,
+    error: failure.cause ?? failure,
+  };
 }
 
 export { PrismaCliCommandError };

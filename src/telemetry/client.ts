@@ -124,6 +124,7 @@ export function trackCliTelemetry(event: string, properties: TelemetryProperties
   return applicationRuntime.runPromise(
     trackCliTelemetryEffect(event, properties).pipe(
       Effect.scoped,
+      Effect.timeout("2 seconds"),
       Effect.catch(() => Effect.void),
     ),
   );

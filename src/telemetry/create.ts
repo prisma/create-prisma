@@ -111,6 +111,7 @@ export const trackCreateCompletedEffect = Effect.fn("Telemetry.createCompleted")
       "duration-ms": params.durationMs,
     }).pipe(
       Effect.scoped,
+      Effect.timeout("2 seconds"),
       Effect.catch(() => Effect.void),
     );
   },
@@ -136,6 +137,7 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
     "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
   }).pipe(
     Effect.scoped,
+    Effect.timeout("2 seconds"),
     Effect.catch(() => Effect.void),
   );
 });
@@ -153,6 +155,7 @@ export const trackCreateCancelledEffect = Effect.fn("Telemetry.createCancelled")
       "cancellation-stage": params.stage,
     }).pipe(
       Effect.scoped,
+      Effect.timeout("2 seconds"),
       Effect.catch(() => Effect.void),
     );
   },

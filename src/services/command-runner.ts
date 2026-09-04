@@ -68,7 +68,15 @@ export class CommandRunner extends Context.Service<
                 })()
               : Promise.resolve();
 
-          const [result] = await Promise.all([subprocess, stderrLines]);
+          let result: Awaited<typeof subprocess>;
+          try {
+            [result] = await Promise.all([subprocess, stderrLines]);
+          } catch (cause) {
+            const error = cause instanceof Error ? cause : new Error(String(cause));
+            subprocess.kill(error);
+            await subprocess.catch(() => undefined);
+            throw cause;
+          }
           return {
             exitCode: result.exitCode ?? 1,
             stdout: typeof result.stdout === "string" ? result.stdout : "",
