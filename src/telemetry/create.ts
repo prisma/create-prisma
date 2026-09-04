@@ -85,6 +85,45 @@ function getErrorCode(error: unknown): number | string | null {
   return typeof code === "number" || typeof code === "string" ? code : null;
 }
 
+type ChildProcessFailure =
+  | "cancelled"
+  | "command_not_found"
+  | "interrupted"
+  | "max_buffer"
+  | "non_zero_exit"
+  | "permission_denied"
+  | "spawn_failed"
+  | "terminated"
+  | "timed_out";
+
+const WINDOWS_CONTROL_C_EXIT_CODE = 0xc000013a;
+
+function getChildProcessFailure(error: unknown): ChildProcessFailure | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+  if (Reflect.get(error, "name") !== "ExecaError" || Reflect.get(error, "failed") !== true) {
+    return null;
+  }
+
+  if (Reflect.get(error, "timedOut") === true) return "timed_out";
+  if (Reflect.get(error, "isCanceled") === true) return "cancelled";
+  if (Reflect.get(error, "isMaxBuffer") === true) return "max_buffer";
+
+  const exitCode = Reflect.get(error, "exitCode");
+  const signal = Reflect.get(error, "signal");
+  if (signal === "SIGINT" || exitCode === 130 || exitCode === WINDOWS_CONTROL_C_EXIT_CODE) {
+    return "interrupted";
+  }
+  if (Reflect.get(error, "isTerminated") === true) return "terminated";
+
+  const code = Reflect.get(error, "code");
+  if (code === "ENOENT") return "command_not_found";
+  if (code === "EACCES" || code === "EPERM") return "permission_denied";
+  if (typeof exitCode === "number") return "non_zero_exit";
+  return "spawn_failed";
+}
+
 function getPrismaCliFailureProperty(
   error: unknown,
   property: "prismaCliCommand" | "prismaCliErrorCode",
@@ -124,6 +163,7 @@ export async function trackCreateFailed(params: {
     "failure-reason": params.reason,
     "error-name": getErrorName(params.error),
     "error-code": getErrorCode(params.error),
+    "child-process-failure": getChildProcessFailure(params.error),
     "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
     "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
   });
