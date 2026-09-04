@@ -3,7 +3,6 @@ import { Effect, FileSystem, Schema } from "effect";
 import path from "node:path";
 import type { Writable } from "node:stream";
 
-import { PRISMA_DENO_CLI_PACKAGE, PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import {
   CreateCancellationError,
   CreateFailure,
@@ -29,7 +28,7 @@ import { getErrorMessage } from "../utils/errors";
 import {
   detectPackageManagerEffect,
   getInstallCommand,
-  getPackageExecutionArgs,
+  getLocalPackageBinaryArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
 import { runSetupCommand } from "../utils/run-command";
@@ -232,10 +231,7 @@ const getContractPath = (authoring: AuthoringStyle) =>
 const getInitTarget = (provider: DatabaseProvider) =>
   provider === "mongo" ? ("mongodb" as const) : ("postgres" as const);
 const getPrismaCliInvocation = (packageManager: PackageManager, args: string[]) =>
-  getPackageExecutionArgs(packageManager, [
-    packageManager === "deno" ? PRISMA_DENO_CLI_PACKAGE : PRISMA_PLATFORM_CLI_PACKAGE,
-    ...args,
-  ]);
+  getLocalPackageBinaryArgs(packageManager, "prisma", args);
 
 const runPrismaCli = Effect.fn("PrismaSetup.runCli")(function* (
   context: PrismaSetupContext,
@@ -429,32 +425,13 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
   if (ownsProgress) yield* Effect.sync(() => progress.start("Creating Prisma 8 project..."));
 
   const setup = Effect.gen(function* () {
-    yield* Effect.sync(() => progress?.message("Preparing Prisma 8 project files..."));
-    yield* atStage(runPrismaInit(context, projectDir), "initialize_prisma", "prisma_init_failed");
-
     yield* atStage(
-      Effect.gen(function* () {
-        yield* scaffoldCreateSharedTemplatesEffect({
-          projectDir,
-          projectName,
-          template,
-          provider: context.databaseProvider,
-          authoring: context.authoring,
-          packageManager: context.packageManager,
-        });
-        yield* writePrismaDependenciesEffect(
-          context.databaseProvider,
-          context.packageManager,
-          context.authoring,
-          projectDir,
-        );
-        yield* ensureComposerTypeScriptOptions(projectDir);
-        if (context.databaseProvider === "mongo") yield* ensureMongoEnvironment(projectDir);
-        if (context.packageManager !== "deno") {
-          yield* ensureGitignoreEntry(projectDir, "/.alchemy");
-          yield* ensureGitignoreEntry(projectDir, "/.prisma-composer");
-        }
-      }),
+      writePrismaDependenciesEffect(
+        context.databaseProvider,
+        context.packageManager,
+        context.authoring,
+        projectDir,
+      ),
       "configure_project",
       "project_configuration_failed",
     );
@@ -471,6 +448,30 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
       }),
       "install_dependencies",
       "dependency_install_failed",
+    );
+
+    yield* Effect.sync(() => progress?.message("Preparing Prisma 8 project files..."));
+    yield* atStage(runPrismaInit(context, projectDir), "initialize_prisma", "prisma_init_failed");
+
+    yield* atStage(
+      Effect.gen(function* () {
+        yield* scaffoldCreateSharedTemplatesEffect({
+          projectDir,
+          projectName,
+          template,
+          provider: context.databaseProvider,
+          authoring: context.authoring,
+          packageManager: context.packageManager,
+        });
+        yield* ensureComposerTypeScriptOptions(projectDir);
+        if (context.databaseProvider === "mongo") yield* ensureMongoEnvironment(projectDir);
+        if (context.packageManager !== "deno") {
+          yield* ensureGitignoreEntry(projectDir, "/.alchemy");
+          yield* ensureGitignoreEntry(projectDir, "/.prisma-composer");
+        }
+      }),
+      "configure_project",
+      "project_configuration_failed",
     );
 
     yield* Effect.sync(() => progress?.message("Installing Prisma agent skills..."));

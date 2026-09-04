@@ -2,7 +2,6 @@ import { cancel, isCancel, log, select, spinner, taskLog } from "@clack/prompts"
 import { Effect, Schema } from "effect";
 import type { Writable } from "node:stream";
 
-import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import {
   CreateCancellationError,
   CreateFailure,
@@ -16,8 +15,8 @@ import { CommandRunner } from "../services/command-runner";
 import type { PackageManager } from "../types";
 import { getErrorMessage, redactSecrets } from "../utils/errors";
 import {
-  getPackageExecutionArgs,
-  getPackageExecutionCommand,
+  getLocalPackageBinaryArgs,
+  getLocalPackageBinaryCommand,
   getRunScriptArgs,
   getRunScriptCommand,
 } from "../utils/package-manager";
@@ -128,7 +127,7 @@ export function parsePrismaCliEnvelope(output: string): PrismaCliEnvelope {
 }
 
 const getPrismaCliArgs = (packageManager: PackageManager, args: string[]) =>
-  getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
+  getLocalPackageBinaryArgs(packageManager, "prisma", args);
 
 const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(function* (options: {
   packageManager: PackageManager;
@@ -240,8 +239,7 @@ const ensureAuthentication = Effect.fn("Deployment.ensureAuthentication")(functi
 
   const authState = yield* whoami();
   if (authState.authenticated) return authState;
-  const loginCommand = getPackageExecutionCommand(options.packageManager, [
-    PRISMA_PLATFORM_CLI_PACKAGE,
+  const loginCommand = getLocalPackageBinaryCommand(options.packageManager, "prisma", [
     "auth",
     "login",
   ]);
@@ -517,8 +515,7 @@ export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")
       "build_failed",
     );
 
-    const deployCommand = getPackageExecutionCommand(options.packageManager, [
-      PRISMA_PLATFORM_CLI_PACKAGE,
+    const deployCommand = getLocalPackageBinaryCommand(options.packageManager, "prisma", [
       "deploy",
       "module.ts",
     ]);

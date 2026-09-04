@@ -281,7 +281,7 @@ export function getLocalPackageBinaryArgs(
     case "deno":
       return {
         command: "deno",
-        args: ["run", "-A", DENO_ALLOW_FRESH_DEPENDENCIES, `npm:${binaryName}`, ...binaryArgs],
+        args: ["run", "-A", "--frozen", `npm:${binaryName}@latest`, ...binaryArgs],
       };
     case "pnpm":
       return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
@@ -291,7 +291,10 @@ export function getLocalPackageBinaryArgs(
       return { command: "bun", args: [binaryName, ...binaryArgs] };
     case "npm":
     default:
-      return { command: "npm", args: ["exec", binaryName, "--", ...binaryArgs] };
+      return {
+        command: "npm",
+        args: ["exec", "--offline", "--yes=false", "--", binaryName, ...binaryArgs],
+      };
   }
 }
 
