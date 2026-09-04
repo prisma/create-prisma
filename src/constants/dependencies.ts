@@ -3,8 +3,8 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@prisma/composer": "0.16.0",
-  "@prisma/composer-prisma-cloud": "0.16.0",
+  "@prisma/composer": "0.17.0",
+  "@prisma/composer-prisma-cloud": "0.17.0",
   "@prisma/orm-mongo": "8.0.0-rc.8",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency.
   "@prisma/orm-postgres": "8.0.0-rc.8",
