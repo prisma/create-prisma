@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { CreatePromptContext } from "../commands/create";
 import type {
   CreateCancellationStage,
@@ -5,8 +7,9 @@ import type {
   CreateFailureStage,
 } from "../create-outcome";
 import type { CreateCommandInput } from "../types";
+import { applicationRuntime } from "../runtime";
 
-import { trackCliTelemetry } from "./client";
+import { trackCliTelemetryEffect } from "./client";
 
 export const CREATE_PRISMA_NEXT_COMPLETED_EVENT = "cli:create_prisma_next_command_completed";
 export const CREATE_PRISMA_NEXT_FAILED_EVENT = "cli:create_prisma_next_command_failed";
@@ -97,26 +100,31 @@ function getPrismaCliFailureProperty(
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-export async function trackCreateCompleted(params: {
-  input: CreateCommandInput;
-  context: CreatePromptContext;
-  durationMs: number;
-}): Promise<void> {
-  await trackCliTelemetry(CREATE_PRISMA_NEXT_COMPLETED_EVENT, {
-    ...getBaseCreateProperties(params.input, params.context),
-    "duration-ms": params.durationMs,
-  });
-}
+export const trackCreateCompletedEffect = Effect.fn("Telemetry.createCompleted")(
+  function* (params: {
+    input: CreateCommandInput;
+    context: CreatePromptContext;
+    durationMs: number;
+  }) {
+    yield* trackCliTelemetryEffect(CREATE_PRISMA_NEXT_COMPLETED_EVENT, {
+      ...getBaseCreateProperties(params.input, params.context),
+      "duration-ms": params.durationMs,
+    }).pipe(
+      Effect.scoped,
+      Effect.catch(() => Effect.void),
+    );
+  },
+);
 
-export async function trackCreateFailed(params: {
+export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(function* (params: {
   input: CreateCommandInput;
   context?: CreatePromptContext;
   durationMs: number;
   error?: unknown;
   stage: CreateTelemetryFailureStage;
   reason: CreateFailureReason;
-}): Promise<void> {
-  await trackCliTelemetry(CREATE_PRISMA_NEXT_FAILED_EVENT, {
+}) {
+  yield* trackCliTelemetryEffect(CREATE_PRISMA_NEXT_FAILED_EVENT, {
     ...getBaseCreateProperties(params.input, params.context),
     "duration-ms": params.durationMs,
     "failure-class": getFailureClass(params.reason),
@@ -126,18 +134,33 @@ export async function trackCreateFailed(params: {
     "error-code": getErrorCode(params.error),
     "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
     "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
-  });
-}
+  }).pipe(
+    Effect.scoped,
+    Effect.catch(() => Effect.void),
+  );
+});
 
-export async function trackCreateCancelled(params: {
-  input: CreateCommandInput;
-  context?: CreatePromptContext;
-  durationMs: number;
-  stage: CreateCancellationStage;
-}): Promise<void> {
-  await trackCliTelemetry(CREATE_PRISMA_NEXT_CANCELLED_EVENT, {
-    ...getBaseCreateProperties(params.input, params.context),
-    "duration-ms": params.durationMs,
-    "cancellation-stage": params.stage,
-  });
-}
+export const trackCreateCancelledEffect = Effect.fn("Telemetry.createCancelled")(
+  function* (params: {
+    input: CreateCommandInput;
+    context?: CreatePromptContext;
+    durationMs: number;
+    stage: CreateCancellationStage;
+  }) {
+    yield* trackCliTelemetryEffect(CREATE_PRISMA_NEXT_CANCELLED_EVENT, {
+      ...getBaseCreateProperties(params.input, params.context),
+      "duration-ms": params.durationMs,
+      "cancellation-stage": params.stage,
+    }).pipe(
+      Effect.scoped,
+      Effect.catch(() => Effect.void),
+    );
+  },
+);
+
+export const trackCreateCompleted = (params: Parameters<typeof trackCreateCompletedEffect>[0]) =>
+  applicationRuntime.runPromise(trackCreateCompletedEffect(params));
+export const trackCreateFailed = (params: Parameters<typeof trackCreateFailedEffect>[0]) =>
+  applicationRuntime.runPromise(trackCreateFailedEffect(params));
+export const trackCreateCancelled = (params: Parameters<typeof trackCreateCancelledEffect>[0]) =>
+  applicationRuntime.runPromise(trackCreateCancelledEffect(params));

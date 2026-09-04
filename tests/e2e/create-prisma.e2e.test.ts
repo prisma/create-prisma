@@ -58,7 +58,7 @@ async function runCommand(projectDir: string, args: string[]) {
 
 async function runCreatePrismaJson(rootDir: string, args: string[]) {
   const child = Bun.spawn({
-    cmd: [process.execPath, path.join(import.meta.dir, "../../src/cli.ts"), "create", ...args],
+    cmd: [process.execPath, path.join(import.meta.dir, "../../src/cli.ts"), ...args],
     cwd: rootDir,
     env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
     stdout: "pipe",

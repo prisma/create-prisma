@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { Effect } from "effect";
 
 import type { CreatePromptContext } from "../src/commands/create";
 import type { CreateCommandInput } from "../src/types";
 
 const trackCliTelemetry = mock(async () => {});
 
-mock.module("../src/telemetry/client", () => ({ trackCliTelemetry }));
+mock.module("../src/telemetry/client", () => ({
+  trackCliTelemetryEffect: (event: string, properties: Record<string, unknown>) =>
+    Effect.promise(() => trackCliTelemetry(event, properties)),
+}));
 
 const {
   CREATE_PRISMA_NEXT_CANCELLED_EVENT,

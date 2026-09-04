@@ -1,4 +1,4 @@
-import fs from "fs-extra";
+import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
 import {
@@ -7,9 +7,19 @@ import {
   PRISMA_DENO_CLI_PACKAGE,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
+import { applicationRuntime } from "../runtime";
 import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
 import { getInstallArgs, getRunScriptCommand } from "../utils/package-manager";
 import { runSetupCommand } from "../utils/run-command";
+
+type PackageJson = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+  resolutions?: Record<string, string>;
+  overrides?: Record<string, string>;
+  [key: string]: unknown;
+};
 
 function getPrismaScriptMap(packageManager: PackageManager): Record<string, string> {
   if (packageManager === "deno") {
@@ -34,7 +44,6 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
   }
 
   const prismaCommand = (...args: string[]) => ["prisma", ...args].join(" ");
-
   return {
     "contract:emit": prismaCommand("contract", "emit"),
     "db:init": prismaCommand("db", "init"),
@@ -49,168 +58,176 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
 }
 
 export function getComposerScriptMap(packageManager: PackageManager): Record<string, string> {
-  if (packageManager === "deno") {
-    return {};
-  }
-
+  if (packageManager === "deno") return {};
   const composerCommand = (subcommand: "dev" | "deploy") =>
     ["prisma", subcommand, "module.ts"].join(" ");
-
   return {
     "composer:dev": composerCommand("dev"),
     "composer:deploy": composerCommand("deploy"),
-    deploy: `${getRunScriptCommand(packageManager, "build")} && ${getRunScriptCommand(
-      packageManager,
-      "composer:deploy",
-    )}`,
-    "dev:composer": `${getRunScriptCommand(packageManager, "build")} && ${getRunScriptCommand(
-      packageManager,
-      "composer:dev",
-    )}`,
+    deploy: `${getRunScriptCommand(packageManager, "build")} && ${getRunScriptCommand(packageManager, "composer:deploy")}`,
+    "dev:composer": `${getRunScriptCommand(packageManager, "build")} && ${getRunScriptCommand(packageManager, "composer:dev")}`,
   };
 }
 
-function unique(items: string[]): string[] {
-  return [...new Set(items)];
-}
+const unique = (items: string[]) => [...new Set(items)];
+const sortRecord = (record: Record<string, string>) =>
+  Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
 
-function sortRecord(record: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
-}
+const readPackageJson = Effect.fn("Dependencies.readPackageJson")(function* (
+  packageJsonPath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const source = yield* fs.readFileString(packageJsonPath);
+  return yield* Effect.try({
+    try: () => JSON.parse(source) as PackageJson,
+    catch: (cause) => new Error(`Invalid package.json at ${packageJsonPath}`, { cause }),
+  });
+});
 
-export async function addPackageDependency(opts: {
+const writePackageJson = Effect.fn("Dependencies.writePackageJson")(function* (
+  packageJsonPath: string,
+  packageJson: PackageJson,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs.writeFileString(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+});
+
+export const addPackageDependencyEffect = Effect.fn("Dependencies.add")(function* (opts: {
   dependencies?: string[];
   devDependencies?: string[];
   customDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
   scriptMode?: "if-missing";
   projectDir: string;
-}): Promise<void> {
-  const {
-    dependencies = [],
-    devDependencies = [],
-    customDependencies = {},
-    scripts = {},
-    scriptMode,
-    projectDir,
-  } = opts;
-
-  const pkgJsonPath = path.join(projectDir, "package.json");
-  if (!(await fs.pathExists(pkgJsonPath))) {
-    throw new Error(
-      `No package.json found in ${projectDir}. Run this command inside an existing JavaScript/TypeScript project.`,
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const dependencies = opts.dependencies ?? [];
+  const devDependencies = opts.devDependencies ?? [];
+  const customDependencies = opts.customDependencies ?? {};
+  const scripts = opts.scripts ?? {};
+  const packageJsonPath = path.join(opts.projectDir, "package.json");
+  if (!(yield* fs.exists(packageJsonPath))) {
+    return yield* Effect.fail(
+      new Error(
+        `No package.json found in ${opts.projectDir}. Run this command inside an existing JavaScript/TypeScript project.`,
+      ),
     );
   }
 
-  const pkgJson = await fs.readJson(pkgJsonPath);
-  pkgJson.dependencies ??= {};
-  pkgJson.devDependencies ??= {};
-  pkgJson.scripts ??= {};
+  const packageJson = yield* readPackageJson(packageJsonPath);
+  packageJson.dependencies ??= {};
+  packageJson.devDependencies ??= {};
+  packageJson.scripts ??= {};
 
   for (const packageName of unique(dependencies)) {
     const version = getDependencyVersion(packageName);
-    if (!version) throw new Error(`Dependency ${packageName} is missing from the version map.`);
-    pkgJson.dependencies[packageName] = version;
+    if (!version)
+      return yield* Effect.fail(
+        new Error(`Dependency ${packageName} is missing from the version map.`),
+      );
+    packageJson.dependencies[packageName] = version;
   }
   for (const packageName of unique(devDependencies)) {
     const version = getDependencyVersion(packageName);
-    if (!version) throw new Error(`Dependency ${packageName} is missing from the version map.`);
-    pkgJson.devDependencies[packageName] = version;
+    if (!version)
+      return yield* Effect.fail(
+        new Error(`Dependency ${packageName} is missing from the version map.`),
+      );
+    packageJson.devDependencies[packageName] = version;
   }
-  for (const [packageName, version] of Object.entries(customDependencies)) {
-    pkgJson.dependencies[packageName] = version;
-  }
+  Object.assign(packageJson.dependencies, customDependencies);
   for (const [scriptName, command] of Object.entries(scripts)) {
     if (
-      scriptMode === "if-missing" &&
-      typeof pkgJson.scripts[scriptName] === "string" &&
-      pkgJson.scripts[scriptName].trim().length > 0
+      opts.scriptMode === "if-missing" &&
+      typeof packageJson.scripts[scriptName] === "string" &&
+      packageJson.scripts[scriptName].trim().length > 0
     ) {
       continue;
     }
-    pkgJson.scripts[scriptName] = command;
+    packageJson.scripts[scriptName] = command;
   }
 
-  pkgJson.dependencies = sortRecord(pkgJson.dependencies);
-  pkgJson.devDependencies = sortRecord(pkgJson.devDependencies);
-  pkgJson.scripts = sortRecord(pkgJson.scripts);
-  await fs.writeJson(pkgJsonPath, pkgJson, { spaces: 2 });
-}
+  packageJson.dependencies = sortRecord(packageJson.dependencies);
+  packageJson.devDependencies = sortRecord(packageJson.devDependencies);
+  packageJson.scripts = sortRecord(packageJson.scripts);
+  yield* writePackageJson(packageJsonPath, packageJson);
+});
 
-export async function writePrismaDependencies(
+export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma")(function* (
   provider: DatabaseProvider,
   packageManager: PackageManager,
   _authoring: AuthoringStyle,
   projectDir = process.cwd(),
-): Promise<void> {
+) {
   const dependencies = [getDbPackages(provider)];
   if (provider === "postgres" && packageManager !== "deno") dependencies.push("temporal-polyfill");
   if (provider === "mongo") dependencies.push("arktype", "mongodb");
   if (packageManager === "deno") dependencies.push("dotenv");
-
-  const devDependencies = ["@types/node", "prisma"];
-
-  await addPackageDependency({
+  yield* addPackageDependencyEffect({
     dependencies,
-    devDependencies,
+    devDependencies: ["@types/node", "prisma"],
     scripts: getPrismaScriptMap(packageManager),
     projectDir,
   });
-}
+});
 
-export async function writeCreateTemplateDependencies(opts: {
-  template: CreateTemplate;
-  packageManager: PackageManager;
-  projectDir?: string;
-}): Promise<void> {
-  const { template, packageManager, projectDir = process.cwd() } = opts;
+export const writeCreateTemplateDependenciesEffect = Effect.fn("Dependencies.writeTemplate")(
+  function* (opts: {
+    template: CreateTemplate;
+    packageManager: PackageManager;
+    projectDir?: string;
+  }) {
+    const projectDir = opts.projectDir ?? process.cwd();
+    if (opts.packageManager === "deno") return;
 
-  if (packageManager === "deno") {
-    return;
-  }
+    for (const target of getCreateTemplateDependencies(opts.template, opts.packageManager)) {
+      yield* addPackageDependencyEffect({
+        dependencies: target.dependencies,
+        devDependencies: target.devDependencies,
+        customDependencies: target.customDependencies,
+        scripts: getComposerScriptMap(opts.packageManager),
+        projectDir: path.join(projectDir, path.dirname(target.packageJsonPath)),
+      });
+    }
 
-  for (const target of getCreateTemplateDependencies(template, packageManager)) {
-    await addPackageDependency({
-      dependencies: target.dependencies,
-      devDependencies: target.devDependencies,
-      customDependencies: target.customDependencies,
-      scripts: getComposerScriptMap(packageManager),
-      projectDir: path.join(projectDir, path.dirname(target.packageJsonPath)),
-    });
-  }
+    const packageJsonPath = path.join(projectDir, "package.json");
+    const packageJson = yield* readPackageJson(packageJsonPath);
+    const effectVersion = getDependencyVersion("effect");
+    if (!effectVersion)
+      return yield* Effect.fail(new Error("Dependency effect is missing from the version map."));
+    if (opts.packageManager === "yarn") {
+      packageJson.resolutions = { ...packageJson.resolutions, effect: effectVersion };
+    } else if (opts.packageManager !== "pnpm") {
+      packageJson.overrides = { ...packageJson.overrides, effect: effectVersion };
+    }
+    yield* writePackageJson(packageJsonPath, packageJson);
+  },
+);
 
-  const packageJsonPath = path.join(projectDir, "package.json");
-  const packageJson = await fs.readJson(packageJsonPath);
-  const effectVersion = getDependencyVersion("effect");
-  if (!effectVersion) throw new Error("Dependency effect is missing from the version map.");
-
-  if (packageManager === "yarn") {
-    packageJson.resolutions = { ...packageJson.resolutions, effect: effectVersion };
-  } else if (packageManager !== "pnpm") {
-    packageJson.overrides = { ...packageJson.overrides, effect: effectVersion };
-  }
-  await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 });
-}
-
-export async function installProjectDependencies(
+export const installProjectDependenciesEffect = Effect.fn("Dependencies.install")(function* (
   packageManager: PackageManager,
   projectDir = process.cwd(),
   options: { verbose?: boolean; json?: boolean } = {},
-): Promise<void> {
+) {
   const installCommand = getInstallArgs(packageManager);
-  const env =
-    packageManager === "yarn"
-      ? {
-          YARN_ENABLE_IMMUTABLE_INSTALLS: "false",
-        }
-      : undefined;
-
-  await runSetupCommand({
+  yield* runSetupCommand({
     command: installCommand.command,
     args: installCommand.args,
     cwd: projectDir,
-    env,
+    ...(packageManager === "yarn" ? { env: { YARN_ENABLE_IMMUTABLE_INSTALLS: "false" } } : {}),
     verbose: options.verbose === true,
     json: options.json === true,
   });
-}
+});
+
+export const addPackageDependency = (opts: Parameters<typeof addPackageDependencyEffect>[0]) =>
+  applicationRuntime.runPromise(addPackageDependencyEffect(opts));
+export const writePrismaDependencies = (
+  ...args: Parameters<typeof writePrismaDependenciesEffect>
+) => applicationRuntime.runPromise(writePrismaDependenciesEffect(...args));
+export const writeCreateTemplateDependencies = (
+  opts: Parameters<typeof writeCreateTemplateDependenciesEffect>[0],
+) => applicationRuntime.runPromise(writeCreateTemplateDependenciesEffect(opts));
+export const installProjectDependencies = (
+  ...args: Parameters<typeof installProjectDependenciesEffect>
+) => applicationRuntime.runPromise(installProjectDependenciesEffect(...args));
