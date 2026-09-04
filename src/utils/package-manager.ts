@@ -1,7 +1,8 @@
-import fs from "fs-extra";
+import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
-import { PackageManagerSchema, type PackageManager } from "../types";
+import { applicationRuntime } from "../runtime";
+import { packageManagers, type PackageManager } from "../types";
 
 type CommandAndArgs = {
   command: string;
@@ -55,31 +56,46 @@ function parsePackageManagerField(packageManagerField: unknown): PackageManager 
   }
 
   const managerName = packageManagerField.split("@")[0];
-  const parsed = PackageManagerSchema.safeParse(managerName);
-  return parsed.success ? parsed.data : null;
+  return packageManagers.includes(managerName as PackageManager)
+    ? (managerName as PackageManager)
+    : null;
 }
 
-async function detectFromPackageJson(projectDir: string): Promise<PackageManager | null> {
+const detectFromPackageJson = Effect.fn("PackageManager.detectFromPackageJson")(function* (
+  projectDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   const packageJsonPath = path.join(projectDir, "package.json");
-  if (!(await fs.pathExists(packageJsonPath))) {
+  if (!(yield* fs.exists(packageJsonPath))) {
     return null;
   }
 
-  const packageJson = await fs.readJson(packageJsonPath);
-  return parsePackageManagerField(packageJson.packageManager);
-}
+  const packageJsonSource = yield* fs
+    .readFileString(packageJsonPath)
+    .pipe(Effect.catch(() => Effect.succeed("")));
+  const packageJson = yield* Effect.try(
+    () => JSON.parse(packageJsonSource) as Record<string, unknown>,
+  ).pipe(Effect.catch(() => Effect.succeed(null)));
+  return packageJson ? parsePackageManagerField(packageJson.packageManager) : null;
+});
 
-async function detectFromDenoConfig(projectDir: string): Promise<PackageManager | null> {
+const detectFromDenoConfig = Effect.fn("PackageManager.detectFromDenoConfig")(function* (
+  projectDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   for (const configFile of ["deno.json", "deno.jsonc"]) {
-    if (await fs.pathExists(path.join(projectDir, configFile))) {
+    if (yield* fs.exists(path.join(projectDir, configFile))) {
       return "deno";
     }
   }
 
   return null;
-}
+});
 
-async function detectFromLockfile(projectDir: string): Promise<PackageManager | null> {
+const detectFromLockfile = Effect.fn("PackageManager.detectFromLockfile")(function* (
+  projectDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   const lockfileChecks: Array<{ manager: PackageManager; lockfile: string }> = [
     { manager: "pnpm", lockfile: "pnpm-lock.yaml" },
     { manager: "yarn", lockfile: "yarn.lock" },
@@ -91,26 +107,28 @@ async function detectFromLockfile(projectDir: string): Promise<PackageManager | 
   ];
 
   for (const check of lockfileChecks) {
-    if (await fs.pathExists(path.join(projectDir, check.lockfile))) {
+    if (yield* fs.exists(path.join(projectDir, check.lockfile))) {
       return check.manager;
     }
   }
 
   return null;
-}
+});
 
-export async function detectPackageManager(projectDir = process.cwd()): Promise<PackageManager> {
-  const fromPackageJson = await detectFromPackageJson(projectDir);
+export const detectPackageManagerEffect = Effect.fn("PackageManager.detect")(function* (
+  projectDir = process.cwd(),
+) {
+  const fromPackageJson = yield* detectFromPackageJson(projectDir);
   if (fromPackageJson) {
     return fromPackageJson;
   }
 
-  const fromLockfile = await detectFromLockfile(projectDir);
+  const fromLockfile = yield* detectFromLockfile(projectDir);
   if (fromLockfile) {
     return fromLockfile;
   }
 
-  const fromDenoConfig = await detectFromDenoConfig(projectDir);
+  const fromDenoConfig = yield* detectFromDenoConfig(projectDir);
   if (fromDenoConfig) {
     return fromDenoConfig;
   }
@@ -121,6 +139,10 @@ export async function detectPackageManager(projectDir = process.cwd()): Promise<
   }
 
   return "npm";
+});
+
+export function detectPackageManager(projectDir = process.cwd()): Promise<PackageManager> {
+  return applicationRuntime.runPromise(detectPackageManagerEffect(projectDir));
 }
 
 export function getPackageManagerManifestValue(
@@ -258,7 +280,7 @@ export function getLocalPackageBinaryArgs(
     case "deno":
       return {
         command: "deno",
-        args: ["run", "-A", DENO_ALLOW_FRESH_DEPENDENCIES, `npm:${binaryName}`, ...binaryArgs],
+        args: ["run", "-A", "--frozen", `npm:${binaryName}@latest`, ...binaryArgs],
       };
     case "pnpm":
       return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
@@ -268,7 +290,10 @@ export function getLocalPackageBinaryArgs(
       return { command: "bun", args: [binaryName, ...binaryArgs] };
     case "npm":
     default:
-      return { command: "npm", args: ["exec", binaryName, "--", ...binaryArgs] };
+      return {
+        command: "npm",
+        args: ["exec", "--offline", "--yes=false", "--", binaryName, ...binaryArgs],
+      };
   }
 }
 

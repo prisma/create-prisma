@@ -1,100 +1,27 @@
-import { cancel, isCancel, log, select, spinner, taskLog } from "@clack/prompts";
-import { execa } from "execa";
-import { createInterface } from "node:readline";
+import { log, spinner, taskLog } from "@clack/prompts";
+import { Cause, Effect, Exit } from "effect";
 import type { Writable } from "node:stream";
 
-import { PRISMA_PLATFORM_CLI_PACKAGE } from "../constants/dependencies";
 import {
-  ClassifiedCreateError,
-  getCreateFailureReason,
+  CreateCancellationError,
+  CreateFailure,
   type CreateFailureReason,
   type CreateFailureStage,
 } from "../create-outcome";
+import type { ComposerDeployResult } from "../result";
+import { applicationRuntime } from "../runtime";
 import type { PackageManager } from "../types";
 import { getErrorMessage, redactSecrets } from "../utils/errors";
-import {
-  getPackageExecutionArgs,
-  getPackageExecutionCommand,
-  getRunScriptArgs,
-  getRunScriptCommand,
-} from "../utils/package-manager";
+import { getLocalPackageBinaryCommand, getRunScriptArgs } from "../utils/package-manager";
 import { runSetupCommand } from "../utils/run-command";
-
-type PrismaCliEnvelope<Result = unknown> = {
-  ok: boolean;
-  command?: string;
-  commandId?: string;
-  result?: Result;
-  error?: { code?: string; summary?: string; message?: string; why?: string };
-};
-
-export class PrismaCliCommandError extends Error {
-  readonly prismaCliCommand?: string;
-  readonly prismaCliErrorCode?: string;
-
-  constructor(options: { message: string; command?: string; code?: string }) {
-    super(options.message);
-    this.name = "PrismaCliCommandError";
-    this.prismaCliCommand = options.command;
-    this.prismaCliErrorCode = options.code;
-  }
-}
-
-type PrismaWorkspace = {
-  id: string;
-  name: string | null;
-};
-
-type WhoamiResult = {
-  authenticated: boolean;
-  workspace: PrismaWorkspace | null;
-  source: "stored" | "environment" | null;
-};
-
-type WorkspaceListResult = {
-  items: Array<{
-    workspaceId: string;
-    workspaceName: string | null;
-    current: boolean;
-  }>;
-};
-
-type WorkspaceUseResult = {
-  workspace: PrismaWorkspace;
-};
-
-type ProjectShowResult = {
-  workspace: PrismaWorkspace;
-  project: { id: string; name: string } | null;
-};
-
-type ProjectListResult = {
-  items: Array<{
-    id: string;
-    name: string;
-  }>;
-};
-
-type ComposerDeployCommandResult = {
-  summary: {
-    app: string;
-    nodes: Array<{
-      entities: Array<{ kind: string; id: string; url?: string }>;
-    }>;
-  } | null;
-};
-
-export type ComposerDeployResult = {
-  appName: string;
-  appUrl?: string;
-  serviceId?: string;
-  workspace?: PrismaWorkspace;
-  project: {
-    id?: string;
-    name: string;
-    consoleUrl?: string;
-  };
-};
+import { atCreateStage } from "../workflow/failure";
+import { ensureAuthentication, selectDeploymentWorkspace } from "./composer/auth";
+import {
+  ComposerDeployCommandResultSchema,
+  parseComposerDeployResult,
+} from "./composer/deployment-result";
+import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "./composer/prisma-cli";
+import { ensureProjectNameAvailable, getProjectDetails } from "./composer/projects";
 
 export type ComposerDeployExecutionResult =
   | { ok: true; deployment: ComposerDeployResult }
@@ -107,329 +34,7 @@ export type ComposerDeployExecutionResult =
       error: unknown;
     };
 
-type WorkspaceSelectionResult =
-  | { ok: true; workspace: PrismaWorkspace }
-  | { ok: false; cancelled: true };
-
-function stripResourcePrefix(id: string, prefix: "proj" | "wksp"): string {
-  const marker = `${prefix}_`;
-  return id.startsWith(marker) ? id.slice(marker.length) : id;
-}
-
-export function getConsoleProjectUrl(workspaceId: string, projectId: string): string {
-  const consoleWorkspaceId = stripResourcePrefix(workspaceId, "wksp");
-  const consoleProjectId = stripResourcePrefix(projectId, "proj");
-  return `https://console.prisma.io/${encodeURIComponent(
-    consoleWorkspaceId,
-  )}/${encodeURIComponent(consoleProjectId)}`;
-}
-
-export function parsePrismaCliEnvelope<Result = unknown>(
-  output: string,
-): PrismaCliEnvelope<Result> {
-  const lines = output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .reverse();
-
-  for (const line of lines) {
-    try {
-      const parsed = JSON.parse(line) as Record<string, unknown>;
-      const candidate = parsed.kind === "result" ? parsed.envelope : parsed;
-      if (typeof candidate !== "object" || candidate === null) continue;
-      if (typeof Reflect.get(candidate, "ok") !== "boolean") continue;
-      return candidate as PrismaCliEnvelope<Result>;
-    } catch {
-      // The CLI may print progress frames before its final JSON envelope.
-    }
-  }
-
-  throw new Error("Prisma CLI returned output that is not a valid result envelope.");
-}
-
-function getPrismaCliArgs(packageManager: PackageManager, args: string[]) {
-  return getPackageExecutionArgs(packageManager, [PRISMA_PLATFORM_CLI_PACKAGE, ...args]);
-}
-
-async function runPrismaJsonCommand<Result>(options: {
-  packageManager: PackageManager;
-  projectDir: string;
-  args: string[];
-  onStderrLine?: (line: string) => void;
-}): Promise<Result> {
-  const invocation = getPrismaCliArgs(options.packageManager, [
-    ...options.args,
-    "--json",
-    "--no-interactive",
-  ]);
-  const subprocess = execa(invocation.command, invocation.args, {
-    cwd: options.projectDir,
-    env: process.env,
-    reject: false,
-  });
-  const stderrLines =
-    options.onStderrLine && subprocess.stderr
-      ? (async () => {
-          const lines = createInterface({ input: subprocess.stderr });
-          for await (const line of lines) {
-            if (line.trim()) options.onStderrLine?.(line);
-          }
-        })()
-      : Promise.resolve();
-  const [result] = await Promise.all([subprocess, stderrLines]);
-
-  let envelope: PrismaCliEnvelope<Result>;
-  try {
-    envelope = parsePrismaCliEnvelope<Result>(result.stdout);
-  } catch (error) {
-    if (result.exitCode !== 0 && result.stderr.trim()) throw new Error(result.stderr.trim());
-    throw error;
-  }
-
-  if (result.exitCode !== 0 || !envelope.ok || envelope.result === undefined) {
-    const summary = envelope.error?.summary ?? envelope.error?.message;
-    throw new PrismaCliCommandError({
-      message:
-        [summary, envelope.error?.why].filter(Boolean).join(": ") ||
-        result.stderr.trim() ||
-        "Prisma CLI command failed.",
-      ...(envelope.commandId || envelope.command
-        ? { command: envelope.commandId ?? envelope.command }
-        : {}),
-      ...(envelope.error?.code ? { code: envelope.error.code } : {}),
-    });
-  }
-  return envelope.result;
-}
-
-export function findProjectNameCollisions(
-  projects: ProjectListResult["items"],
-  appName: string,
-): ProjectListResult["items"] {
-  return projects.filter((project) => project.name === appName);
-}
-
-async function ensureProjectNameAvailable(options: {
-  appName: string;
-  packageManager: PackageManager;
-  projectDir: string;
-  workspace: PrismaWorkspace;
-}): Promise<void> {
-  const result = await runPrismaJsonCommand<ProjectListResult>({
-    packageManager: options.packageManager,
-    projectDir: options.projectDir,
-    args: ["project", "list"],
-  });
-  const collisions = findProjectNameCollisions(result.items, options.appName);
-  if (collisions.length === 0) return;
-
-  const projectIds = collisions.map((project) => project.id).join(", ");
-  throw new ClassifiedCreateError(
-    "project_name_collision",
-    `A Prisma project named "${options.appName}" already exists in workspace ${workspaceLabel(
-      options.workspace,
-    )} (${options.workspace.id}). Choose a different project name or delete the existing project ` +
-      `(${projectIds}) in Prisma Console, then retry.`,
-  );
-}
-
-async function ensureAuthentication(options: {
-  packageManager: PackageManager;
-  projectDir: string;
-  output: Writable;
-  allowInteractiveLogin: boolean;
-  beforeInteractiveLogin?: () => void;
-}): Promise<WhoamiResult> {
-  const whoami = () =>
-    runPrismaJsonCommand<WhoamiResult>({
-      packageManager: options.packageManager,
-      projectDir: options.projectDir,
-      args: ["auth", "whoami"],
-    });
-
-  const authState = await whoami();
-  if (authState.authenticated) return authState;
-
-  const loginCommand = getPackageExecutionCommand(options.packageManager, [
-    PRISMA_PLATFORM_CLI_PACKAGE,
-    "auth",
-    "login",
-  ]);
-  if (!options.allowInteractiveLogin || process.stdin.isTTY !== true) {
-    throw new ClassifiedCreateError(
-      "not_authenticated",
-      `Sign in first with ${loginCommand}, then run ${getRunScriptCommand(options.packageManager, "deploy")}.`,
-    );
-  }
-
-  options.beforeInteractiveLogin?.();
-  log.info("Sign in to Prisma to deploy.", { output: options.output });
-  const login = getPrismaCliArgs(options.packageManager, ["auth", "login"]);
-  await execa(login.command, login.args, {
-    cwd: options.projectDir,
-    env: process.env,
-    stdio: "inherit",
-  });
-
-  const authenticatedState = await whoami();
-  if (!authenticatedState.authenticated) {
-    throw new ClassifiedCreateError(
-      "authentication_failed",
-      "Prisma sign-in completed without an active workspace session.",
-    );
-  }
-  return authenticatedState;
-}
-
-function workspaceLabel(workspace: PrismaWorkspace): string {
-  return workspace.name ?? workspace.id;
-}
-
-async function useWorkspace(options: {
-  packageManager: PackageManager;
-  projectDir: string;
-  workspace: string;
-}): Promise<PrismaWorkspace> {
-  const result = await runPrismaJsonCommand<WorkspaceUseResult>({
-    packageManager: options.packageManager,
-    projectDir: options.projectDir,
-    args: ["auth", "workspace", "use", options.workspace],
-  });
-  return result.workspace;
-}
-
-async function selectDeploymentWorkspace(options: {
-  packageManager: PackageManager;
-  projectDir: string;
-  shouldPrompt: boolean;
-  workspace?: string;
-  authState: WhoamiResult;
-  beforePrompt?: () => void;
-  afterPrompt?: () => void;
-  output: Writable;
-}): Promise<WorkspaceSelectionResult> {
-  const activeWorkspace = options.authState.workspace;
-  if (!activeWorkspace) {
-    throw new ClassifiedCreateError(
-      "workspace_missing",
-      "The active Prisma credential does not specify a workspace.",
-    );
-  }
-
-  if (options.workspace) {
-    if (options.authState.source === "environment") {
-      if (options.workspace === activeWorkspace.id || options.workspace === activeWorkspace.name) {
-        return { ok: true, workspace: activeWorkspace };
-      }
-      throw new ClassifiedCreateError(
-        "workspace_mismatch",
-        `The environment credential is fixed to workspace ${workspaceLabel(
-          activeWorkspace,
-        )}. Unset it before using --workspace ${options.workspace}.`,
-      );
-    }
-    return {
-      ok: true,
-      workspace: await useWorkspace({
-        packageManager: options.packageManager,
-        projectDir: options.projectDir,
-        workspace: options.workspace,
-      }),
-    };
-  }
-
-  if (!options.shouldPrompt || process.stdin.isTTY !== true) {
-    return { ok: true, workspace: activeWorkspace };
-  }
-
-  const available = await runPrismaJsonCommand<WorkspaceListResult>({
-    packageManager: options.packageManager,
-    projectDir: options.projectDir,
-    args: ["auth", "workspace", "list"],
-  });
-  if (available.items.length <= 1) return { ok: true, workspace: activeWorkspace };
-
-  options.beforePrompt?.();
-  const selectedWorkspaceId = await select({
-    message: "Select Prisma workspace for deployment",
-    initialValue: activeWorkspace.id,
-    options: available.items.map((workspace) => ({
-      value: workspace.workspaceId,
-      label: workspace.workspaceName ?? workspace.workspaceId,
-      hint: workspace.current ? `${workspace.workspaceId}, current` : workspace.workspaceId,
-    })),
-    output: options.output,
-  });
-  if (isCancel(selectedWorkspaceId)) {
-    cancel("Operation cancelled.", { output: options.output });
-    return { ok: false, cancelled: true };
-  }
-  options.afterPrompt?.();
-  if (selectedWorkspaceId === activeWorkspace.id) {
-    return { ok: true, workspace: activeWorkspace };
-  }
-
-  return {
-    ok: true,
-    workspace: await useWorkspace({
-      packageManager: options.packageManager,
-      projectDir: options.projectDir,
-      workspace: selectedWorkspaceId,
-    }),
-  };
-}
-
-export function parseComposerDeployResult(result: ComposerDeployCommandResult):
-  | {
-      appName: string;
-      appUrl?: string;
-      serviceId?: string;
-    }
-  | undefined {
-  const summary = result.summary;
-  if (!summary) return;
-  const computeService = summary.nodes
-    .flatMap((node) => node.entities)
-    .find((entity) => entity.kind === "compute-service");
-  return {
-    appName: summary.app,
-    ...(computeService?.id ? { serviceId: computeService.id } : {}),
-    ...(computeService?.url ? { appUrl: computeService.url.replace(/\/$/, "") } : {}),
-  };
-}
-
-async function getProjectDetails(options: {
-  packageManager: PackageManager;
-  projectDir: string;
-  appName: string;
-}): Promise<Pick<ComposerDeployResult, "workspace" | "project"> | undefined> {
-  try {
-    const result = await runPrismaJsonCommand<ProjectShowResult>({
-      packageManager: options.packageManager,
-      projectDir: options.projectDir,
-      args: ["project", "show", options.appName],
-    });
-    if (!result.project) return;
-    return {
-      workspace: result.workspace,
-      project: {
-        id: result.project.id,
-        name: result.project.name,
-        consoleUrl: getConsoleProjectUrl(result.workspace.id, result.project.id),
-      },
-    };
-  } catch {
-    // Metadata enrichment must not turn a successful deploy into a failure.
-    return;
-  }
-}
-
-/**
- * Performs the optional one-shot deployment at the end of a create-prisma scaffold.
- * Generated projects use their own `deploy` script for every subsequent deployment.
- */
-export async function deployNewProjectWithComposer(options: {
+type DeployOptions = {
   appName: string;
   packageManager: PackageManager;
   projectDir: string;
@@ -439,18 +44,19 @@ export async function deployNewProjectWithComposer(options: {
   allowInteractiveLogin?: boolean;
   json?: boolean;
   workspace?: string;
-}): Promise<ComposerDeployExecutionResult> {
+};
+
+export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")(function* (
+  options: DeployOptions,
+) {
   const output = options.output ?? process.stdout;
   const progress = options.verbose ? undefined : spinner({ output });
   let deploymentLog: ReturnType<typeof taskLog> | undefined;
   let progressRunning = false;
-  let failureStage: CreateFailureStage = "authenticate";
-  let failureReason: CreateFailureReason = "prisma_auth_command_failed";
   const showProgress = (message: string) => {
     if (!progress) return;
-    if (progressRunning) {
-      progress.message(message);
-    } else {
+    if (progressRunning) progress.message(message);
+    else {
       progress.start(message);
       progressRunning = true;
     }
@@ -461,130 +67,198 @@ export async function deployNewProjectWithComposer(options: {
     progressRunning = false;
   };
 
-  try {
-    showProgress("Checking Prisma account...");
-    if (options.verbose) log.step("Checking Prisma account.", { output });
-    const authState = await ensureAuthentication({
-      packageManager: options.packageManager,
-      projectDir: options.projectDir,
-      output,
-      allowInteractiveLogin: options.allowInteractiveLogin ?? true,
-      beforeInteractiveLogin: clearProgress,
+  const program = Effect.gen(function* () {
+    yield* Effect.sync(() => {
+      showProgress("Checking Prisma account...");
+      if (options.verbose) log.step("Checking Prisma account.", { output });
     });
+    const authState = yield* atCreateStage(
+      ensureAuthentication({
+        packageManager: options.packageManager,
+        projectDir: options.projectDir,
+        output,
+        allowInteractiveLogin: options.allowInteractiveLogin ?? true,
+        beforeInteractiveLogin: clearProgress,
+      }),
+      "authenticate",
+      "prisma_auth_command_failed",
+    );
 
-    showProgress("Checking Prisma workspace...");
-    failureStage = "select_workspace";
-    failureReason = "workspace_selection_failed";
-    if (options.verbose) log.step("Checking Prisma workspace.", { output });
-    const workspaceResult = await selectDeploymentWorkspace({
-      packageManager: options.packageManager,
-      projectDir: options.projectDir,
-      shouldPrompt: options.shouldPromptForWorkspace,
-      authState,
-      output,
-      beforePrompt: clearProgress,
-      afterPrompt: () => showProgress("Selecting Prisma workspace..."),
-      ...(options.workspace ? { workspace: options.workspace } : {}),
+    yield* Effect.sync(() => {
+      showProgress("Checking Prisma workspace...");
+      if (options.verbose) log.step("Checking Prisma workspace.", { output });
     });
-    if (!workspaceResult.ok) return { ok: false, cancelled: true, stage: "select_workspace" };
-    const selectedWorkspace = workspaceResult.workspace;
+    const selectedWorkspace = yield* atCreateStage(
+      selectDeploymentWorkspace({
+        packageManager: options.packageManager,
+        projectDir: options.projectDir,
+        shouldPrompt: options.shouldPromptForWorkspace,
+        authState,
+        output,
+        beforePrompt: clearProgress,
+        afterPrompt: () => showProgress("Selecting Prisma workspace..."),
+        ...(options.workspace ? { workspace: options.workspace } : {}),
+      }),
+      "select_workspace",
+      "workspace_selection_failed",
+    );
 
-    showProgress("Checking Prisma project name...");
-    failureStage = "check_project_name";
-    failureReason = "project_lookup_failed";
-    if (options.verbose) log.step("Checking Prisma project name.", { output });
-    await ensureProjectNameAvailable({
-      appName: options.appName,
-      packageManager: options.packageManager,
-      projectDir: options.projectDir,
-      workspace: selectedWorkspace,
+    yield* Effect.sync(() => {
+      showProgress("Checking Prisma project name...");
+      if (options.verbose) log.step("Checking Prisma project name.", { output });
     });
+    yield* atCreateStage(
+      ensureProjectNameAvailable({
+        appName: options.appName,
+        packageManager: options.packageManager,
+        projectDir: options.projectDir,
+        workspace: selectedWorkspace,
+      }),
+      "check_project_name",
+      "project_lookup_failed",
+    );
 
-    showProgress("Building for deployment...");
-    failureStage = "build";
-    failureReason = "build_failed";
-    if (options.verbose) log.step("Building for deployment.", { output });
+    yield* Effect.sync(() => {
+      showProgress("Building for deployment...");
+      if (options.verbose) log.step("Building for deployment.", { output });
+    });
     const build = getRunScriptArgs(options.packageManager, "build");
-    await runSetupCommand({
-      command: build.command,
-      args: build.args,
-      cwd: options.projectDir,
-      env: process.env,
-      verbose: options.verbose,
-      json: options.json === true,
-    });
+    yield* atCreateStage(
+      runSetupCommand({
+        command: build.command,
+        args: build.args,
+        cwd: options.projectDir,
+        env: process.env,
+        verbose: options.verbose,
+        json: options.json === true,
+      }),
+      "build",
+      "build_failed",
+    );
 
-    clearProgress();
-    failureStage = "composer_deploy";
-    failureReason = "composer_deploy_failed";
-    const deployCommand = getPackageExecutionCommand(options.packageManager, [
-      PRISMA_PLATFORM_CLI_PACKAGE,
+    const deployCommand = getLocalPackageBinaryCommand(options.packageManager, "prisma", [
       "deploy",
       "module.ts",
     ]);
-    if (options.verbose) {
-      log.step(`Deploying to Prisma with ${deployCommand}.`, { output });
-    } else {
-      deploymentLog = taskLog({ title: "Deploying to Prisma...", limit: 10, output });
-      deploymentLog.message(`$ ${deployCommand}`);
-    }
-    const deployment = parseComposerDeployResult(
-      await runPrismaJsonCommand<ComposerDeployCommandResult>({
+    yield* Effect.sync(() => {
+      clearProgress();
+      if (options.verbose) log.step(`Deploying to Prisma with ${deployCommand}.`, { output });
+      else {
+        deploymentLog = taskLog({ title: "Deploying to Prisma...", limit: 10, output });
+        deploymentLog.message(`$ ${deployCommand}`);
+      }
+    });
+    const rawDeployment = yield* atCreateStage(
+      runPrismaJsonCommandEffect({
         packageManager: options.packageManager,
         projectDir: options.projectDir,
         args: ["deploy", "module.ts"],
         onStderrLine: (line) => {
-          const redactedLine = redactSecrets(line);
-          if (options.verbose) {
-            output.write(`${redactedLine}\n`);
-          } else {
-            deploymentLog?.message(redactedLine);
-          }
+          const redacted = redactSecrets(line);
+          if (options.verbose) output.write(`${redacted}\n`);
+          else deploymentLog?.message(redacted);
         },
       }),
+      "composer_deploy",
+      "composer_deploy_failed",
     );
+    const deploymentResult = yield* atCreateStage(
+      decodePrismaCommandResult(ComposerDeployCommandResultSchema, rawDeployment),
+      "composer_deploy",
+      "composer_deploy_failed",
+    );
+    const deployment = parseComposerDeployResult(deploymentResult);
     const appName = deployment?.appName ?? options.appName;
 
-    if (options.verbose) {
-      log.step("Loading deployment details.", { output });
-    } else {
-      deploymentLog?.message("Loading deployment details...");
-    }
-    const details = await getProjectDetails({
+    yield* Effect.sync(() => {
+      if (options.verbose) log.step("Loading deployment details.", { output });
+      else deploymentLog?.message("Loading deployment details...");
+    });
+    const details = yield* getProjectDetails({
       packageManager: options.packageManager,
       projectDir: options.projectDir,
       appName,
     });
+    yield* Effect.sync(() => {
+      deploymentLog?.success("Deployed to Prisma.");
+      deploymentLog = undefined;
+      progressRunning = false;
+      if (options.verbose) log.success("Deployed to Prisma.", { output });
+    });
 
-    deploymentLog?.success("Deployed to Prisma.");
-    deploymentLog = undefined;
-    progressRunning = false;
-    if (options.verbose) log.success("Deployed to Prisma.", { output });
-    const workspace = details?.workspace ?? selectedWorkspace;
+    return {
+      appName,
+      ...(deployment?.appUrl ? { appUrl: deployment.appUrl } : {}),
+      ...(deployment?.serviceId ? { serviceId: deployment.serviceId } : {}),
+      workspace: details?.workspace ?? selectedWorkspace,
+      project: details?.project ?? { name: appName },
+    } satisfies ComposerDeployResult;
+  });
+
+  return yield* program.pipe(
+    Effect.tapCause((cause) =>
+      Effect.sync(() => {
+        const error = Cause.squash(cause);
+        if (deploymentLog) {
+          deploymentLog.error("Deployment failed.");
+          deploymentLog = undefined;
+        } else {
+          progress?.error("Deployment failed.");
+        }
+        progressRunning = false;
+        if (!(error instanceof CreateCancellationError)) {
+          log.error(`Deploy failed: ${getErrorMessage(error)}`, { output });
+        }
+      }),
+    ),
+    Effect.mapError((error) =>
+      error instanceof CreateFailure
+        ? new CreateFailure({
+            stage: error.stage,
+            reason: error.reason,
+            message: error.message,
+            cause: error.cause,
+            errorReported: true,
+          })
+        : error,
+    ),
+  );
+});
+
+export async function deployNewProjectWithComposer(
+  options: DeployOptions,
+): Promise<ComposerDeployExecutionResult> {
+  const exit = await applicationRuntime.runPromiseExit(deployNewProjectWithComposerEffect(options));
+  if (Exit.isSuccess(exit)) {
     return {
       ok: true,
-      deployment: {
-        appName,
-        ...(deployment?.appUrl ? { appUrl: deployment.appUrl } : {}),
-        ...(deployment?.serviceId ? { serviceId: deployment.serviceId } : {}),
-        ...(workspace ? { workspace } : {}),
-        project: details?.project ?? { name: appName },
-      },
-    };
-  } catch (error) {
-    if (deploymentLog) {
-      deploymentLog.error("Deployment failed.");
-      deploymentLog = undefined;
-    } else {
-      progress?.error("Deployment failed.");
-    }
-    progressRunning = false;
-    log.error(`Deploy failed: ${getErrorMessage(error)}`, { output });
-    return {
-      ok: false,
-      stage: failureStage,
-      reason: getCreateFailureReason(error, failureReason),
-      error,
+      deployment: exit.value,
     };
   }
+
+  const failureReason = exit.cause.reasons.find(Cause.isFailReason);
+  const error = failureReason?.error ?? Cause.squash(exit.cause);
+  if (error instanceof CreateCancellationError) {
+    return { ok: false, cancelled: true, stage: "select_workspace" };
+  }
+  const failure =
+    error instanceof CreateFailure
+      ? error
+      : new CreateFailure({
+          stage: "unknown",
+          reason: "unexpected_error",
+          message: getErrorMessage(error),
+          cause: error,
+        });
+  return {
+    ok: false,
+    stage: failure.stage,
+    reason: failure.reason,
+    error: failure.cause ?? failure,
+  };
 }
+
+export { parseComposerDeployResult } from "./composer/deployment-result";
+export { parsePrismaCliEnvelope, PrismaCliCommandError } from "./composer/prisma-cli";
+export { findProjectNameCollisions, getConsoleProjectUrl } from "./composer/projects";
+export type { ComposerDeployResult } from "../result";

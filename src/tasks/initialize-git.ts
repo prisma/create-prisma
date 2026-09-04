@@ -1,53 +1,63 @@
-import { execa } from "execa";
-import fs from "fs-extra";
+import { Effect, FileSystem, Result } from "effect";
 import path from "node:path";
+
+import { applicationRuntime } from "../runtime";
+import { CommandRunner } from "../services/command-runner";
+import { getErrorMessage } from "../utils/errors";
 
 export type GitInitializationResult =
   | { status: "initialized" }
   | { status: "already-in-repository" }
   | { status: "skipped"; reason: string };
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && "stderr" in error) {
-    const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
-    if (stderr) return stderr;
-  }
-  return error instanceof Error ? error.message : String(error);
-}
+export const initializeGitRepositoryEffect = Effect.fn("Git.initialize")(function* (
+  projectDir: string,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const runner = yield* CommandRunner;
+  const fs = yield* FileSystem.FileSystem;
+  const existing = yield* runner
+    .run({ command: "git", args: ["rev-parse", "--is-inside-work-tree"], cwd: projectDir, env })
+    .pipe(Effect.result);
 
-/**
- * Initializes a standalone scaffold as a Git repository and records its generated files.
- * Projects created inside an existing repository remain part of that repository.
- */
-export async function initializeGitRepository(
+  if (Result.isFailure(existing)) {
+    return {
+      status: "skipped",
+      reason: getErrorMessage(existing.failure),
+    } satisfies GitInitializationResult;
+  }
+  if (existing.success.exitCode === 0 && existing.success.stdout.trim() === "true") {
+    return { status: "already-in-repository" } satisfies GitInitializationResult;
+  }
+
+  const initialize = Effect.gen(function* () {
+    yield* runner.runChecked({ command: "git", args: ["init"], cwd: projectDir, env });
+    yield* runner.runChecked({ command: "git", args: ["add", "--all"], cwd: projectDir, env });
+    yield* runner.runChecked({
+      command: "git",
+      args: ["commit", "--no-verify", "-m", "Initial commit from create-prisma"],
+      cwd: projectDir,
+      env,
+    });
+    return { status: "initialized" } satisfies GitInitializationResult;
+  });
+
+  return yield* initialize.pipe(
+    Effect.catch((error) =>
+      fs.remove(path.join(projectDir, ".git"), { recursive: true, force: true }).pipe(
+        Effect.catch(() => Effect.void),
+        Effect.as({
+          status: "skipped",
+          reason: getErrorMessage(error),
+        } satisfies GitInitializationResult),
+      ),
+    ),
+  );
+});
+
+export function initializeGitRepository(
   projectDir: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<GitInitializationResult> {
-  try {
-    const existing = await execa("git", ["rev-parse", "--is-inside-work-tree"], {
-      cwd: projectDir,
-      env,
-      reject: false,
-    });
-    if (existing.exitCode === 0 && existing.stdout.trim() === "true") {
-      return { status: "already-in-repository" };
-    }
-  } catch (error) {
-    return { status: "skipped", reason: errorMessage(error) };
-  }
-
-  let initialized = false;
-  try {
-    await execa("git", ["init"], { cwd: projectDir, env });
-    initialized = true;
-    await execa("git", ["add", "--all"], { cwd: projectDir, env });
-    await execa("git", ["commit", "--no-verify", "-m", "Initial commit from create-prisma"], {
-      cwd: projectDir,
-      env,
-    });
-    return { status: "initialized" };
-  } catch (error) {
-    if (initialized) await fs.remove(path.join(projectDir, ".git"));
-    return { status: "skipped", reason: errorMessage(error) };
-  }
+  return applicationRuntime.runPromise(initializeGitRepositoryEffect(projectDir, env));
 }
