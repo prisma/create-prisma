@@ -9,7 +9,7 @@ import type {
 import type { CreateCommandInput } from "../types";
 import { applicationRuntime } from "../runtime";
 
-import { trackCliTelemetryEffect } from "./client";
+import { TELEMETRY_TIMEOUT_MS, trackCliTelemetryEffect } from "./client";
 
 export const CREATE_PRISMA_NEXT_COMPLETED_EVENT = "cli:create_prisma_next_command_completed";
 export const CREATE_PRISMA_NEXT_FAILED_EVENT = "cli:create_prisma_next_command_failed";
@@ -111,7 +111,7 @@ export const trackCreateCompletedEffect = Effect.fn("Telemetry.createCompleted")
       "duration-ms": params.durationMs,
     }).pipe(
       Effect.scoped,
-      Effect.timeout("2 seconds"),
+      Effect.timeout(TELEMETRY_TIMEOUT_MS),
       Effect.catch(() => Effect.void),
     );
   },
@@ -137,7 +137,7 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
     "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
   }).pipe(
     Effect.scoped,
-    Effect.timeout("2 seconds"),
+    Effect.timeout(TELEMETRY_TIMEOUT_MS),
     Effect.catch(() => Effect.void),
   );
 });
@@ -155,7 +155,7 @@ export const trackCreateCancelledEffect = Effect.fn("Telemetry.createCancelled")
       "cancellation-stage": params.stage,
     }).pipe(
       Effect.scoped,
-      Effect.timeout("2 seconds"),
+      Effect.timeout(TELEMETRY_TIMEOUT_MS),
       Effect.catch(() => Effect.void),
     );
   },

@@ -9,6 +9,7 @@ import { applicationRuntime } from "../runtime";
 const TELEMETRY_API_KEY = process.env.CREATE_PRISMA_TELEMETRY_API_KEY ?? "";
 const TELEMETRY_HOST = process.env.CREATE_PRISMA_TELEMETRY_HOST || "https://us.i.posthog.com";
 const TELEMETRY_CONFIG_FILE = "telemetry.json";
+export const TELEMETRY_TIMEOUT_MS = 2_000;
 const AnonymousId = Schema.String.check(Schema.isUUID(4));
 const decodeAnonymousId = Schema.decodeUnknownExit(AnonymousId);
 
@@ -84,6 +85,19 @@ const sanitizeProperties = (properties: TelemetryProperties) =>
     Object.entries(properties).filter(([, value]) => value !== undefined),
   ) as Record<string, Exclude<TelemetryValue, undefined>>;
 
+export const shutdownTelemetryClientEffect = (
+  client: Pick<PostHog, "shutdown">,
+  timeoutMs = TELEMETRY_TIMEOUT_MS,
+) =>
+  Effect.tryPromise({
+    try: () => Promise.resolve(client.shutdown(timeoutMs)),
+    catch: () => undefined,
+  }).pipe(
+    Effect.timeout(timeoutMs),
+    Effect.interruptible,
+    Effect.catch(() => Effect.void),
+  );
+
 export const trackCliTelemetryEffect = Effect.fn("Telemetry.track")(function* (
   event: string,
   properties: TelemetryProperties,
@@ -100,11 +114,7 @@ export const trackCliTelemetryEffect = Effect.fn("Telemetry.track")(function* (
           flushInterval: 0,
         }),
     ),
-    (posthog) =>
-      Effect.tryPromise({
-        try: () => posthog.shutdown(),
-        catch: () => undefined,
-      }).pipe(Effect.catch(() => Effect.void)),
+    (posthog) => shutdownTelemetryClientEffect(posthog),
   );
   yield* Effect.tryPromise(() =>
     client.captureImmediate({
@@ -124,7 +134,7 @@ export function trackCliTelemetry(event: string, properties: TelemetryProperties
   return applicationRuntime.runPromise(
     trackCliTelemetryEffect(event, properties).pipe(
       Effect.scoped,
-      Effect.timeout("2 seconds"),
+      Effect.timeout(TELEMETRY_TIMEOUT_MS),
       Effect.catch(() => Effect.void),
     ),
   );
