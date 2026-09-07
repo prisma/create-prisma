@@ -51,6 +51,17 @@ export const scaffoldCreateSharedTemplatesEffect = Effect.fn("Templates.scaffold
   });
 });
 
+export const scaffoldCreatePackageManagerTemplatesEffect = Effect.fn(
+  "Templates.scaffoldPackageManager",
+)(function* (options: ScaffoldCreateTemplateOptions) {
+  const templateRoot = yield* resolveTemplatesDirEffect("templates/create/_package-manager");
+  yield* renderTemplateTreeEffect({
+    templateRoot,
+    outputDir: options.projectDir,
+    context: createTemplateContext(options),
+  });
+});
+
 export const scaffoldCreateFrameworkTemplateEffect = Effect.fn("Templates.scaffoldFramework")(
   function* (options: ScaffoldCreateTemplateOptions) {
     const templateRoot = yield* resolveTemplatesDirEffect(`templates/create/${options.template}`);
@@ -66,6 +77,7 @@ export const scaffoldCreateTemplateEffect = Effect.fn("Templates.scaffold")(func
   options: ScaffoldCreateTemplateOptions,
 ) {
   yield* scaffoldCreateFrameworkTemplateEffect(options);
+  yield* scaffoldCreatePackageManagerTemplatesEffect(options);
   yield* scaffoldCreateSharedTemplatesEffect(options);
 });
 
