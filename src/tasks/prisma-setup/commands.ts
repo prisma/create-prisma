@@ -4,7 +4,8 @@ import path from "node:path";
 
 import type { AuthoringStyle, DatabaseProvider } from "../../types";
 import { getLocalPackageBinaryArgs } from "../../utils/package-manager";
-import { runSetupCommand } from "../../utils/run-command";
+import { redactSecrets } from "../../utils/errors";
+import { runPrismaJsonCommandEffect } from "../prisma-cli";
 import type { PrismaSetupContext } from "./types";
 
 const getContractPath = (authoring: AuthoringStyle) =>
@@ -24,25 +25,30 @@ export const runPrismaCli = Effect.fn("PrismaSetup.runCli")(function* (
       log.step([invocation.command, ...invocation.args].join(" "), { output: context.output });
     }
   });
-  yield* runSetupCommand({
-    command: invocation.command,
-    args: invocation.args,
-    cwd: projectDir,
+  yield* runPrismaJsonCommandEffect({
+    packageManager: context.packageManager,
+    projectDir,
+    args,
     env: { ...process.env, CI: "1" },
-    verbose: context.verbose,
-    json: context.json,
+    ...(context.verbose
+      ? {
+          onStderrLine: (line: string) =>
+            log.message(redactSecrets(line), { output: context.output }),
+        }
+      : {}),
   });
 });
 
 export const runPrismaInit = Effect.fn("PrismaSetup.init")(function* (
   context: PrismaSetupContext,
   projectDir: string,
+  force = false,
 ) {
   yield* runPrismaCli(context, projectDir, [
     "orm",
     "init",
     "--yes",
-    "--no-interactive",
+    ...(force ? ["--confirm", path.basename(projectDir).trim() || projectDir.trim()] : []),
     "--target",
     getInitTarget(context.databaseProvider),
     "--authoring",
@@ -62,5 +68,5 @@ export const initializeAgentSkills = Effect.fn("PrismaSetup.initializeSkills")(f
   projectDir: string,
 ) {
   if (context.packageManager === "deno") return;
-  yield* runPrismaCli(context, projectDir, ["init", "--yes", "--no-interactive"]);
+  yield* runPrismaCli(context, projectDir, ["init", "--yes"]);
 });

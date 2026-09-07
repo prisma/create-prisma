@@ -222,6 +222,52 @@ afterEach(async () => {
 });
 
 describe("create-prisma e2e", () => {
+  test(
+    "resumes a partially scaffolded app only with explicit --force",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-force-e2e-"));
+      tempRoots.push(rootDir);
+      const args = [
+        "retry app",
+        "--template",
+        "minimal",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "bun",
+        "--no-deploy",
+        "--json",
+      ];
+      const projectDir = path.join(rootDir, "retry app");
+      await scaffoldCreateTemplate({
+        projectDir,
+        projectName: "retry-app",
+        template: "minimal",
+        provider: "postgres",
+        authoring: "psl",
+        packageManager: "bun",
+      });
+      const contractPath = path.join(projectDir, "src/prisma/contract.prisma");
+      await writeFile(contractPath, `${TEST_PSL_CONTRACT}\n// User modification\n`);
+      await writeFile(path.join(projectDir, "keep.txt"), "Unrelated user file\n");
+
+      const refused = await runCreatePrismaJson(rootDir, args);
+      expect(refused.exitCode).toBe(1);
+      expect(refused.result).toMatchObject({ ok: false, error: { stage: "collect_context" } });
+      expect(await readFile(contractPath, "utf8")).toContain("// User modification");
+
+      const retried = await runCreatePrismaJson(rootDir, [...args, "--force"]);
+      expect(retried.result).toMatchObject({ ok: true });
+      expect(retried.exitCode).toBe(0);
+      expect(await readFile(contractPath, "utf8")).not.toContain("// User modification");
+      expect(await readFile(path.join(projectDir, "keep.txt"), "utf8")).toBe(
+        "Unrelated user file\n",
+      );
+      await runCommand(projectDir, ["bun", "run", "build"]);
+    },
+    TEST_TIMEOUT,
+  );
+
   test("returns a non-zero exit code when project setup fails", async () => {
     const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-exit-code-e2e-"));
     tempRoots.push(rootDir);

@@ -1,10 +1,10 @@
 import { Effect, Schema } from "effect";
 
-import { PrismaCliCommandError } from "../../create-outcome";
-import { CommandRunner } from "../../services/command-runner";
-import type { PackageManager } from "../../types";
-import { getErrorMessage } from "../../utils/errors";
-import { getLocalPackageBinaryArgs } from "../../utils/package-manager";
+import { PrismaCliCommandError } from "../create-outcome";
+import { CommandRunner } from "../services/command-runner";
+import type { PackageManager } from "../types";
+import { getErrorMessage } from "../utils/errors";
+import { getLocalPackageBinaryArgs } from "../utils/package-manager";
 
 const PrismaCliEnvelopeSchema = Schema.Struct({
   ok: Schema.Boolean,
@@ -47,6 +47,7 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
   packageManager: PackageManager;
   projectDir: string;
   args: string[];
+  env?: NodeJS.ProcessEnv;
   onStderrLine?: (line: string) => void;
 }) {
   const runner = yield* CommandRunner;
@@ -59,7 +60,7 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
     command: invocation.command,
     args: invocation.args,
     cwd: options.projectDir,
-    env: process.env,
+    env: options.env ?? process.env,
     ...(options.onStderrLine ? { onStderrLine: options.onStderrLine } : {}),
   });
 
@@ -68,7 +69,7 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
     envelope = parsePrismaCliEnvelope(result.stdout);
   } catch (cause) {
     return yield* new PrismaCliCommandError({
-      message: result.stderr.trim() || getErrorMessage(cause),
+      message: result.stderr.trim() || result.stdout.trim() || getErrorMessage(cause),
       stderr: result.stderr,
       exitCode: result.exitCode,
     });
@@ -102,4 +103,4 @@ export const decodePrismaCommandResult = <A>(schema: Schema.Codec<A>, value: unk
     ),
   );
 
-export { PrismaCliCommandError } from "../../create-outcome";
+export { PrismaCliCommandError } from "../create-outcome";

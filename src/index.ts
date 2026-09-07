@@ -64,7 +64,10 @@ export const createPrismaCommand = Command.make(
     ),
     deploy: optionalBoolean("deploy", "Deploy the generated app to Prisma immediately"),
     workspace: optionalString("workspace", "Prisma workspace id or name to deploy into"),
-    force: optionalBoolean("force", "Allow scaffolding into a non-empty target directory"),
+    force: optionalBoolean(
+      "force",
+      "Overwrite generated starter and Prisma files in a non-empty directory",
+    ),
     yes: optionalBoolean("yes", "Skip prompts and accept default choices"),
     verbose: optionalBoolean("verbose", "Show verbose command output during setup"),
     json: optionalBoolean(
