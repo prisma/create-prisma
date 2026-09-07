@@ -26,6 +26,7 @@ export const CreateFailureReasonSchema = Schema.Literals([
   "invalid_project_name",
   "target_path_not_directory",
   "target_directory_not_empty",
+  "target_has_migrations",
   "unsupported_configuration",
   "template_scaffold_failed",
   "prisma_init_failed",

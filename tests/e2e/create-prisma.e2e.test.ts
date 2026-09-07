@@ -7,6 +7,7 @@ import {
   readdir,
   realpath,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -264,6 +265,35 @@ describe("create-prisma e2e", () => {
         "Unrelated user file\n",
       );
       await runCommand(projectDir, ["bun", "run", "build"]);
+
+      await writeFile(contractPath, `${TEST_PSL_CONTRACT}\n// Keep this existing project edit\n`);
+      const preservedPaths = ["package.json", "prisma.config.ts", "src/prisma/contract.prisma"];
+      const migrationPaths = await readdir(path.join(projectDir, "migrations"), {
+        recursive: true,
+      });
+      for (const relativePath of migrationPaths) {
+        const filePath = path.join("migrations", relativePath);
+        if ((await stat(path.join(projectDir, filePath))).isFile()) {
+          preservedPaths.push(filePath);
+        }
+      }
+      const before = await Promise.all(
+        preservedPaths.map((filePath) => readFile(path.join(projectDir, filePath), "utf8")),
+      );
+      const completeRetry = await runCreatePrismaJson(rootDir, [...args, "--force"]);
+      expect(completeRetry.exitCode).toBe(1);
+      expect(completeRetry.result).toMatchObject({
+        ok: false,
+        error: { stage: "collect_context", message: expect.stringContaining("migration history") },
+      });
+      expect(await readdir(path.join(projectDir, "migrations"), { recursive: true })).toEqual(
+        migrationPaths,
+      );
+      expect(
+        await Promise.all(
+          preservedPaths.map((filePath) => readFile(path.join(projectDir, filePath), "utf8")),
+        ),
+      ).toEqual(before);
     },
     TEST_TIMEOUT,
   );
