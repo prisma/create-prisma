@@ -84,7 +84,11 @@ describe("create telemetry", () => {
   });
 
   test("separates expected input and environment rejections from technical failures", async () => {
-    for (const reason of ["target_directory_not_empty", "workspace_missing"] as const) {
+    for (const reason of [
+      "target_directory_not_empty",
+      "target_has_migrations",
+      "workspace_missing",
+    ] as const) {
       await trackCreateFailed({
         input: createInput,
         context: createContext,
@@ -94,9 +98,10 @@ describe("create telemetry", () => {
       });
     }
     const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     expect(calls.map(([, properties]) => properties["failure-reason"])).toEqual([
       "target_directory_not_empty",
+      "target_has_migrations",
       "workspace_missing",
     ]);
     for (const [, properties] of calls) {

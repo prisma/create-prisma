@@ -178,6 +178,20 @@ export const collectCreateContext = Effect.fn("Create.collectContext")(function*
     });
   }
 
+  if (force && targetPathState.exists) {
+    const migrations = yield* inspectTargetPath(path.join(targetDirectory, "migrations"));
+    if (migrations.exists && !migrations.isEmptyDirectory) {
+      const message = `Target directory ${formatPathForDisplay(targetDirectory)} contains migration history. Create a starter in a new directory, or continue working in the existing project with the Prisma CLI. --force cannot overwrite a project with existing migrations.`;
+      yield* Effect.sync(() => cancel(message, { output }));
+      return yield* new CreateFailure({
+        stage: "collect_context",
+        reason: "target_has_migrations",
+        message,
+        errorReported: true,
+      });
+    }
+  }
+
   const prismaSetupContext = yield* collectPrismaSetupContextEffect(input, {
     projectDir: targetDirectory,
     template,

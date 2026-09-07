@@ -66,7 +66,7 @@ export const createPrismaCommand = Command.make(
     workspace: optionalString("workspace", "Prisma workspace id or name to deploy into"),
     force: optionalBoolean(
       "force",
-      "Overwrite generated starter and Prisma files in a non-empty directory",
+      "Overwrite generated starter and Prisma files; refuses a non-empty migrations path",
     ),
     yes: optionalBoolean("yes", "Skip prompts and accept default choices"),
     verbose: optionalBoolean("verbose", "Show verbose command output during setup"),

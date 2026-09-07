@@ -23,6 +23,7 @@ const expectedRejectionReasons = new Set<CreateFailureReason>([
   "invalid_project_name",
   "target_path_not_directory",
   "target_directory_not_empty",
+  "target_has_migrations",
   "unsupported_configuration",
   "not_authenticated",
   "workspace_missing",
