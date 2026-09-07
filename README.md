@@ -61,7 +61,7 @@ older cached version. Prisma Compute does not support Deno deployments yet.
 - `--deploy` / `--no-deploy`
 - `--workspace <id-or-name>`
 - `--yes`
-- `--force`
+- `--force`: overwrite generated starter and Prisma files in a non-empty directory. This replaces existing Prisma config, contract, and database-client files; back up edits first.
 - `--verbose`
 - `--json`
 

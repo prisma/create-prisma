@@ -13,6 +13,7 @@ export type PrismaSetupRunOptions = {
   createdProjectPath?: string;
   includeDevNextStep?: boolean;
   initializeGit?: boolean;
+  force?: boolean;
   progressSpinner?: ReturnType<typeof spinner>;
 };
 

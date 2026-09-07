@@ -11,7 +11,7 @@ import {
   getLocalPackageBinaryCommand,
   getRunScriptCommand,
 } from "../../utils/package-manager";
-import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "./prisma-cli";
+import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "../prisma-cli";
 import { getWorkspaceLabel } from "./workspace";
 
 const WhoamiResultSchema = Schema.Struct({

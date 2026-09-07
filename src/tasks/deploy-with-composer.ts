@@ -20,7 +20,7 @@ import {
   ComposerDeployCommandResultSchema,
   parseComposerDeployResult,
 } from "./composer/deployment-result";
-import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "./composer/prisma-cli";
+import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "./prisma-cli";
 import { ensureProjectNameAvailable, getProjectDetails } from "./composer/projects";
 
 export type ComposerDeployExecutionResult =
@@ -259,6 +259,6 @@ export async function deployNewProjectWithComposer(
 }
 
 export { parseComposerDeployResult } from "./composer/deployment-result";
-export { parsePrismaCliEnvelope, PrismaCliCommandError } from "./composer/prisma-cli";
+export { parsePrismaCliEnvelope, PrismaCliCommandError } from "./prisma-cli";
 export { findProjectNameCollisions, getConsoleProjectUrl } from "./composer/projects";
 export type { ComposerDeployResult } from "../result";

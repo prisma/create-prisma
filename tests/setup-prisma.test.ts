@@ -6,7 +6,13 @@ import path from "node:path";
 
 import { runCreateCommandEffect } from "../src/commands/create";
 import { applicationRuntime } from "../src/runtime";
-import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
+import {
+  CommandExecutionError,
+  CommandRunner,
+  type CommandSpec,
+} from "../src/services/command-runner";
+import { initializeAgentSkills, runPrismaInit } from "../src/tasks/prisma-setup/commands";
+import { runPrismaJsonCommandEffect } from "../src/tasks/prisma-cli";
 import { collectPrismaSetupContext } from "../src/tasks/setup-prisma";
 
 async function withTempProject<T>(run: (projectDir: string) => Promise<T>): Promise<T> {
@@ -62,6 +68,142 @@ test("writes pnpm build permissions before the first dependency installation", a
     );
     expect(installChecked).toBe(true);
     expect(result).toMatchObject({ ok: false, error: { stage: "install_dependencies" } });
+  });
+});
+
+describe("Prisma setup commands", () => {
+  test.each([
+    { source: "stdout", stdout: "DATABASE_URL=postgres://user:secret@localhost/db", stderr: "" },
+    { source: "stderr", stdout: "", stderr: "DATABASE_URL=postgres://user:secret@localhost/db" },
+    {
+      source: "envelope fallback",
+      stdout: JSON.stringify({ ok: false }),
+      stderr: "DATABASE_URL=postgres://user:secret@localhost/db",
+    },
+    {
+      source: "structured error",
+      stdout: JSON.stringify({
+        ok: false,
+        error: {
+          summary: "Connection failed",
+          why: "DATABASE_URL=postgres://user:secret@localhost/db",
+        },
+      }),
+      stderr: "Authorization: Bearer private-token",
+    },
+  ])("redacts stored errors from $source", async ({ stdout, stderr }) => {
+    const error = await applicationRuntime.runPromise(
+      runPrismaJsonCommandEffect({
+        packageManager: "npm",
+        projectDir: process.cwd(),
+        args: ["init", "--yes"],
+      }).pipe(
+        Effect.provideService(CommandRunner, {
+          run: () => Effect.succeed({ exitCode: 1, stdout, stderr }),
+          runChecked: () => Effect.die("Expected structured Prisma execution"),
+        }),
+        Effect.flip,
+      ),
+    );
+    expect(error).toMatchObject({ exitCode: 1, message: expect.stringContaining("<redacted>") });
+    expect(JSON.stringify(error)).not.toContain("user:secret");
+    expect(JSON.stringify(error)).not.toContain("private-token");
+    if (stderr) expect(error).toMatchObject({ stderr: expect.stringContaining("<redacted>") });
+  });
+
+  test("keeps package-manager errors when Prisma cannot start", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { json: true, deploy: false, packageManager: "pnpm" },
+        { projectDir },
+      );
+      const message = "ERR_PNPM_OUTDATED_LOCKFILE Cannot install with frozen-lockfile";
+      const error = await applicationRuntime.runPromise(
+        initializeAgentSkills(context, projectDir).pipe(
+          Effect.provideService(CommandRunner, {
+            run: () => Effect.succeed({ exitCode: 1, stdout: message, stderr: "" }),
+            runChecked: () => Effect.die("Expected structured Prisma execution"),
+          }),
+          Effect.flip,
+        ),
+      );
+      expect(error).toMatchObject({ message, exitCode: 1 });
+    });
+  });
+
+  test("grants overwrite consent only with explicit force", async () => {
+    await withTempProject(async (root) => {
+      const projectDir = path.join(root, "retry app");
+      const context = await collectPrismaSetupContext(
+        { json: true, deploy: false, packageManager: "npm" },
+        { projectDir },
+      );
+      const commands: CommandSpec[] = [];
+      const runner = {
+        run: (spec: CommandSpec) => {
+          commands.push(spec);
+          return Effect.succeed({
+            exitCode: 0,
+            stdout: '{"kind":"result","envelope":{"ok":true,"result":{}}}',
+            stderr: "",
+          });
+        },
+        runChecked: () => Effect.die("Expected structured Prisma execution"),
+      };
+      await applicationRuntime.runPromise(
+        Effect.gen(function* () {
+          yield* runPrismaInit(context, projectDir);
+          yield* runPrismaInit(context, projectDir, true);
+          yield* initializeAgentSkills(context, projectDir);
+        }).pipe(Effect.provideService(CommandRunner, runner)),
+      );
+      expect(commands[0]?.args).not.toContain("--confirm");
+      expect(commands[1]?.args).toContain("--confirm");
+      expect(commands[1]?.args[commands[1].args.indexOf("--confirm") + 1]).toBe("retry app");
+      expect(commands[0]?.args).toContain("--json");
+      expect(commands[0]?.env?.CI).toBe("1");
+      expect(commands[2]?.args.slice(-4)).toEqual(["init", "--yes", "--json", "--no-interactive"]);
+      expect(commands[2]?.args.filter((arg) => arg === "--no-interactive")).toHaveLength(1);
+    });
+  });
+
+  test.each([
+    { run: runPrismaInit, command: "orm.init", code: "CLI.CONSENT_REQUIRED" },
+    { run: initializeAgentSkills, command: "init", code: "CLI.CONFIG_SECTION_INVALID" },
+  ])("preserves structured errors from $command", async ({ run, command, code }) => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { json: true, deploy: false, packageManager: "pnpm" },
+        { projectDir },
+      );
+      const error = await applicationRuntime.runPromise(
+        run(context, projectDir).pipe(
+          Effect.provideService(CommandRunner, {
+            run: () =>
+              Effect.succeed({
+                exitCode: 2,
+                stdout: JSON.stringify({
+                  kind: "result",
+                  envelope: {
+                    ok: false,
+                    commandId: command,
+                    error: { code, summary: "Setup rejected", why: "Explicit action is required" },
+                  },
+                }),
+                stderr: "",
+              }),
+            runChecked: () => Effect.die("Expected structured Prisma execution"),
+          }),
+          Effect.flip,
+        ),
+      );
+      expect(error).toMatchObject({
+        message: "Setup rejected: Explicit action is required",
+        exitCode: 2,
+        prismaCliCommand: command,
+        prismaCliErrorCode: code,
+      });
+    });
   });
 });
 

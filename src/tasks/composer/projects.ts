@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { CreateFailure } from "../../create-outcome";
 import { PrismaWorkspaceSchema, type PrismaWorkspace } from "../../result";
 import type { PackageManager } from "../../types";
-import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "./prisma-cli";
+import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "../prisma-cli";
 import { getWorkspaceLabel } from "./workspace";
 
 const ProjectShowResultSchema = Schema.Struct({

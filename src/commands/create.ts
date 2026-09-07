@@ -93,6 +93,7 @@ const executeCreateContext = Effect.fn("Create.execute")(function* (context: Cre
     template: context.template,
     createdProjectPath: context.targetDirectory,
     includeDevNextStep: true,
+    force: context.force,
     initializeGit: !context.targetPathState.exists || context.targetPathState.isEmptyDirectory,
     progressSpinner: createSpinner,
   });

@@ -83,7 +83,7 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
 
     yield* Effect.sync(() => progress?.message("Preparing Prisma 8 project files..."));
     yield* atCreateStage(
-      runPrismaInit(context, projectDir),
+      runPrismaInit(context, projectDir, options.force),
       "initialize_prisma",
       "prisma_init_failed",
     );
