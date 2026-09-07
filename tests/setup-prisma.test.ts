@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { Effect, FileSystem } from "effect";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { runCreateCommandEffect } from "../src/commands/create";
+import { applicationRuntime } from "../src/runtime";
+import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
 import { collectPrismaSetupContext } from "../src/tasks/setup-prisma";
 
 async function withTempProject<T>(run: (projectDir: string) => Promise<T>): Promise<T> {
@@ -13,6 +17,53 @@ async function withTempProject<T>(run: (projectDir: string) => Promise<T>): Prom
     await rm(projectDir, { recursive: true, force: true });
   }
 }
+
+test("writes pnpm build permissions before the first dependency installation", async () => {
+  await withTempProject(async (projectDir) => {
+    let installChecked = false;
+    const result = await applicationRuntime.runPromise(
+      runCreateCommandEffect({
+        name: path.relative(process.cwd(), path.join(projectDir, "next-app")),
+        template: "next",
+        packageManager: "pnpm",
+        json: true,
+        deploy: false,
+      }).pipe(
+        Effect.provideService(CommandRunner, {
+          run: () => Effect.die("Unexpected unchecked command"),
+          runChecked: (spec) =>
+            Effect.gen(function* () {
+              expect(spec.command).toBe("pnpm");
+              expect(spec.args).toEqual(["install"]);
+              const fs = yield* FileSystem.FileSystem;
+              const config = yield* fs
+                .readFileString(path.join(spec.cwd, "pnpm-workspace.yaml"))
+                .pipe(Effect.orDie);
+              for (const dependency of [
+                "esbuild",
+                "msgpackr-extract",
+                "workerd",
+                "sharp",
+                "unrs-resolver",
+              ]) {
+                expect(config).toContain(`  ${dependency}: true`);
+              }
+              installChecked = true;
+              return yield* new CommandExecutionError({
+                command: spec.command,
+                args: [...spec.args],
+                exitCode: 1,
+                stdout: "",
+                stderr: "Stopped before installing test dependencies",
+              });
+            }),
+        }),
+      ),
+    );
+    expect(installChecked).toBe(true);
+    expect(result).toMatchObject({ ok: false, error: { stage: "install_dependencies" } });
+  });
+});
 
 describe("collectPrismaSetupContext", () => {
   test("--yes uses Prisma Postgres defaults without deploying", async () => {

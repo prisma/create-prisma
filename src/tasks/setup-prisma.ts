@@ -4,7 +4,10 @@ import path from "node:path";
 
 import { CreateCancellationError, CreateFailure } from "../create-outcome";
 import { applicationRuntime } from "../runtime";
-import { scaffoldCreateSharedTemplatesEffect } from "../templates/render-create-template";
+import {
+  scaffoldCreatePackageManagerTemplatesEffect,
+  scaffoldCreateSharedTemplatesEffect,
+} from "../templates/render-create-template";
 import type { CreateTemplate, PrismaSetupCommandInput } from "../types";
 import { getErrorMessage } from "../utils/errors";
 import { getInstallCommand } from "../utils/package-manager";
@@ -41,6 +44,18 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
   if (ownsProgress) yield* Effect.sync(() => progress.start("Creating Prisma 8 project..."));
 
   const setup = Effect.gen(function* () {
+    yield* atCreateStage(
+      scaffoldCreatePackageManagerTemplatesEffect({
+        projectDir,
+        projectName,
+        template,
+        provider: context.databaseProvider,
+        authoring: context.authoring,
+        packageManager: context.packageManager,
+      }),
+      "configure_project",
+      "project_configuration_failed",
+    );
     yield* atCreateStage(
       writePrismaDependenciesEffect(
         context.databaseProvider,
