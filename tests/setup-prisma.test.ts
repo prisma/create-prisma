@@ -12,6 +12,7 @@ import {
   type CommandSpec,
 } from "../src/services/command-runner";
 import { initializeAgentSkills, runPrismaInit } from "../src/tasks/prisma-setup/commands";
+import { runPrismaJsonCommandEffect } from "../src/tasks/prisma-cli";
 import { collectPrismaSetupContext } from "../src/tasks/setup-prisma";
 
 async function withTempProject<T>(run: (projectDir: string) => Promise<T>): Promise<T> {
@@ -71,6 +72,45 @@ test("writes pnpm build permissions before the first dependency installation", a
 });
 
 describe("Prisma setup commands", () => {
+  test.each([
+    { source: "stdout", stdout: "DATABASE_URL=postgres://user:secret@localhost/db", stderr: "" },
+    { source: "stderr", stdout: "", stderr: "DATABASE_URL=postgres://user:secret@localhost/db" },
+    {
+      source: "envelope fallback",
+      stdout: JSON.stringify({ ok: false }),
+      stderr: "DATABASE_URL=postgres://user:secret@localhost/db",
+    },
+    {
+      source: "structured error",
+      stdout: JSON.stringify({
+        ok: false,
+        error: {
+          summary: "Connection failed",
+          why: "DATABASE_URL=postgres://user:secret@localhost/db",
+        },
+      }),
+      stderr: "Authorization: Bearer private-token",
+    },
+  ])("redacts stored errors from $source", async ({ stdout, stderr }) => {
+    const error = await applicationRuntime.runPromise(
+      runPrismaJsonCommandEffect({
+        packageManager: "npm",
+        projectDir: process.cwd(),
+        args: ["init", "--yes"],
+      }).pipe(
+        Effect.provideService(CommandRunner, {
+          run: () => Effect.succeed({ exitCode: 1, stdout, stderr }),
+          runChecked: () => Effect.die("Expected structured Prisma execution"),
+        }),
+        Effect.flip,
+      ),
+    );
+    expect(error).toMatchObject({ exitCode: 1, message: expect.stringContaining("<redacted>") });
+    expect(JSON.stringify(error)).not.toContain("user:secret");
+    expect(JSON.stringify(error)).not.toContain("private-token");
+    if (stderr) expect(error).toMatchObject({ stderr: expect.stringContaining("<redacted>") });
+  });
+
   test("keeps package-manager errors when Prisma cannot start", async () => {
     await withTempProject(async (projectDir) => {
       const context = await collectPrismaSetupContext(
@@ -114,6 +154,7 @@ describe("Prisma setup commands", () => {
         Effect.gen(function* () {
           yield* runPrismaInit(context, projectDir);
           yield* runPrismaInit(context, projectDir, true);
+          yield* initializeAgentSkills(context, projectDir);
         }).pipe(Effect.provideService(CommandRunner, runner)),
       );
       expect(commands[0]?.args).not.toContain("--confirm");
@@ -121,6 +162,8 @@ describe("Prisma setup commands", () => {
       expect(commands[1]?.args[commands[1].args.indexOf("--confirm") + 1]).toBe("retry app");
       expect(commands[0]?.args).toContain("--json");
       expect(commands[0]?.env?.CI).toBe("1");
+      expect(commands[2]?.args.slice(-4)).toEqual(["init", "--yes", "--json", "--no-interactive"]);
+      expect(commands[2]?.args.filter((arg) => arg === "--no-interactive")).toHaveLength(1);
     });
   });
 

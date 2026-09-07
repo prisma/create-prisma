@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { PrismaCliCommandError } from "../create-outcome";
 import { CommandRunner } from "../services/command-runner";
 import type { PackageManager } from "../types";
-import { getErrorMessage } from "../utils/errors";
+import { getErrorMessage, redactSecrets } from "../utils/errors";
 import { getLocalPackageBinaryArgs } from "../utils/package-manager";
 
 const PrismaCliEnvelopeSchema = Schema.Struct({
@@ -69,8 +69,9 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
     envelope = parsePrismaCliEnvelope(result.stdout);
   } catch (cause) {
     return yield* new PrismaCliCommandError({
-      message: result.stderr.trim() || result.stdout.trim() || getErrorMessage(cause),
-      stderr: result.stderr,
+      message:
+        redactSecrets(result.stderr.trim() || result.stdout.trim()) || getErrorMessage(cause),
+      stderr: redactSecrets(result.stderr),
       exitCode: result.exitCode,
     });
   }
@@ -78,15 +79,16 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
   if (result.exitCode !== 0 || !envelope.ok || envelope.result === undefined) {
     const summary = envelope.error?.summary ?? envelope.error?.message;
     return yield* new PrismaCliCommandError({
-      message:
+      message: redactSecrets(
         [summary, envelope.error?.why].filter(Boolean).join(": ") ||
-        result.stderr.trim() ||
-        "Prisma CLI command failed.",
+          result.stderr.trim() ||
+          "Prisma CLI command failed.",
+      ),
       ...(envelope.commandId || envelope.command
         ? { command: envelope.commandId ?? envelope.command }
         : {}),
       ...(envelope.error?.code ? { code: envelope.error.code } : {}),
-      stderr: result.stderr,
+      stderr: redactSecrets(result.stderr),
       exitCode: result.exitCode,
     });
   }
