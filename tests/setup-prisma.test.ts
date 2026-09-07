@@ -126,7 +126,7 @@ describe("Prisma setup commands", () => {
 
   test.each([
     { run: runPrismaInit, command: "orm.init", code: "CLI.CONSENT_REQUIRED" },
-    { run: initializeAgentSkills, command: "init", code: "SKILLS.CONFIG_INVALID" },
+    { run: initializeAgentSkills, command: "init", code: "CLI.CONFIG_SECTION_INVALID" },
   ])("preserves structured errors from $command", async ({ run, command, code }) => {
     await withTempProject(async (projectDir) => {
       const context = await collectPrismaSetupContext(
