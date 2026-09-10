@@ -5,10 +5,13 @@ import type { Writable } from "node:stream";
 
 import { CreateCancellationError, CreateFailure } from "../../create-outcome";
 import {
+  agentSkillTargets,
   AuthoringStyleSchema,
   DatabaseProviderSchema,
   PackageManagerSchema,
   packageManagers,
+  parseAgentSkillSelection,
+  type AgentSkillTarget,
   type AuthoringStyle,
   type CreateTemplate,
   type DatabaseProvider,
@@ -109,6 +112,36 @@ const promptForPackageManager = Effect.fn("Prompts.packageManager")(function* (
   return yield* decodePromptValue(PackageManagerSchema, value);
 });
 
+const promptForAgentSkills = Effect.fn("Prompts.agentSkills")(function* (output: Writable) {
+  const value = yield* Effect.tryPromise(() =>
+    confirm({
+      message: "Install agent skills for coding assistants (Claude Code, Cursor, Codex, Devin)?",
+      initialValue: true,
+      output,
+    }),
+  );
+  if (isCancel(value)) {
+    yield* Effect.sync(() => cancel("Operation cancelled.", { output }));
+    return yield* new CreateCancellationError({ stage: "agent_skills" });
+  }
+  return value ? agentSkillTargets : [];
+});
+
+const resolveRequestedAgentSkills = Effect.fn("PrismaSetup.resolveSkills")(function* (
+  value: string,
+  output: Writable,
+) {
+  const selection = parseAgentSkillSelection(value);
+  if (selection.ok) return selection.agents;
+  yield* Effect.sync(() => cancel(selection.message, { output }));
+  return yield* new CreateFailure({
+    stage: "collect_context",
+    reason: "invalid_input",
+    message: selection.message,
+    errorReported: true,
+  });
+});
+
 const promptForDeployment = Effect.fn("Prompts.deployment")(function* (output: Writable) {
   const value = yield* Effect.tryPromise(() =>
     confirm({ message: "Deploy to Prisma now?", initialValue: true, output }),
@@ -126,6 +159,10 @@ export const collectPrismaSetupContextEffect = Effect.fn("PrismaSetup.collectCon
 ) {
   const projectDir = path.resolve(options.projectDir ?? process.cwd());
   const { json, output, useDefaults } = resolveExecutionSettings(input);
+  const requestedSkillAgents =
+    input.skills === undefined
+      ? undefined
+      : yield* resolveRequestedAgentSkills(input.skills, output);
   const databaseProvider =
     input.provider ??
     (useDefaults ? DEFAULT_DATABASE_PROVIDER : yield* promptForDatabaseProvider(output));
@@ -160,6 +197,11 @@ export const collectPrismaSetupContextEffect = Effect.fn("PrismaSetup.collectCon
     });
   }
 
+  const skillAgents: readonly AgentSkillTarget[] =
+    packageManager === "deno"
+      ? []
+      : (requestedSkillAgents ??
+        (useDefaults ? agentSkillTargets : yield* promptForAgentSkills(output)));
   const shouldDeploy =
     packageManager === "deno"
       ? false
@@ -172,6 +214,7 @@ export const collectPrismaSetupContextEffect = Effect.fn("PrismaSetup.collectCon
     databaseProvider,
     authoring,
     packageManager,
+    skillAgents,
     shouldDeploy,
     shouldPromptForWorkspace: !useDefaults,
     ...(input.workspace ? { workspace: input.workspace } : {}),

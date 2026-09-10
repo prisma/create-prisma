@@ -20,7 +20,7 @@ import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postg
 
 export default definePrismaConfig({
   skills: {
-    agents: ["claude", "cursor", "agents", "devin"],
+    agents: [{{#each skillAgents}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}],
   },
   orm: ormConfig({
     contract: "./src/prisma/contract{{#if (eq authoring "typescript")}}.ts{{else}}.prisma{{/if}}",

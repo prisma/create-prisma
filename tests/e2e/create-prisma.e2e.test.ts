@@ -525,6 +525,49 @@ describe("create-prisma e2e", () => {
   );
 
   test(
+    "creates a project without agent skill files when --skills none is passed",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-no-skills-e2e-"));
+      tempRoots.push(rootDir);
+      const { result, exitCode } = await runCreatePrismaJson(rootDir, [
+        "no-skills-app",
+        "--template",
+        "minimal",
+        "--provider",
+        "postgres",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "bun",
+        "--no-deploy",
+        "--yes",
+        "--skills",
+        "none",
+        "--json",
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(result.ok).toBe(true);
+      const projectDir = path.join(rootDir, "no-skills-app");
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectDir, "package.json"), "utf8"),
+      ) as Record<string, any>;
+      const configSource = await readFile(path.join(projectDir, "prisma.config.ts"), "utf8");
+
+      for (const agentDir of [".claude", ".cursor", ".agents", ".devin"]) {
+        expect(await pathExists(path.join(projectDir, agentDir))).toBe(false);
+      }
+      expect(packageJson.scripts.postinstall).toBeUndefined();
+      expect(packageJson.scripts["skills:sync"]).toBeUndefined();
+      expect(configSource).toContain("agents: [],");
+      // prisma-next.md is the human quick reference `prisma orm init` writes; it is not an agent file.
+      expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "src/prisma/contract.json"))).toBe(true);
+    },
+    TEST_TIMEOUT,
+  );
+
+  test(
     "builds a Next.js app with a TypeScript-authored contract",
     async () => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-typescript-e2e-"));

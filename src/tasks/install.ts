@@ -21,7 +21,10 @@ type PackageJson = {
   [key: string]: unknown;
 };
 
-function getPrismaScriptMap(packageManager: PackageManager): Record<string, string> {
+function getPrismaScriptMap(
+  packageManager: PackageManager,
+  skillsSync: boolean,
+): Record<string, string> {
   if (packageManager === "deno") {
     const prismaCommand = (needsDatabase: boolean, ...args: string[]) =>
       [
@@ -53,7 +56,7 @@ function getPrismaScriptMap(packageManager: PackageManager): Record<string, stri
     migrate: prismaCommand("db", "migrate"),
     "migration:status": prismaCommand("migration", "status"),
     "migration:show": prismaCommand("migration", "show"),
-    "skills:sync": `${prismaCommand("skills", "sync")} || exit 0`,
+    ...(skillsSync ? { "skills:sync": `${prismaCommand("skills", "sync")} || exit 0` } : {}),
   };
 }
 
@@ -158,6 +161,7 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   packageManager: PackageManager,
   _authoring: AuthoringStyle,
   projectDir = process.cwd(),
+  options: { skillsSync?: boolean } = {},
 ) {
   const dependencies = [getDbPackages(provider)];
   if (provider === "postgres" && packageManager !== "deno") dependencies.push("temporal-polyfill");
@@ -166,7 +170,7 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   yield* addPackageDependencyEffect({
     dependencies,
     devDependencies: ["@types/node", "prisma"],
-    scripts: getPrismaScriptMap(packageManager),
+    scripts: getPrismaScriptMap(packageManager, options.skillsSync ?? true),
     projectDir,
   });
 });

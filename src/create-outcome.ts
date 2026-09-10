@@ -56,6 +56,7 @@ export const CreateCancellationStageSchema = Schema.Literals([
   "database_provider",
   "authoring_style",
   "package_manager",
+  "agent_skills",
   "deployment_intent",
   "select_workspace",
 ]);

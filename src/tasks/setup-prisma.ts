@@ -52,6 +52,7 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
         provider: context.databaseProvider,
         authoring: context.authoring,
         packageManager: context.packageManager,
+        skillAgents: context.skillAgents,
       }),
       "configure_project",
       "project_configuration_failed",
@@ -62,6 +63,7 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
         context.packageManager,
         context.authoring,
         projectDir,
+        { skillsSync: context.skillAgents.length > 0 },
       ),
       "configure_project",
       "project_configuration_failed",
@@ -97,6 +99,7 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
           provider: context.databaseProvider,
           authoring: context.authoring,
           packageManager: context.packageManager,
+          skillAgents: context.skillAgents,
         });
         yield* ensureComposerTypeScriptOptions(projectDir);
         if (context.databaseProvider === "mongo") yield* ensureMongoEnvironment(projectDir);
@@ -109,12 +112,14 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
       "project_configuration_failed",
     );
 
-    yield* Effect.sync(() => progress?.message("Installing Prisma agent skills..."));
-    yield* atCreateStage(
-      initializeAgentSkills(context, projectDir),
-      "initialize_agent_skills",
-      "agent_skills_init_failed",
-    );
+    if (context.skillAgents.length > 0) {
+      yield* Effect.sync(() => progress?.message("Installing Prisma agent skills..."));
+      yield* atCreateStage(
+        initializeAgentSkills(context, projectDir),
+        "initialize_agent_skills",
+        "agent_skills_init_failed",
+      );
+    }
 
     yield* Effect.sync(() => progress?.message("Generating Prisma 8 contract artifacts..."));
     yield* atCreateStage(

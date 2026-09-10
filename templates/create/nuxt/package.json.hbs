@@ -11,7 +11,7 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare && {{runScriptCommand packageManager "skills:sync"}}",
+    "postinstall": "nuxt prepare{{#if skillAgents.length}} && {{runScriptCommand packageManager "skills:sync"}}{{/if}}",
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {

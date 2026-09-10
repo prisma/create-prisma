@@ -4,6 +4,8 @@ export const databaseProviders = ["postgres", "mongo"] as const;
 export const databaseProviderInputs = ["postgres", "postgresql", "mongo", "mongodb"] as const;
 export const packageManagers = ["npm", "pnpm", "yarn", "bun", "deno"] as const;
 export const authoringStyles = ["psl", "typescript"] as const;
+export const agentSkillTargets = ["claude", "cursor", "agents", "devin"] as const;
+export const SKILLS_NONE = "none";
 export const createTemplates = [
   "minimal",
   "hono",
@@ -27,6 +29,9 @@ export type PackageManager = typeof PackageManagerSchema.Type;
 export const AuthoringStyleSchema = Schema.Literals(authoringStyles);
 export type AuthoringStyle = typeof AuthoringStyleSchema.Type;
 
+export const AgentSkillTargetSchema = Schema.Literals(agentSkillTargets);
+export type AgentSkillTarget = typeof AgentSkillTargetSchema.Type;
+
 export const CreateTemplateSchema = Schema.Literals(createTemplates);
 export type CreateTemplate = typeof CreateTemplateSchema.Type;
 
@@ -48,6 +53,7 @@ export const PrismaSetupOptionsSchema = Schema.Struct({
   packageManager: Schema.optionalKey(PackageManagerSchema),
   deploy: OptionalBoolean,
   workspace: OptionalNonEmptyTrimmedString,
+  skills: OptionalNonEmptyTrimmedString,
 });
 
 export const PrismaSetupCommandInputSchema = Schema.Struct({
@@ -79,6 +85,45 @@ export function normalizeDatabaseProvider(value: DatabaseProviderInput): Databas
     default:
       return value;
   }
+}
+
+export function isAgentSkillTarget(name: string): name is AgentSkillTarget {
+  return (agentSkillTargets as readonly string[]).includes(name);
+}
+
+export type AgentSkillSelection =
+  | { ok: true; agents: readonly AgentSkillTarget[] }
+  | { ok: false; message: string };
+
+/** Parses `--skills`: a comma-separated list of agent names, or `none`. */
+export function parseAgentSkillSelection(value: string): AgentSkillSelection {
+  const names = value
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  const known = agentSkillTargets.join(", ");
+  if (names.includes(SKILLS_NONE)) {
+    return names.length === 1
+      ? { ok: true, agents: [] }
+      : { ok: false, message: `--skills ${SKILLS_NONE} cannot be combined with agent names.` };
+  }
+  const agents: AgentSkillTarget[] = [];
+  for (const name of names) {
+    if (!isAgentSkillTarget(name)) {
+      return {
+        ok: false,
+        message: `--skills names '${name}', which is not a known agent. Use a comma-separated list of ${known}, or ${SKILLS_NONE}.`,
+      };
+    }
+    if (!agents.includes(name)) agents.push(name);
+  }
+  if (agents.length === 0) {
+    return {
+      ok: false,
+      message: `--skills was given no agent names. Use a comma-separated list of ${known}, or ${SKILLS_NONE}.`,
+    };
+  }
+  return { ok: true, agents };
 }
 
 export function decodeCreateCommandInputSync(input: unknown): CreateCommandInput {

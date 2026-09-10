@@ -60,6 +60,7 @@ older cached version. Prisma Compute does not support Deno deployments yet.
 - `--package-manager npm|pnpm|yarn|bun|deno`
 - `--deploy` / `--no-deploy`
 - `--workspace <id-or-name>`
+- `--skills <agents>|none`: agents to install skill files for, comma-separated from `claude`, `cursor`, `agents`, `devin` (default: all). `--skills none` writes no `.claude/`, `.cursor/`, `.agents/`, or `.devin/` directories, no `postinstall` hook, and no `skills:sync` script, and records `skills: { agents: [] }` in `prisma.config.ts`. Interactive runs ask instead.
 - `--yes`
 - `--force`: overwrite generated starter and Prisma files in a non-empty directory. This replaces existing Prisma config, contract, and database-client files; back up edits first. A non-empty standard `migrations` path is protected: use a new directory for a fresh starter, or continue working in the existing project with the Prisma CLI. Custom migration paths are not detected.
 - `--verbose`

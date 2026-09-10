@@ -1,7 +1,14 @@
 import { Effect } from "effect";
 
 import { applicationRuntime } from "../runtime";
-import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
+import {
+  agentSkillTargets,
+  type AgentSkillTarget,
+  type AuthoringStyle,
+  type CreateTemplate,
+  type DatabaseProvider,
+  type PackageManager,
+} from "../types";
 import { renderTemplateTreeEffect, resolveTemplatesDirEffect } from "./shared";
 
 type CreateTemplateContext = {
@@ -10,6 +17,7 @@ type CreateTemplateContext = {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  skillAgents: readonly AgentSkillTarget[];
   tsdownEntry: string | null;
 };
 
@@ -20,6 +28,8 @@ export type ScaffoldCreateTemplateOptions = {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  /** Agents whose skill files the project gets; defaults to all of them. */
+  skillAgents?: readonly AgentSkillTarget[];
 };
 
 const tsdownEntries: Partial<Record<CreateTemplate, string>> = {
@@ -36,6 +46,7 @@ function createTemplateContext(options: ScaffoldCreateTemplateOptions): CreateTe
     provider: options.provider,
     authoring: options.authoring,
     packageManager: options.packageManager,
+    skillAgents: options.skillAgents ?? agentSkillTargets,
     tsdownEntry: tsdownEntries[options.template] ?? null,
   };
 }

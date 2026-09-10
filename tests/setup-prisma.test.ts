@@ -131,6 +131,52 @@ describe("Prisma setup commands", () => {
     });
   });
 
+  test("runs no prisma init when no agent skills are wanted", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { json: true, deploy: false, packageManager: "npm", skills: "none" },
+        { projectDir },
+      );
+      await applicationRuntime.runPromise(
+        initializeAgentSkills(context, projectDir).pipe(
+          Effect.provideService(CommandRunner, {
+            run: () => Effect.die("prisma init must not run when no agents are wanted"),
+            runChecked: () => Effect.die("prisma init must not run when no agents are wanted"),
+          }),
+        ),
+      );
+    });
+  });
+
+  test("passes the chosen agents to prisma init", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { json: true, deploy: false, packageManager: "npm", skills: "claude,cursor" },
+        { projectDir },
+      );
+      const commands: CommandSpec[] = [];
+      await applicationRuntime.runPromise(
+        initializeAgentSkills(context, projectDir).pipe(
+          Effect.provideService(CommandRunner, {
+            run: (spec: CommandSpec) => {
+              commands.push(spec);
+              return Effect.succeed({
+                exitCode: 0,
+                stdout: '{"kind":"result","envelope":{"ok":true,"result":{}}}',
+                stderr: "",
+              });
+            },
+            runChecked: () => Effect.die("Expected structured Prisma execution"),
+          }),
+        ),
+      );
+      expect(commands).toHaveLength(1);
+      expect(commands[0]?.args).toEqual(
+        expect.arrayContaining(["init", "--yes", "--skills=claude,cursor"]),
+      );
+    });
+  });
+
   test("grants overwrite consent only with explicit force", async () => {
     await withTempProject(async (root) => {
       const projectDir = path.join(root, "retry app");
@@ -162,7 +208,13 @@ describe("Prisma setup commands", () => {
       expect(commands[1]?.args[commands[1].args.indexOf("--confirm") + 1]).toBe("retry app");
       expect(commands[0]?.args).toContain("--json");
       expect(commands[0]?.env?.CI).toBe("1");
-      expect(commands[2]?.args.slice(-4)).toEqual(["init", "--yes", "--json", "--no-interactive"]);
+      expect(commands[2]?.args.slice(-5)).toEqual([
+        "init",
+        "--yes",
+        "--skills=claude,cursor,agents,devin",
+        "--json",
+        "--no-interactive",
+      ]);
       expect(commands[2]?.args.filter((arg) => arg === "--no-interactive")).toHaveLength(1);
     });
   });
@@ -219,6 +271,7 @@ describe("collectPrismaSetupContext", () => {
         databaseProvider: "postgres",
         authoring: "psl",
         packageManager: "bun",
+        skillAgents: ["claude", "cursor", "agents", "devin"],
         shouldDeploy: false,
         shouldPromptForWorkspace: false,
       });
@@ -290,11 +343,60 @@ describe("collectPrismaSetupContext", () => {
           provider: "postgres",
           authoring: "psl",
           packageManager: "bun",
+          skills: "claude",
           deploy: true,
         },
         { projectDir },
       );
       expect(context.shouldPromptForWorkspace).toBe(true);
+    });
+  });
+
+  test("--skills none records that no agent skills are wanted", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { yes: true, packageManager: "npm", skills: "none" },
+        { projectDir },
+      );
+      expect(context.skillAgents).toEqual([]);
+    });
+  });
+
+  test("--skills keeps the listed agents in order without duplicates", async () => {
+    await withTempProject(async (projectDir) => {
+      const context = await collectPrismaSetupContext(
+        { yes: true, packageManager: "npm", skills: "cursor, claude,cursor" },
+        { projectDir },
+      );
+      expect(context.skillAgents).toEqual(["cursor", "claude"]);
+    });
+  });
+
+  test.each([
+    { skills: "zed", fragment: "'zed'" },
+    { skills: "none,claude", fragment: "cannot be combined" },
+    { skills: ",", fragment: "no agent names" },
+  ])("rejects --skills $skills before touching the target", async ({ skills, fragment }) => {
+    await withTempProject(async (projectDir) => {
+      const result = await applicationRuntime.runPromise(
+        runCreateCommandEffect({
+          name: path.relative(process.cwd(), path.join(projectDir, "bad-skills-app")),
+          template: "minimal",
+          packageManager: "npm",
+          json: true,
+          deploy: false,
+          skills,
+        }).pipe(
+          Effect.provideService(CommandRunner, {
+            run: () => Effect.die("No command may run with an invalid --skills value"),
+            runChecked: () => Effect.die("No command may run with an invalid --skills value"),
+          }),
+        ),
+      );
+      expect(result).toMatchObject({
+        ok: false,
+        error: { stage: "collect_context", message: expect.stringContaining(fragment) },
+      });
     });
   });
 
@@ -318,6 +420,7 @@ describe("collectPrismaSetupContext", () => {
       expect(context).toMatchObject({
         databaseProvider: "postgres",
         packageManager: "deno",
+        skillAgents: [],
         shouldDeploy: false,
       });
     });
