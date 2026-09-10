@@ -33,6 +33,7 @@ const createContext: CreatePromptContext = {
     databaseProvider: "postgres",
     authoring: "psl",
     packageManager: "bun",
+    skillAgents: ["claude", "cursor", "agents", "devin"],
     shouldDeploy: true,
     shouldPromptForWorkspace: false,
   },

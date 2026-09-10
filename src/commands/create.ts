@@ -48,6 +48,7 @@ const executeCreateContext = Effect.fn("Create.execute")(function* (context: Cre
       provider: context.prismaSetupContext.databaseProvider,
       authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
+      skillAgents: context.prismaSetupContext.skillAgents,
     }).pipe(
       Effect.andThen(
         writeCreateTemplateDependenciesEffect({

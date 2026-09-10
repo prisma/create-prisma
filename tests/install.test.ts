@@ -72,6 +72,16 @@ describe("writePrismaDependencies", () => {
     });
   });
 
+  test("omits the skills:sync script when no agent skills are wanted", async () => {
+    await withPackageJson(async (projectDir) => {
+      await writePrismaDependencies("postgres", "pnpm", "psl", projectDir, { skillsSync: false });
+      const packageJson = await readPackageJson(projectDir);
+
+      expect(packageJson.scripts?.["skills:sync"]).toBeUndefined();
+      expect(packageJson.scripts?.["contract:emit"]).toBe("prisma contract emit");
+    });
+  });
+
   test("adds the MongoDB runtime and direct peer dependencies", async () => {
     await withPackageJson(async (projectDir) => {
       await writePrismaDependencies("mongo", "bun", "typescript", projectDir);
@@ -149,6 +159,38 @@ describe("Composer package-manager commands", () => {
 });
 
 describe("generated templates", () => {
+  test("records the agent skills choice in prisma.config.ts and the Nuxt postinstall", async () => {
+    for (const skillAgents of [[], ["claude", "cursor"]] as const) {
+      for (const template of ["minimal", "nuxt"] as const) {
+        const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-skills-"));
+        try {
+          await scaffoldCreateTemplate({
+            projectDir,
+            projectName: "skills-app",
+            template,
+            provider: "postgres",
+            authoring: "psl",
+            packageManager: "npm",
+            skillAgents,
+          });
+          const prismaConfig = await readFile(path.join(projectDir, "prisma.config.ts"), "utf8");
+          const packageJson = await readPackageJson(projectDir);
+
+          expect(prismaConfig).toContain(
+            `agents: [${skillAgents.map((agent) => `"${agent}"`).join(", ")}],`,
+          );
+          if (template === "nuxt") {
+            expect(packageJson.scripts?.postinstall).toBe(
+              skillAgents.length === 0 ? "nuxt prepare" : "nuxt prepare && npm run skills:sync",
+            );
+          }
+        } finally {
+          await rm(projectDir, { recursive: true, force: true });
+        }
+      }
+    }
+  });
+
   test("renders Composer into every supported combination", async () => {
     for (const template of createTemplates) {
       for (const provider of databaseProviders) {

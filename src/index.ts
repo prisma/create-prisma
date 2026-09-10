@@ -5,6 +5,7 @@ import { runCreateCommandEffect } from "./commands/create";
 import { createCommandFailureResult } from "./result";
 import { applicationRuntime } from "./runtime";
 import {
+  agentSkillTargets,
   authoringStyles,
   createTemplates,
   databaseProviderInputs,
@@ -64,6 +65,10 @@ export const createPrismaCommand = Command.make(
     ),
     deploy: optionalBoolean("deploy", "Deploy the generated app to Prisma immediately"),
     workspace: optionalString("workspace", "Prisma workspace id or name to deploy into"),
+    skills: optionalString(
+      "skills",
+      `Agents to install skills for, comma-separated (${agentSkillTargets.join(", ")}); 'none' installs no agent skill files`,
+    ),
     force: optionalBoolean(
       "force",
       "Overwrite generated starter and Prisma files; refuses a non-empty migrations path",
@@ -86,6 +91,7 @@ export const createPrismaCommand = Command.make(
       ...(options.packageManager ? { packageManager: options.packageManager } : {}),
       ...(options.deploy !== undefined ? { deploy: options.deploy } : {}),
       ...(options.workspace ? { workspace: options.workspace } : {}),
+      ...(options.skills ? { skills: options.skills } : {}),
       ...(options.force !== undefined ? { force: options.force } : {}),
       ...(options.yes !== undefined ? { yes: options.yes } : {}),
       ...(options.verbose !== undefined ? { verbose: options.verbose } : {}),
@@ -102,6 +108,10 @@ export const createPrismaCommand = Command.make(
     {
       command: "create-prisma my-app --yes --json",
       description: "Create and deploy with machine-readable output",
+    },
+    {
+      command: "create-prisma my-app --yes --skills none",
+      description: "Create without agent skill files or the skills-sync postinstall hook",
     },
   ]),
 );
@@ -155,6 +165,7 @@ export type {
 } from "./result";
 export { CREATE_PRISMA_RESULT_SCHEMA_VERSION, CreateCommandResultSchema } from "./result";
 export {
+  AgentSkillTargetSchema,
   AuthoringStyleSchema,
   CreateCommandInputSchema,
   CreateTemplateSchema,

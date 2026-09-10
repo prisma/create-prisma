@@ -67,6 +67,10 @@ export const initializeAgentSkills = Effect.fn("PrismaSetup.initializeSkills")(f
   context: PrismaSetupContext,
   projectDir: string,
 ) {
-  if (context.packageManager === "deno") return;
-  yield* runPrismaCli(context, projectDir, ["init", "--yes"]);
+  if (context.skillAgents.length === 0) return;
+  yield* runPrismaCli(context, projectDir, [
+    "init",
+    "--yes",
+    `--skills=${context.skillAgents.join(",")}`,
+  ]);
 });

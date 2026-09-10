@@ -2,7 +2,13 @@ import type { spinner } from "@clack/prompts";
 import type { Writable } from "node:stream";
 
 import type { ComposerDeployResult, CreateNextStep } from "../../result";
-import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../../types";
+import type {
+  AgentSkillTarget,
+  AuthoringStyle,
+  CreateTemplate,
+  DatabaseProvider,
+  PackageManager,
+} from "../../types";
 import type { GitInitializationResult } from "../initialize-git";
 
 export type PrismaSetupRunOptions = {
@@ -25,6 +31,8 @@ export type PrismaSetupContext = {
   databaseProvider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager: PackageManager;
+  /** Agents whose skill files the project gets; empty means none, no postinstall hook, no sync script. */
+  skillAgents: readonly AgentSkillTarget[];
   shouldDeploy: boolean;
   shouldPromptForWorkspace: boolean;
   workspace?: string;

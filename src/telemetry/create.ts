@@ -62,6 +62,7 @@ function getBaseCreateProperties(
     "database-provider": context?.prismaSetupContext.databaseProvider ?? input.provider ?? null,
     "authoring-style": context?.prismaSetupContext.authoring ?? input.authoring ?? null,
     "package-manager": context?.prismaSetupContext.packageManager ?? input.packageManager ?? null,
+    "agent-skills": context ? [...context.prismaSetupContext.skillAgents] : (input.skills ?? null),
     "should-deploy": context?.prismaSetupContext.shouldDeploy ?? input.deploy ?? null,
     "target-directory-state": context ? getTargetDirectoryState(context) : null,
   };
