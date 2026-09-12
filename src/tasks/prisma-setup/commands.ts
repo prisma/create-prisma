@@ -59,7 +59,9 @@ export const runPrismaInit = Effect.fn("PrismaSetup.init")(function* (
   ]);
   if (context.packageManager === "deno") {
     const fs = yield* FileSystem.FileSystem;
-    yield* fs.remove(path.join(projectDir, "prisma-next.md"), { force: true });
+    for (const primer of ["prisma-8.md", "prisma-next.md"]) {
+      yield* fs.remove(path.join(projectDir, primer), { force: true });
+    }
   }
 });
 

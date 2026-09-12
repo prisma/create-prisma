@@ -20,7 +20,7 @@ import { writeCreateTemplateDependencies, writePrismaDependencies } from "../../
 
 const TEST_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_TIMEOUT_MS ?? 300_000);
 const tempRoots: string[] = [];
-const TEST_PSL_CONTRACT = `// use prisma-next
+const TEST_PSL_CONTRACT = `// use prisma-8
 
 model User {
   id    Int    @id @default(autoincrement())
@@ -560,8 +560,8 @@ describe("create-prisma e2e", () => {
       expect(packageJson.scripts.postinstall).toBeUndefined();
       expect(packageJson.scripts["skills:sync"]).toBeUndefined();
       expect(configSource).toContain("agents: [],");
-      // prisma-next.md is the human quick reference `prisma orm init` writes; it is not an agent file.
-      expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(true);
+      // prisma-8.md is the human quick reference `prisma orm init` writes; it is not an agent file.
+      expect(await pathExists(path.join(projectDir, "prisma-8.md"))).toBe(true);
       expect(await pathExists(path.join(projectDir, "src/prisma/contract.json"))).toBe(true);
     },
     TEST_TIMEOUT,
@@ -695,6 +695,7 @@ describe("create-prisma e2e", () => {
       expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(true);
       expect(await pathExists(path.join(projectDir, "src/prisma/contract.json"))).toBe(true);
       expect(await pathExists(path.join(projectDir, "src/prisma/contract.d.ts"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "prisma-8.md"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "module.ts"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "service.ts"))).toBe(false);
