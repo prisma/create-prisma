@@ -163,11 +163,13 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   projectDir = process.cwd(),
   options: { skillsSync?: boolean; template?: CreateTemplate } = {},
 ) {
-  const dependencies = [getDbPackages(provider)];
-  if (provider === "postgres" && packageManager !== "deno" && options.template !== "turborepo") {
-    dependencies.push("temporal-polyfill");
+  const databaseDependencies = [getDbPackages(provider)];
+  if (provider === "postgres" && packageManager !== "deno") {
+    databaseDependencies.push("temporal-polyfill");
   }
-  if (provider === "mongo") dependencies.push("arktype", "mongodb");
+  if (provider === "mongo") databaseDependencies.push("arktype", "mongodb");
+  const dependencies =
+    options.template === "turborepo" ? [getDbPackages(provider)] : [...databaseDependencies];
   if (packageManager === "deno") dependencies.push("dotenv");
   yield* addPackageDependencyEffect({
     dependencies,
@@ -177,10 +179,7 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   });
   if (options.template === "turborepo") {
     yield* addPackageDependencyEffect({
-      dependencies: [
-        getDbPackages(provider),
-        ...(provider === "postgres" ? ["temporal-polyfill"] : []),
-      ],
+      dependencies: databaseDependencies,
       projectDir: path.join(projectDir, "packages/database"),
     });
   }

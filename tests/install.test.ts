@@ -346,6 +346,7 @@ describe("generated templates", () => {
                 });
                 const web = await readPackageJson(path.join(projectDir, "apps/web"));
                 const database = await readPackageJson(path.join(projectDir, "packages/database"));
+                const root = await readPackageJson(projectDir);
                 expect(packageJson.workspaces).toEqual(["apps/*", "packages/*"]);
                 expect(packageJson.devDependencies?.turbo).toBe(dependencyVersionMap.turbo);
                 expect(web.name).toBe("@repo/web");
@@ -358,6 +359,16 @@ describe("generated templates", () => {
                 );
                 expect(database.dependencies?.["temporal-polyfill"]).toBe(
                   provider === "postgres" ? dependencyVersionMap["temporal-polyfill"] : undefined,
+                );
+                for (const name of ["arktype", "mongodb"] as const) {
+                  expect(database.dependencies?.[name]).toBe(
+                    provider === "mongo" ? dependencyVersionMap[name] : undefined,
+                  );
+                  expect(root.dependencies?.[name]).toBeUndefined();
+                }
+                expect(root.dependencies?.["temporal-polyfill"]).toBeUndefined();
+                expect(root.dependencies).toHaveProperty(
+                  provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
                 );
                 expect(database.scripts).toEqual({
                   typecheck: "tsc --noEmit --project tsconfig.json",
