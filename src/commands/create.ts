@@ -22,6 +22,7 @@ import { getCreatePrismaIntro } from "../ui/branding";
 import { resolveExecutionSettings } from "../ui/output";
 import { getErrorMessage } from "../utils/errors";
 import { getUnsupportedNodeMessage, supportsPrisma } from "../utils/node-version";
+import { verifyPackageManagerEffect } from "../utils/package-manager";
 import { atCreateStage } from "../workflow/failure";
 import {
   collectCreateContext,
@@ -153,6 +154,11 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
     "unexpected_error",
   );
   yield* Ref.set(contextRef, Option.some(context));
+  yield* atCreateStage(
+    verifyPackageManagerEffect(context.prismaSetupContext.packageManager),
+    "install_dependencies",
+    "dependency_install_failed",
+  );
   return { input, context, result: yield* executeCreateContext(context) };
 });
 

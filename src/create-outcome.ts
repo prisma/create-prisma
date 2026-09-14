@@ -23,6 +23,7 @@ export type CreateFailureStage = typeof CreateFailureStageSchema.Type;
 export const CreateFailureReasonSchema = Schema.Literals([
   "invalid_input",
   "unsupported_node_version",
+  "unsupported_package_manager_version",
   "invalid_project_name",
   "target_path_not_directory",
   "target_directory_not_empty",

@@ -1,7 +1,9 @@
 import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
+import { CreateFailure } from "../create-outcome";
 import { applicationRuntime } from "../runtime";
+import { CommandRunner } from "../services/command-runner";
 import { packageManagers, type PackageManager } from "../types";
 
 type CommandAndArgs = {
@@ -20,11 +22,41 @@ type RuntimeScriptOptions = {
 const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
 
 const packageManagerManifestValues = {
-  npm: "npm@10.9.0",
+  npm: "npm@11.6.0",
   pnpm: "pnpm@11.21.0",
   yarn: "yarn@4.13.0",
-  bun: "bun@1.3.9",
+  bun: "bun@1.4.1",
 } as const;
+
+export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(function* (
+  packageManager: PackageManager,
+) {
+  if (packageManager !== "npm") return;
+  const runner = yield* CommandRunner;
+  const result = yield* runner.runChecked({
+    command: "npm",
+    args: ["--version"],
+    cwd: process.cwd(),
+  });
+  const version = result.stdout.trim();
+  const parts = version.split(".").map(Number);
+  if (
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) ||
+    parts.some((part) => !Number.isInteger(part))
+  ) {
+    return yield* Effect.fail(
+      new Error(`Could not determine the installed npm version: ${version}`),
+    );
+  }
+  const [major, minor] = parts;
+  if (major! < 11 || (major === 11 && minor! < 6)) {
+    return yield* new CreateFailure({
+      stage: "validate_input",
+      reason: "unsupported_package_manager_version",
+      message: `npm ${version} is unsupported. Required: npm 11.6.0 or newer. Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.`,
+    });
+  }
+});
 
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
   if (userAgent?.startsWith("pnpm")) {
