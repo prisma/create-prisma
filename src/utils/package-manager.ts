@@ -40,7 +40,10 @@ export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(fun
   });
   const version = result.stdout.trim();
   const parts = version.split(".").map(Number);
-  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
+  if (
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) ||
+    parts.some((part) => !Number.isInteger(part))
+  ) {
     return yield* Effect.fail(
       new Error(`Could not determine the installed npm version: ${version}`),
     );
