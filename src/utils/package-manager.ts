@@ -25,7 +25,7 @@ const packageManagerManifestValues = {
   npm: "npm@11.6.0",
   pnpm: "pnpm@11.21.0",
   yarn: "yarn@4.13.0",
-  bun: "bun@1.3.9",
+  bun: "bun@1.4.1",
 } as const;
 
 export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(function* (

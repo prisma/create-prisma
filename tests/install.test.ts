@@ -23,6 +23,7 @@ import {
 } from "../src/utils/package-manager";
 
 type PackageJson = {
+  packageManager?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   engines?: Record<string, string>;
@@ -264,6 +265,9 @@ describe("generated templates", () => {
               await writeCreateTemplateDependencies({ template, packageManager, projectDir });
 
               const packageJson = await readPackageJson(projectDir);
+              if (packageManager === "bun") {
+                expect(packageJson.packageManager).toBe("bun@1.4.1");
+              }
               const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
               const seedSource = await readFile(
                 path.join(projectDir, "src/prisma/seed.ts"),
