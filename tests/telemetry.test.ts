@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { Effect } from "effect";
 
 import type { CreatePromptContext } from "../src/commands/create";
 import type { CreateCommandInput } from "../src/types";
 
 const trackCliTelemetry = mock(async () => {});
 
-mock.module("../src/telemetry/client", () => ({ trackCliTelemetry }));
+mock.module("../src/telemetry/client", () => ({
+  trackCliTelemetryEffect: (event: string, properties: Record<string, unknown>) =>
+    Effect.promise(() => trackCliTelemetry(event, properties)),
+}));
 
 const {
   CREATE_PRISMA_NEXT_CANCELLED_EVENT,
@@ -29,6 +33,7 @@ const createContext: CreatePromptContext = {
     databaseProvider: "postgres",
     authoring: "psl",
     packageManager: "bun",
+    skillAgents: ["claude", "cursor", "agents", "devin"],
     shouldDeploy: true,
     shouldPromptForWorkspace: false,
   },
@@ -80,7 +85,12 @@ describe("create telemetry", () => {
   });
 
   test("separates expected input and environment rejections from technical failures", async () => {
-    for (const reason of ["target_directory_not_empty", "workspace_missing"] as const) {
+    for (const reason of [
+      "target_directory_not_empty",
+      "target_has_migrations",
+      "workspace_missing",
+      "unsupported_package_manager_version",
+    ] as const) {
       await trackCreateFailed({
         input: createInput,
         context: createContext,
@@ -90,10 +100,12 @@ describe("create telemetry", () => {
       });
     }
     const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(4);
     expect(calls.map(([, properties]) => properties["failure-reason"])).toEqual([
       "target_directory_not_empty",
+      "target_has_migrations",
       "workspace_missing",
+      "unsupported_package_manager_version",
     ]);
     for (const [, properties] of calls) {
       expect(properties["failure-class"]).toBe("expected_rejection");

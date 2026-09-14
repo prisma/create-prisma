@@ -1,21 +1,22 @@
-import { execa } from "execa";
+import { Effect } from "effect";
 
-/**
- * Runs a setup command without allowing child output to corrupt structured CLI output.
- * Human verbose mode keeps native streaming; JSON mode always captures child output.
- */
-export async function runSetupCommand(options: {
+import { CommandRunner } from "../services/command-runner";
+
+export const runSetupCommand = Effect.fn("runSetupCommand")(function* (options: {
   command: string;
   args: string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
   verbose: boolean;
   json: boolean;
-}): Promise<void> {
+}) {
+  const runner = yield* CommandRunner;
   const shouldInheritOutput = options.verbose && !options.json;
-  await execa(options.command, options.args, {
+  yield* runner.runChecked({
+    command: options.command,
+    args: options.args,
     cwd: options.cwd,
-    env: options.env,
+    ...(options.env ? { env: options.env } : {}),
     stdio: shouldInheritOutput ? "inherit" : "pipe",
   });
-}
+});

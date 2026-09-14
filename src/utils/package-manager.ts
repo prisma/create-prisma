@@ -1,7 +1,10 @@
-import fs from "fs-extra";
+import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
-import { PackageManagerSchema, type PackageManager } from "../types";
+import { CreateFailure } from "../create-outcome";
+import { applicationRuntime } from "../runtime";
+import { CommandRunner } from "../services/command-runner";
+import { packageManagers, type PackageManager } from "../types";
 
 type CommandAndArgs = {
   command: string;
@@ -19,11 +22,41 @@ type RuntimeScriptOptions = {
 const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
 
 const packageManagerManifestValues = {
-  npm: "npm@10.9.0",
+  npm: "npm@11.6.0",
   pnpm: "pnpm@11.21.0",
   yarn: "yarn@4.13.0",
-  bun: "bun@1.3.9",
+  bun: "bun@1.4.1",
 } as const;
+
+export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(function* (
+  packageManager: PackageManager,
+) {
+  if (packageManager !== "npm") return;
+  const runner = yield* CommandRunner;
+  const result = yield* runner.runChecked({
+    command: "npm",
+    args: ["--version"],
+    cwd: process.cwd(),
+  });
+  const version = result.stdout.trim();
+  const parts = version.split(".").map(Number);
+  if (
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) ||
+    parts.some((part) => !Number.isInteger(part))
+  ) {
+    return yield* Effect.fail(
+      new Error(`Could not determine the installed npm version: ${version}`),
+    );
+  }
+  const [major, minor] = parts;
+  if (major! < 11 || (major === 11 && minor! < 6)) {
+    return yield* new CreateFailure({
+      stage: "validate_input",
+      reason: "unsupported_package_manager_version",
+      message: `npm ${version} is unsupported. Required: npm 11.6.0 or newer. Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.`,
+    });
+  }
+});
 
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
   if (userAgent?.startsWith("pnpm")) {
@@ -55,31 +88,46 @@ function parsePackageManagerField(packageManagerField: unknown): PackageManager 
   }
 
   const managerName = packageManagerField.split("@")[0];
-  const parsed = PackageManagerSchema.safeParse(managerName);
-  return parsed.success ? parsed.data : null;
+  return packageManagers.includes(managerName as PackageManager)
+    ? (managerName as PackageManager)
+    : null;
 }
 
-async function detectFromPackageJson(projectDir: string): Promise<PackageManager | null> {
+const detectFromPackageJson = Effect.fn("PackageManager.detectFromPackageJson")(function* (
+  projectDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   const packageJsonPath = path.join(projectDir, "package.json");
-  if (!(await fs.pathExists(packageJsonPath))) {
+  if (!(yield* fs.exists(packageJsonPath))) {
     return null;
   }
 
-  const packageJson = await fs.readJson(packageJsonPath);
-  return parsePackageManagerField(packageJson.packageManager);
-}
+  const packageJsonSource = yield* fs
+    .readFileString(packageJsonPath)
+    .pipe(Effect.catch(() => Effect.succeed("")));
+  const packageJson = yield* Effect.try(
+    () => JSON.parse(packageJsonSource) as Record<string, unknown>,
+  ).pipe(Effect.catch(() => Effect.succeed(null)));
+  return packageJson ? parsePackageManagerField(packageJson.packageManager) : null;
+});
 
-async function detectFromDenoConfig(projectDir: string): Promise<PackageManager | null> {
+const detectFromDenoConfig = Effect.fn("PackageManager.detectFromDenoConfig")(function* (
+  projectDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   for (const configFile of ["deno.json", "deno.jsonc"]) {
-    if (await fs.pathExists(path.join(projectDir, configFile))) {
+    if (yield* fs.exists(path.join(projectDir, configFile))) {
       return "deno";
     }
   }
 
   return null;
-}
+});
 
-async function detectFromLockfile(projectDir: string): Promise<PackageManager | null> {
+const detectFromLockfile = Effect.fn("PackageManager.detectFromLockfile")(function* (
+  projectDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   const lockfileChecks: Array<{ manager: PackageManager; lockfile: string }> = [
     { manager: "pnpm", lockfile: "pnpm-lock.yaml" },
     { manager: "yarn", lockfile: "yarn.lock" },
@@ -91,26 +139,28 @@ async function detectFromLockfile(projectDir: string): Promise<PackageManager | 
   ];
 
   for (const check of lockfileChecks) {
-    if (await fs.pathExists(path.join(projectDir, check.lockfile))) {
+    if (yield* fs.exists(path.join(projectDir, check.lockfile))) {
       return check.manager;
     }
   }
 
   return null;
-}
+});
 
-export async function detectPackageManager(projectDir = process.cwd()): Promise<PackageManager> {
-  const fromPackageJson = await detectFromPackageJson(projectDir);
+export const detectPackageManagerEffect = Effect.fn("PackageManager.detect")(function* (
+  projectDir = process.cwd(),
+) {
+  const fromPackageJson = yield* detectFromPackageJson(projectDir);
   if (fromPackageJson) {
     return fromPackageJson;
   }
 
-  const fromLockfile = await detectFromLockfile(projectDir);
+  const fromLockfile = yield* detectFromLockfile(projectDir);
   if (fromLockfile) {
     return fromLockfile;
   }
 
-  const fromDenoConfig = await detectFromDenoConfig(projectDir);
+  const fromDenoConfig = yield* detectFromDenoConfig(projectDir);
   if (fromDenoConfig) {
     return fromDenoConfig;
   }
@@ -121,6 +171,10 @@ export async function detectPackageManager(projectDir = process.cwd()): Promise<
   }
 
   return "npm";
+});
+
+export function detectPackageManager(projectDir = process.cwd()): Promise<PackageManager> {
+  return applicationRuntime.runPromise(detectPackageManagerEffect(projectDir));
 }
 
 export function getPackageManagerManifestValue(
@@ -258,7 +312,7 @@ export function getLocalPackageBinaryArgs(
     case "deno":
       return {
         command: "deno",
-        args: ["run", "-A", DENO_ALLOW_FRESH_DEPENDENCIES, `npm:${binaryName}`, ...binaryArgs],
+        args: ["run", "-A", "--frozen", `npm:${binaryName}@latest`, ...binaryArgs],
       };
     case "pnpm":
       return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
@@ -268,7 +322,10 @@ export function getLocalPackageBinaryArgs(
       return { command: "bun", args: [binaryName, ...binaryArgs] };
     case "npm":
     default:
-      return { command: "npm", args: ["exec", binaryName, "--", ...binaryArgs] };
+      return {
+        command: "npm",
+        args: ["exec", "--offline", "--yes=false", "--", binaryName, ...binaryArgs],
+      };
   }
 }
 

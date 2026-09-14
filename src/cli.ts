@@ -1,13 +1,10 @@
-import { createCreatePrismaCli } from "./index";
-import { createJsonOutputLogger, isJsonOutputRequested } from "./ui/json-output";
+import { NodeRuntime } from "@effect/platform-node-shared";
+import { Effect } from "effect";
 
-createCreatePrismaCli().run({
-  ...(isJsonOutputRequested(process.argv) ? { logger: createJsonOutputLogger() } : {}),
-  process: {
-    exit(code): never {
-      const commandExitCode =
-        typeof process.exitCode === "number" && process.exitCode !== 0 ? process.exitCode : code;
-      process.exit(commandExitCode);
-    },
-  },
-});
+import { runCreatePrismaCli } from "./index";
+import { ApplicationLayer } from "./runtime";
+
+runCreatePrismaCli().pipe(
+  Effect.provide(ApplicationLayer),
+  NodeRuntime.runMain({ disableErrorReporting: true }),
+);

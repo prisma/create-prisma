@@ -43,6 +43,16 @@ describe("redactSecrets", () => {
 
     expect(getErrorMessage(error)).toBe("DATABASE_URL=<redacted>");
   });
+
+  test("prefers a structured Prisma error over package-manager stderr", () => {
+    const error = new PrismaCliCommandError({
+      message: "Explicit overwrite consent is required",
+      code: "CLI.CONSENT_REQUIRED",
+      stderr: 'error: "prisma" exited with code 2',
+      exitCode: 2,
+    });
+    expect(getErrorMessage(error)).toBe("Explicit overwrite consent is required");
+  });
 });
 
 describe("findProjectNameCollisions", () => {

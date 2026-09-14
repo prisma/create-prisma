@@ -15,6 +15,11 @@ bunx create-prisma@latest my-app
 
 The CLI initializes Prisma 8 with `prisma@latest`, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
 
+For npm, use 11.6.0 or newer, which includes the [upstream resolver fix](https://github.com/npm/cli/pull/8448).
+Older npm releases can crash resolving the dependency tree (`Cannot read properties of null (reading 'edgesOut')`). Run
+`npm install --global npm@11` to update. create-prisma checks the selected npm
+version before writing project files and never upgrades your package manager automatically.
+
 The deployment prompt is:
 
 ```text
@@ -22,6 +27,11 @@ Deploy to Prisma now?
 ```
 
 Choose no to deploy later with the generated `deploy` script.
+
+New apps explicitly use `us-east-1` in `prisma-composer.config.ts`. Change the
+`prismaCloud({ region })` option before deploying if you need another region.
+Composer requires a region when creating a new project; leaving it unspecified
+only works when deploying into an existing project whose region can be inherited.
 
 When multiple Prisma workspace sessions are available, the CLI asks which workspace should receive
 the deployment. For unattended usage, pass `--workspace <id-or-name>` or omit it to use the active
@@ -60,8 +70,9 @@ older cached version. Prisma Compute does not support Deno deployments yet.
 - `--package-manager npm|pnpm|yarn|bun|deno`
 - `--deploy` / `--no-deploy`
 - `--workspace <id-or-name>`
+- `--skills <agents>|none`: agents to install skill files for, comma-separated from `claude`, `cursor`, `agents`, `devin` (default: all). `--skills none` writes no `.claude/`, `.cursor/`, `.agents/`, or `.devin/` directories, no `postinstall` hook, and no `skills:sync` script, and records `skills: { agents: [] }` in `prisma.config.ts`. Interactive runs ask instead.
 - `--yes`
-- `--force`
+- `--force`: overwrite generated starter and Prisma files in a non-empty directory. This replaces existing Prisma config, contract, and database-client files; back up edits first. A non-empty standard `migrations` path is protected: use a new directory for a fresh starter, or continue working in the existing project with the Prisma CLI. Custom migration paths are not detected.
 - `--verbose`
 - `--json`
 
