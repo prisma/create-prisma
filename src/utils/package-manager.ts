@@ -22,7 +22,7 @@ type RuntimeScriptOptions = {
 const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
 
 const packageManagerManifestValues = {
-  npm: "npm@11.6.2",
+  npm: "npm@11.6.0",
   pnpm: "pnpm@11.21.0",
   yarn: "yarn@4.13.0",
   bun: "bun@1.3.9",
@@ -45,12 +45,12 @@ export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(fun
       new Error(`Could not determine the installed npm version: ${version}`),
     );
   }
-  const [major, minor, patch] = parts;
-  if (major! < 11 || (major === 11 && (minor! < 6 || (minor === 6 && patch! < 2)))) {
+  const [major, minor] = parts;
+  if (major! < 11 || (major === 11 && minor! < 6)) {
     return yield* new CreateFailure({
       stage: "validate_input",
       reason: "unsupported_package_manager_version",
-      message: `npm ${version} is unsupported. Required: npm 11.6.2 or newer. Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.`,
+      message: `npm ${version} is unsupported. Required: npm 11.6.0 or newer. Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.`,
     });
   }
 });
