@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { dependencyVersionMap, PRISMA_DENO_CLI_PACKAGE } from "../src/constants/dependencies";
+import { applicationRuntime } from "../src/runtime";
+import { CommandRunner } from "../src/services/command-runner";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import {
   getComposerScriptMap,
@@ -16,6 +19,7 @@ import {
   getLocalPackageBinaryArgs,
   getPackageExecutionArgs,
   getRunScriptCommand,
+  verifyPackageManagerEffect,
 } from "../src/utils/package-manager";
 
 type PackageJson = {
@@ -119,6 +123,44 @@ describe("writePrismaDependencies", () => {
 });
 
 describe("Composer package-manager commands", () => {
+  test("checks the selected npm binary against the supported resolver version", async () => {
+    for (const version of ["10.9.7", "11.5.1", "11.6.1", "11.6.2", "11.19.0", "12.0.2"]) {
+      const result = applicationRuntime.runPromise(
+        verifyPackageManagerEffect("npm").pipe(
+          Effect.provideService(CommandRunner, {
+            run: () => Effect.die("Unexpected unchecked command"),
+            runChecked: (spec) => {
+              expect(spec.command).toBe("npm");
+              expect(spec.args).toEqual(["--version"]);
+              return Effect.succeed({ exitCode: 0, stdout: `${version}\n`, stderr: "" });
+            },
+          }),
+        ),
+      );
+      if (["10.9.7", "11.5.1", "11.6.1"].includes(version)) {
+        await expect(result).rejects.toMatchObject({
+          reason: "unsupported_package_manager_version",
+          message: expect.stringContaining("npm install --global npm@11"),
+        });
+      } else {
+        await expect(result).resolves.toBeUndefined();
+      }
+    }
+  });
+
+  test("does not require npm when another package manager is selected", async () => {
+    for (const manager of ["bun", "pnpm", "yarn", "deno"] as const) {
+      await applicationRuntime.runPromise(
+        verifyPackageManagerEffect(manager).pipe(
+          Effect.provideService(CommandRunner, {
+            run: () => Effect.die("npm must not run"),
+            runChecked: () => Effect.die("npm must not run"),
+          }),
+        ),
+      );
+    }
+  });
+
   test("uses each selected package manager for Prisma CLI execution", () => {
     for (const packageManager of ["npm", "pnpm", "yarn", "bun"] as const) {
       expect(getComposerScriptMap(packageManager)["composer:deploy"]).toBe(
@@ -260,6 +302,9 @@ describe("generated templates", () => {
               expect(prismaConfig).toContain('import { definePrismaConfig } from "prisma/config"');
               expect(prismaConfig).toContain('agents: ["claude", "cursor", "agents", "devin"]');
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
+              expect(
+                await readFile(path.join(projectDir, "prisma-composer.config.ts"), "utf8"),
+              ).toContain('prismaCloud({ region: "us-east-1" })');
               expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");
