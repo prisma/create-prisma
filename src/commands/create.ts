@@ -154,7 +154,11 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
     "unexpected_error",
   );
   yield* Ref.set(contextRef, Option.some(context));
-  yield* verifyPackageManagerEffect(context.prismaSetupContext.packageManager);
+  yield* atCreateStage(
+    verifyPackageManagerEffect(context.prismaSetupContext.packageManager),
+    "install_dependencies",
+    "dependency_install_failed",
+  );
   return { input, context, result: yield* executeCreateContext(context) };
 });
 

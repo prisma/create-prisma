@@ -89,6 +89,7 @@ describe("create telemetry", () => {
       "target_directory_not_empty",
       "target_has_migrations",
       "workspace_missing",
+      "unsupported_package_manager_version",
     ] as const) {
       await trackCreateFailed({
         input: createInput,
@@ -99,11 +100,12 @@ describe("create telemetry", () => {
       });
     }
     const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     expect(calls.map(([, properties]) => properties["failure-reason"])).toEqual([
       "target_directory_not_empty",
       "target_has_migrations",
       "workspace_missing",
+      "unsupported_package_manager_version",
     ]);
     for (const [, properties] of calls) {
       expect(properties["failure-class"]).toBe("expected_rejection");
