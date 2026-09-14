@@ -7,6 +7,7 @@ import {
   getConsoleProjectUrl,
   parseComposerDeployResult,
   parsePrismaCliEnvelope,
+  PrismaCliCommandError,
 } from "../src/tasks/deploy-with-composer";
 import { getErrorMessage, redactSecrets } from "../src/utils/errors";
 
@@ -41,6 +42,16 @@ describe("redactSecrets", () => {
     });
 
     expect(getErrorMessage(error)).toBe("DATABASE_URL=<redacted>");
+  });
+
+  test("prefers a structured Prisma error over package-manager stderr", () => {
+    const error = new PrismaCliCommandError({
+      message: "Explicit overwrite consent is required",
+      code: "CLI.CONSENT_REQUIRED",
+      stderr: 'error: "prisma" exited with code 2',
+      exitCode: 2,
+    });
+    expect(getErrorMessage(error)).toBe("Explicit overwrite consent is required");
   });
 });
 
@@ -90,6 +101,46 @@ describe("parsePrismaCliEnvelope", () => {
         ].join("\n"),
       ),
     ).toEqual({ ok: true, result: { summary: null } });
+  });
+
+  test("preserves stable command and error codes from a failure envelope", () => {
+    const envelope = parsePrismaCliEnvelope(
+      JSON.stringify({
+        kind: "result",
+        envelope: {
+          ok: false,
+          commandId: "app.deploy",
+          error: {
+            code: "APP.DEPLOY_FAILED",
+            summary: "Deployment failed",
+            why: "The compute service was not created",
+          },
+        },
+      }),
+    );
+
+    expect(envelope).toMatchObject({
+      ok: false,
+      commandId: "app.deploy",
+      error: { code: "APP.DEPLOY_FAILED" },
+    });
+  });
+});
+
+describe("PrismaCliCommandError", () => {
+  test("exposes only stable structured fields for telemetry", () => {
+    const error = new PrismaCliCommandError({
+      message: "Deployment failed",
+      command: "app.deploy",
+      code: "APP.DEPLOY_FAILED",
+    });
+
+    expect(error).toMatchObject({
+      name: "PrismaCliCommandError",
+      message: "Deployment failed",
+      prismaCliCommand: "app.deploy",
+      prismaCliErrorCode: "APP.DEPLOY_FAILED",
+    });
   });
 });
 

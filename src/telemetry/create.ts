@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { CreatePromptContext } from "../commands/create";
 import type {
   CreateCancellationStage,
@@ -5,14 +7,34 @@ import type {
   CreateFailureStage,
 } from "../create-outcome";
 import type { CreateCommandInput } from "../types";
+import { applicationRuntime } from "../runtime";
 
-import { trackCliTelemetry } from "./client";
+import { TELEMETRY_TIMEOUT_MS, trackCliTelemetryEffect } from "./client";
 
 export const CREATE_PRISMA_NEXT_COMPLETED_EVENT = "cli:create_prisma_next_command_completed";
 export const CREATE_PRISMA_NEXT_FAILED_EVENT = "cli:create_prisma_next_command_failed";
 export const CREATE_PRISMA_NEXT_CANCELLED_EVENT = "cli:create_prisma_next_command_cancelled";
 
 export type CreateTelemetryFailureStage = CreateFailureStage;
+
+const expectedRejectionReasons = new Set<CreateFailureReason>([
+  "invalid_input",
+  "unsupported_node_version",
+  "unsupported_package_manager_version",
+  "invalid_project_name",
+  "target_path_not_directory",
+  "target_directory_not_empty",
+  "target_has_migrations",
+  "unsupported_configuration",
+  "not_authenticated",
+  "workspace_missing",
+  "workspace_mismatch",
+  "project_name_collision",
+]);
+
+function getFailureClass(reason: CreateFailureReason): "expected_rejection" | "technical_failure" {
+  return expectedRejectionReasons.has(reason) ? "expected_rejection" : "technical_failure";
+}
 
 function getTargetDirectoryState(context: CreatePromptContext): string {
   if (!context.targetPathState.exists) {
@@ -41,6 +63,7 @@ function getBaseCreateProperties(
     "database-provider": context?.prismaSetupContext.databaseProvider ?? input.provider ?? null,
     "authoring-style": context?.prismaSetupContext.authoring ?? input.authoring ?? null,
     "package-manager": context?.prismaSetupContext.packageManager ?? input.packageManager ?? null,
+    "agent-skills": context ? [...context.prismaSetupContext.skillAgents] : (input.skills ?? null),
     "should-deploy": context?.prismaSetupContext.shouldDeploy ?? input.deploy ?? null,
     "target-directory-state": context ? getTargetDirectoryState(context) : null,
   };
@@ -68,44 +91,82 @@ function getErrorCode(error: unknown): number | string | null {
   return typeof code === "number" || typeof code === "string" ? code : null;
 }
 
-export async function trackCreateCompleted(params: {
-  input: CreateCommandInput;
-  context: CreatePromptContext;
-  durationMs: number;
-}): Promise<void> {
-  await trackCliTelemetry(CREATE_PRISMA_NEXT_COMPLETED_EVENT, {
-    ...getBaseCreateProperties(params.input, params.context),
-    "duration-ms": params.durationMs,
-  });
+function getPrismaCliFailureProperty(
+  error: unknown,
+  property: "prismaCliCommand" | "prismaCliErrorCode",
+): string | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+
+  const value = Reflect.get(error, property);
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-export async function trackCreateFailed(params: {
+export const trackCreateCompletedEffect = Effect.fn("Telemetry.createCompleted")(
+  function* (params: {
+    input: CreateCommandInput;
+    context: CreatePromptContext;
+    durationMs: number;
+  }) {
+    yield* trackCliTelemetryEffect(CREATE_PRISMA_NEXT_COMPLETED_EVENT, {
+      ...getBaseCreateProperties(params.input, params.context),
+      "duration-ms": params.durationMs,
+    }).pipe(
+      Effect.scoped,
+      Effect.timeout(TELEMETRY_TIMEOUT_MS),
+      Effect.catch(() => Effect.void),
+    );
+  },
+);
+
+export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(function* (params: {
   input: CreateCommandInput;
   context?: CreatePromptContext;
   durationMs: number;
   error?: unknown;
   stage: CreateTelemetryFailureStage;
   reason: CreateFailureReason;
-}): Promise<void> {
-  await trackCliTelemetry(CREATE_PRISMA_NEXT_FAILED_EVENT, {
+}) {
+  yield* trackCliTelemetryEffect(CREATE_PRISMA_NEXT_FAILED_EVENT, {
     ...getBaseCreateProperties(params.input, params.context),
     "duration-ms": params.durationMs,
+    "failure-class": getFailureClass(params.reason),
     "failure-stage": params.stage,
     "failure-reason": params.reason,
     "error-name": getErrorName(params.error),
     "error-code": getErrorCode(params.error),
-  });
-}
+    "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
+    "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
+  }).pipe(
+    Effect.scoped,
+    Effect.timeout(TELEMETRY_TIMEOUT_MS),
+    Effect.catch(() => Effect.void),
+  );
+});
 
-export async function trackCreateCancelled(params: {
-  input: CreateCommandInput;
-  context?: CreatePromptContext;
-  durationMs: number;
-  stage: CreateCancellationStage;
-}): Promise<void> {
-  await trackCliTelemetry(CREATE_PRISMA_NEXT_CANCELLED_EVENT, {
-    ...getBaseCreateProperties(params.input, params.context),
-    "duration-ms": params.durationMs,
-    "cancellation-stage": params.stage,
-  });
-}
+export const trackCreateCancelledEffect = Effect.fn("Telemetry.createCancelled")(
+  function* (params: {
+    input: CreateCommandInput;
+    context?: CreatePromptContext;
+    durationMs: number;
+    stage: CreateCancellationStage;
+  }) {
+    yield* trackCliTelemetryEffect(CREATE_PRISMA_NEXT_CANCELLED_EVENT, {
+      ...getBaseCreateProperties(params.input, params.context),
+      "duration-ms": params.durationMs,
+      "cancellation-stage": params.stage,
+    }).pipe(
+      Effect.scoped,
+      Effect.timeout(TELEMETRY_TIMEOUT_MS),
+      Effect.catch(() => Effect.void),
+    );
+  },
+);
+
+export const trackCreateCompleted = (params: Parameters<typeof trackCreateCompletedEffect>[0]) =>
+  applicationRuntime.runPromise(trackCreateCompletedEffect(params));
+export const trackCreateFailed = (params: Parameters<typeof trackCreateFailedEffect>[0]) =>
+  applicationRuntime.runPromise(trackCreateFailedEffect(params));
+export const trackCreateCancelled = (params: Parameters<typeof trackCreateCancelledEffect>[0]) =>
+  applicationRuntime.runPromise(trackCreateCancelledEffect(params));

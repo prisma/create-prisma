@@ -16,7 +16,7 @@ export function supportsPrisma(nodeVersion = process.versions.node): boolean {
 
 export function getUnsupportedNodeMessage(nodeVersion = process.versions.node): string {
   return [
-    `Node.js ${nodeVersion} is unsupported by create-prisma@next.`,
+    `Node.js ${nodeVersion} is unsupported by create-prisma@latest.`,
     "Required: Node.js 22.18 or newer.",
     "Update Node.js and run the command again.",
   ].join("\n");

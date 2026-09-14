@@ -1,10 +1,23 @@
+import { Effect } from "effect";
 import path from "node:path";
 
-import type { AuthoringStyle, CreateTemplate, DatabaseProvider, PackageManager } from "../types";
-import { renderTemplateTree, resolveTemplatesDir } from "./shared";
+import { applicationRuntime } from "../runtime";
+import {
+  agentSkillTargets,
+  type AgentSkillTarget,
+  type AuthoringStyle,
+  type CreateTemplate,
+  type DatabaseProvider,
+  type PackageManager,
+} from "../types";
+import { renderTemplateTreeEffect, resolveTemplatesDirEffect } from "./shared";
 
 const DEFAULT_PRISMA_SOURCE_DIR = "src/prisma";
 const TURBOREPO_PRISMA_SOURCE_DIR = "packages/database/src";
+
+export function getCreatePrismaSourceDir(template: CreateTemplate): string {
+  return template === "turborepo" ? TURBOREPO_PRISMA_SOURCE_DIR : DEFAULT_PRISMA_SOURCE_DIR;
+}
 
 type CreateTemplateContext = {
   projectName: string;
@@ -12,97 +25,112 @@ type CreateTemplateContext = {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  skillAgents: readonly AgentSkillTarget[];
+  tsdownEntry: string | null;
 };
 
-function getCreateTemplateDir(template: CreateTemplate): string {
-  return resolveTemplatesDir(`templates/create/${template}`);
-}
+export type ScaffoldCreateTemplateOptions = {
+  projectDir: string;
+  projectName: string;
+  template: CreateTemplate;
+  provider: DatabaseProvider;
+  authoring: AuthoringStyle;
+  packageManager?: PackageManager;
+  /** Agents whose skill files the project gets; defaults to all of them. */
+  skillAgents?: readonly AgentSkillTarget[];
+};
 
-function getCreateSharedTemplateDir(): string {
-  return resolveTemplatesDir("templates/create/_shared");
-}
+const tsdownEntries: Partial<Record<CreateTemplate, string>> = {
+  minimal: "src/index.ts",
+  hono: "src/index.ts",
+  elysia: "src/index.ts",
+  nest: "src/main.ts",
+};
 
-export function getCreatePrismaSourceDir(template: CreateTemplate): string {
-  return template === "turborepo" ? TURBOREPO_PRISMA_SOURCE_DIR : DEFAULT_PRISMA_SOURCE_DIR;
-}
-
-function createTemplateContext(
-  projectName: string,
-  template: CreateTemplate,
-  provider: DatabaseProvider,
-  authoring: AuthoringStyle,
-  packageManager?: PackageManager,
-): CreateTemplateContext {
+function createTemplateContext(options: ScaffoldCreateTemplateOptions): CreateTemplateContext {
   return {
-    projectName,
-    template,
-    provider,
-    authoring,
-    packageManager,
+    projectName: options.projectName,
+    template: options.template,
+    provider: options.provider,
+    authoring: options.authoring,
+    packageManager: options.packageManager,
+    skillAgents: options.skillAgents ?? agentSkillTargets,
+    tsdownEntry: tsdownEntries[options.template] ?? null,
   };
 }
 
-export async function scaffoldCreateSharedTemplates(opts: {
-  projectDir: string;
-  projectName: string;
-  template: CreateTemplate;
-  provider: DatabaseProvider;
-  authoring: AuthoringStyle;
-  packageManager?: PackageManager;
-}): Promise<void> {
-  const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
-  await renderTemplateTree<CreateTemplateContext>({
-    templateRoot: getCreateSharedTemplateDir(),
-    outputDir: projectDir,
-    context: createTemplateContext(projectName, template, provider, authoring, packageManager),
+export const scaffoldCreateSharedTemplatesEffect = Effect.fn("Templates.scaffoldShared")(function* (
+  options: ScaffoldCreateTemplateOptions,
+) {
+  const templateRoot = yield* resolveTemplatesDirEffect("templates/create/_shared");
+  yield* renderTemplateTreeEffect({
+    templateRoot,
+    outputDir: options.projectDir,
+    context: createTemplateContext(options),
     mapRelativeOutputPath(relativePath) {
-      if (template !== "turborepo") return relativePath;
+      if (options.template !== "turborepo") return relativePath;
       const relativePrismaPath = path.relative(DEFAULT_PRISMA_SOURCE_DIR, relativePath);
       if (
-        relativePrismaPath === "" ||
         relativePrismaPath === ".." ||
-        relativePrismaPath.startsWith(`..${path.sep}`)
-      ) {
+        relativePrismaPath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePrismaPath)
+      )
         return relativePath;
-      }
       return path.join(TURBOREPO_PRISMA_SOURCE_DIR, relativePrismaPath);
     },
   });
-}
+});
 
-export async function scaffoldCreateTemplate(opts: {
-  projectDir: string;
-  projectName: string;
-  template: CreateTemplate;
-  provider: DatabaseProvider;
-  authoring: AuthoringStyle;
-  packageManager?: PackageManager;
-}): Promise<void> {
-  await scaffoldCreateFrameworkTemplate(opts);
-  await scaffoldCreateSharedTemplates(opts);
-}
-
-export async function scaffoldCreateFrameworkTemplate(opts: {
-  projectDir: string;
-  projectName: string;
-  template: CreateTemplate;
-  provider: DatabaseProvider;
-  authoring: AuthoringStyle;
-  packageManager?: PackageManager;
-}): Promise<void> {
-  const { projectDir, projectName, template, provider, authoring, packageManager } = opts;
-  const templateRoot = getCreateTemplateDir(template);
-  const context = createTemplateContext(projectName, template, provider, authoring, packageManager);
-  await renderTemplateTree<CreateTemplateContext>({
+export const scaffoldCreatePackageManagerTemplatesEffect = Effect.fn(
+  "Templates.scaffoldPackageManager",
+)(function* (options: ScaffoldCreateTemplateOptions) {
+  const templateRoot = yield* resolveTemplatesDirEffect("templates/create/_package-manager");
+  yield* renderTemplateTreeEffect({
     templateRoot,
-    outputDir: projectDir,
-    context,
+    outputDir: options.projectDir,
+    context: createTemplateContext(options),
   });
-  if (template === "turborepo") {
-    await renderTemplateTree<CreateTemplateContext>({
-      templateRoot: getCreateTemplateDir("next"),
-      outputDir: path.join(projectDir, "apps/web"),
-      context,
+});
+
+export const scaffoldCreateFrameworkTemplateEffect = Effect.fn("Templates.scaffoldFramework")(
+  function* (options: ScaffoldCreateTemplateOptions) {
+    const templateRoot = yield* resolveTemplatesDirEffect(`templates/create/${options.template}`);
+    yield* renderTemplateTreeEffect({
+      templateRoot,
+      outputDir: options.projectDir,
+      context: createTemplateContext(options),
     });
-  }
+    if (options.template === "turborepo") {
+      const nextTemplateRoot = yield* resolveTemplatesDirEffect("templates/create/next");
+      yield* renderTemplateTreeEffect({
+        templateRoot: nextTemplateRoot,
+        outputDir: path.join(options.projectDir, "apps/web"),
+        context: createTemplateContext(options),
+      });
+    }
+  },
+);
+
+export const scaffoldCreateTemplateEffect = Effect.fn("Templates.scaffold")(function* (
+  options: ScaffoldCreateTemplateOptions,
+) {
+  yield* scaffoldCreateFrameworkTemplateEffect(options);
+  yield* scaffoldCreatePackageManagerTemplatesEffect(options);
+  yield* scaffoldCreateSharedTemplatesEffect(options);
+});
+
+export function scaffoldCreateSharedTemplates(
+  options: ScaffoldCreateTemplateOptions,
+): Promise<void> {
+  return applicationRuntime.runPromise(scaffoldCreateSharedTemplatesEffect(options));
+}
+
+export function scaffoldCreateFrameworkTemplate(
+  options: ScaffoldCreateTemplateOptions,
+): Promise<void> {
+  return applicationRuntime.runPromise(scaffoldCreateFrameworkTemplateEffect(options));
+}
+
+export function scaffoldCreateTemplate(options: ScaffoldCreateTemplateOptions): Promise<void> {
+  return applicationRuntime.runPromise(scaffoldCreateTemplateEffect(options));
 }

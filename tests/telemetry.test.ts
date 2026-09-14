@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { Effect } from "effect";
 
 import type { CreatePromptContext } from "../src/commands/create";
 import type { CreateCommandInput } from "../src/types";
 
 const trackCliTelemetry = mock(async () => {});
 
-mock.module("../src/telemetry/client", () => ({ trackCliTelemetry }));
+mock.module("../src/telemetry/client", () => ({
+  trackCliTelemetryEffect: (event: string, properties: Record<string, unknown>) =>
+    Effect.promise(() => trackCliTelemetry(event, properties)),
+}));
 
 const {
   CREATE_PRISMA_NEXT_CANCELLED_EVENT,
@@ -29,6 +33,7 @@ const createContext: CreatePromptContext = {
     databaseProvider: "postgres",
     authoring: "psl",
     packageManager: "bun",
+    skillAgents: ["claude", "cursor", "agents", "devin"],
     shouldDeploy: true,
     shouldPromptForWorkspace: false,
   },
@@ -69,12 +74,63 @@ describe("create telemetry", () => {
     expect(properties).toEqual(
       expect.objectContaining({
         "duration-ms": 456,
+        "failure-class": "technical_failure",
         "error-code": "ERR_TEST",
         "failure-stage": "plan_migration",
         "failure-reason": "migration_plan_failed",
       }),
     );
     expect(properties).not.toHaveProperty("error-message");
+    expect(JSON.stringify(properties)).not.toContain("secret");
+  });
+
+  test("separates expected input and environment rejections from technical failures", async () => {
+    for (const reason of [
+      "target_directory_not_empty",
+      "target_has_migrations",
+      "workspace_missing",
+      "unsupported_package_manager_version",
+    ] as const) {
+      await trackCreateFailed({
+        input: createInput,
+        context: createContext,
+        durationMs: 10,
+        stage: reason === "workspace_missing" ? "select_workspace" : "collect_context",
+        reason,
+      });
+    }
+    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
+    expect(calls).toHaveLength(4);
+    expect(calls.map(([, properties]) => properties["failure-reason"])).toEqual([
+      "target_directory_not_empty",
+      "target_has_migrations",
+      "workspace_missing",
+      "unsupported_package_manager_version",
+    ]);
+    for (const [, properties] of calls) {
+      expect(properties["failure-class"]).toBe("expected_rejection");
+    }
+  });
+
+  test("tracks stable Prisma CLI failure fields without raw output", async () => {
+    await trackCreateFailed({
+      input: createInput,
+      context: createContext,
+      durationMs: 456,
+      error: Object.assign(new Error("token=secret"), {
+        prismaCliCommand: "app.deploy",
+        prismaCliErrorCode: "APP.DEPLOY_FAILED",
+      }),
+      stage: "composer_deploy",
+      reason: "composer_deploy_failed",
+    });
+    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
+    expect(properties).toEqual(
+      expect.objectContaining({
+        "prisma-cli-command": "app.deploy",
+        "prisma-cli-error-code": "APP.DEPLOY_FAILED",
+      }),
+    );
     expect(JSON.stringify(properties)).not.toContain("secret");
   });
 

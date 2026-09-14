@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
-import { createJsonOutputLogger, isJsonOutputRequested } from "../src/ui/json-output";
+import { isJsonOutputRequested, writeJsonResult } from "../src/ui/json-output";
 
 describe("isJsonOutputRequested", () => {
   test("uses the last explicit JSON flag", () => {
@@ -13,12 +14,40 @@ describe("isJsonOutputRequested", () => {
   });
 });
 
-describe("createJsonOutputLogger", () => {
-  test("writes one compact success result", () => {
-    const outputs: string[] = [];
-    const logger = createJsonOutputLogger((output) => outputs.push(output));
+describe("writeJsonResult", () => {
+  test("writes one compact success result", async () => {
+    const writes: string[] = [];
+    const originalWrite = process.stdout.write;
+    process.stdout.write = ((output: string) => {
+      writes.push(output);
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      await Effect.runPromise(
+        writeJsonResult({
+          schemaVersion: 1,
+          ok: true,
+          project: {
+            name: "my-app",
+            path: "/tmp/my-app",
+            template: "minimal",
+            databaseProvider: "postgres",
+            authoring: "psl",
+            packageManager: "bun",
+          },
+          deployment: null,
+          nextSteps: [],
+          warnings: [],
+        }),
+      );
+    } finally {
+      process.stdout.write = originalWrite;
+    }
 
-    logger.info?.({
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.split("\n")).toHaveLength(2);
+    expect(writes[0]?.endsWith("\n")).toBe(true);
+    expect(JSON.parse(writes[0]!)).toEqual({
       schemaVersion: 1,
       ok: true,
       project: {
@@ -32,57 +61,6 @@ describe("createJsonOutputLogger", () => {
       deployment: null,
       nextSteps: [],
       warnings: [],
-    });
-
-    expect(outputs).toHaveLength(1);
-    expect(outputs[0]?.split("\n")).toHaveLength(2);
-    expect(outputs[0]?.endsWith("\n")).toBe(true);
-    expect(JSON.parse(outputs[0]!)).toEqual({
-      schemaVersion: 1,
-      ok: true,
-      project: {
-        name: "my-app",
-        path: "/tmp/my-app",
-        template: "minimal",
-        databaseProvider: "postgres",
-        authoring: "psl",
-        packageManager: "bun",
-      },
-      deployment: null,
-      nextSteps: [],
-      warnings: [],
-    });
-  });
-
-  test("turns parser errors into one structured failure", () => {
-    const outputs: string[] = [];
-    const logger = createJsonOutputLogger((output) => outputs.push(output));
-
-    logger.error?.("Invalid template");
-    logger.info?.({ unexpected: true });
-
-    expect(outputs).toHaveLength(1);
-    expect(JSON.parse(outputs[0]!)).toEqual({
-      schemaVersion: 1,
-      ok: false,
-      error: { stage: "parse_arguments", message: "Invalid template" },
-    });
-  });
-
-  test("turns unexpected info values into a structured failure", () => {
-    const outputs: string[] = [];
-    const logger = createJsonOutputLogger((output) => outputs.push(output));
-
-    logger.info?.({ unexpected: true });
-
-    expect(outputs).toHaveLength(1);
-    expect(JSON.parse(outputs[0]!)).toEqual({
-      schemaVersion: 1,
-      ok: false,
-      error: {
-        stage: "parse_arguments",
-        message: '{"unexpected":true}',
-      },
     });
   });
 });

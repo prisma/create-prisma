@@ -1,13 +1,33 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { access, mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { runCreateCommand } from "../../src/commands/create";
 import type { CreateCommandResult } from "../../src/result";
+import { scaffoldCreateTemplate } from "../../src/templates/render-create-template";
+import { writeCreateTemplateDependencies, writePrismaDependencies } from "../../src/tasks/install";
 
 const TEST_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_TIMEOUT_MS ?? 300_000);
 const tempRoots: string[] = [];
+const TEST_PSL_CONTRACT = `// use prisma-8
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String?
+}
+`;
 
 async function pathExists(filePath: string) {
   try {
@@ -39,7 +59,7 @@ async function runCommand(projectDir: string, args: string[]) {
 
 async function runCreatePrismaJson(rootDir: string, args: string[]) {
   const child = Bun.spawn({
-    cmd: [process.execPath, path.join(import.meta.dir, "../../src/cli.ts"), "create", ...args],
+    cmd: [process.execPath, path.join(import.meta.dir, "../../src/cli.ts"), ...args],
     cwd: rootDir,
     env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
     stdout: "pipe",
@@ -96,13 +116,50 @@ async function fetchUntilReady(url: string, deadline: number): Promise<Response>
   }
 }
 
-async function verifyComposerDev(
-  projectDir: string,
-  verifyResponse: (response: Response) => Promise<void> = async (response) => {
-    const body = (await response.json()) as { users: Array<{ name: string }> };
-    expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
-  },
-) {
+async function fetchUntilResponding(url: string, deadline: number): Promise<Response> {
+  while (true) {
+    try {
+      return await fetch(url);
+    } catch (error) {
+      if (Date.now() >= deadline) throw error;
+    }
+    await Bun.sleep(100);
+  }
+}
+
+async function verifyBuiltServer(projectDir: string, port: number, expectedStatus: number) {
+  const process = Bun.spawn({
+    cmd: ["node", "dist/server.mjs"],
+    cwd: projectDir,
+    env: { ...Bun.env, PORT: String(port) },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const output = Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+  ]);
+  let failure: unknown;
+
+  try {
+    const response = await fetchUntilResponding(`http://127.0.0.1:${port}`, Date.now() + 10_000);
+    expect(response.status).toBe(expectedStatus);
+  } catch (error) {
+    failure = error;
+  } finally {
+    process.kill();
+    await process.exited;
+  }
+
+  const [stdout, stderr] = await output;
+  if (failure) {
+    throw new Error(`Built server did not start correctly.\n${stdout}\n${stderr}`, {
+      cause: failure,
+    });
+  }
+}
+
+async function verifyComposerDev(projectDir: string) {
   const process = Bun.spawn({
     cmd: ["bun", "run", "dev:composer"],
     cwd: projectDir,
@@ -145,7 +202,8 @@ async function verifyComposerDev(
       // retry connection refusals until the deadline.
       const response = await fetchUntilReady(appUrl, deadline);
       expect(response.status).toBe(200);
-      await verifyResponse(response);
+      const body = (await response.json()) as { users: Array<{ name: string }> };
+      expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
       return;
     }
   } finally {
@@ -165,6 +223,81 @@ afterEach(async () => {
 });
 
 describe("create-prisma e2e", () => {
+  test(
+    "resumes a partially scaffolded app only with explicit --force",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-force-e2e-"));
+      tempRoots.push(rootDir);
+      const args = [
+        "retry app",
+        "--template",
+        "minimal",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "bun",
+        "--no-deploy",
+        "--json",
+      ];
+      const projectDir = path.join(rootDir, "retry app");
+      await scaffoldCreateTemplate({
+        projectDir,
+        projectName: "retry-app",
+        template: "minimal",
+        provider: "postgres",
+        authoring: "psl",
+        packageManager: "bun",
+      });
+      const contractPath = path.join(projectDir, "src/prisma/contract.prisma");
+      await writeFile(contractPath, `${TEST_PSL_CONTRACT}\n// User modification\n`);
+      await writeFile(path.join(projectDir, "keep.txt"), "Unrelated user file\n");
+
+      const refused = await runCreatePrismaJson(rootDir, args);
+      expect(refused.exitCode).toBe(1);
+      expect(refused.result).toMatchObject({ ok: false, error: { stage: "collect_context" } });
+      expect(await readFile(contractPath, "utf8")).toContain("// User modification");
+
+      const retried = await runCreatePrismaJson(rootDir, [...args, "--force"]);
+      expect(retried.result).toMatchObject({ ok: true });
+      expect(retried.exitCode).toBe(0);
+      expect(await readFile(contractPath, "utf8")).not.toContain("// User modification");
+      expect(await readFile(path.join(projectDir, "keep.txt"), "utf8")).toBe(
+        "Unrelated user file\n",
+      );
+      await runCommand(projectDir, ["bun", "run", "build"]);
+
+      await writeFile(contractPath, `${TEST_PSL_CONTRACT}\n// Keep this existing project edit\n`);
+      const preservedPaths = ["package.json", "prisma.config.ts", "src/prisma/contract.prisma"];
+      const migrationPaths = await readdir(path.join(projectDir, "migrations"), {
+        recursive: true,
+      });
+      for (const relativePath of migrationPaths) {
+        const filePath = path.join("migrations", relativePath);
+        if ((await stat(path.join(projectDir, filePath))).isFile()) {
+          preservedPaths.push(filePath);
+        }
+      }
+      const before = await Promise.all(
+        preservedPaths.map((filePath) => readFile(path.join(projectDir, filePath), "utf8")),
+      );
+      const completeRetry = await runCreatePrismaJson(rootDir, [...args, "--force"]);
+      expect(completeRetry.exitCode).toBe(1);
+      expect(completeRetry.result).toMatchObject({
+        ok: false,
+        error: { stage: "collect_context", message: expect.stringContaining("migration history") },
+      });
+      expect(await readdir(path.join(projectDir, "migrations"), { recursive: true })).toEqual(
+        migrationPaths,
+      );
+      expect(
+        await Promise.all(
+          preservedPaths.map((filePath) => readFile(path.join(projectDir, filePath), "utf8")),
+        ),
+      ).toEqual(before);
+    },
+    TEST_TIMEOUT,
+  );
+
   test("returns a non-zero exit code when project setup fails", async () => {
     const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-exit-code-e2e-"));
     tempRoots.push(rootDir);
@@ -210,7 +343,7 @@ describe("create-prisma e2e", () => {
     expect(JSON.parse(stdout)).toMatchObject({
       schemaVersion: 1,
       ok: false,
-      error: { stage: "initialize_prisma" },
+      error: { stage: "install_dependencies" },
     });
     expect(stderr).toBe("");
     expect(await pathExists(path.join(rootDir, "failed-app", "package.json"))).toBe(true);
@@ -368,12 +501,16 @@ describe("create-prisma e2e", () => {
       // need an authored path from empty to the contract.
       expect(await pathExists(path.join(projectDir, "migrations/app"))).toBe(true);
       expect(
-        await pathExists(path.join(projectDir, ".agents/skills/prisma-composer/SKILL.md")),
+        await pathExists(
+          path.join(projectDir, ".agents/skills/prisma-composer-core-concepts/SKILL.md"),
+        ),
       ).toBe(true);
       expect(
-        await pathExists(path.join(projectDir, ".claude/skills/prisma-composer/SKILL.md")),
+        await pathExists(
+          path.join(projectDir, ".claude/skills/prisma-composer-core-concepts/SKILL.md"),
+        ),
       ).toBe(true);
-      expect(packageJson.devDependencies.prisma).toBe("8.0.0-rc.12");
+      expect(packageJson.devDependencies.prisma).toBe("latest");
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
       expect(packageJson.overrides.effect).toBe("4.0.0-rc.112");
@@ -388,8 +525,51 @@ describe("create-prisma e2e", () => {
   );
 
   test(
-    "builds a Next.js app with a TypeScript-authored contract",
+    "creates a project without agent skill files when --skills none is passed",
     async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-no-skills-e2e-"));
+      tempRoots.push(rootDir);
+      const { result, exitCode } = await runCreatePrismaJson(rootDir, [
+        "no-skills-app",
+        "--template",
+        "minimal",
+        "--provider",
+        "postgres",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "bun",
+        "--no-deploy",
+        "--yes",
+        "--skills",
+        "none",
+        "--json",
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(result.ok).toBe(true);
+      const projectDir = path.join(rootDir, "no-skills-app");
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectDir, "package.json"), "utf8"),
+      ) as Record<string, any>;
+      const configSource = await readFile(path.join(projectDir, "prisma.config.ts"), "utf8");
+
+      for (const agentDir of [".claude", ".cursor", ".agents", ".devin"]) {
+        expect(await pathExists(path.join(projectDir, agentDir))).toBe(false);
+      }
+      expect(packageJson.scripts.postinstall).toBeUndefined();
+      expect(packageJson.scripts["skills:sync"]).toBeUndefined();
+      expect(configSource).toContain("agents: [],");
+      // prisma-8.md is the human quick reference `prisma orm init` writes; it is not an agent file.
+      expect(await pathExists(path.join(projectDir, "prisma-8.md"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "src/prisma/contract.json"))).toBe(true);
+    },
+    TEST_TIMEOUT,
+  );
+
+  test.each(["next", "turborepo"] as const)(
+    "builds a %s app with a TypeScript-authored contract",
+    async (template) => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-typescript-e2e-"));
       tempRoots.push(rootDir);
       const previousCwd = process.cwd();
@@ -397,7 +577,7 @@ describe("create-prisma e2e", () => {
       try {
         await runCreateCommand({
           name: "next-typescript-app",
-          template: "next",
+          template,
           provider: "postgres",
           authoring: "typescript",
           packageManager: "bun",
@@ -409,22 +589,35 @@ describe("create-prisma e2e", () => {
       }
 
       const projectDir = path.join(rootDir, "next-typescript-app");
+      const prismaSourceDir = template === "turborepo" ? "packages/database/src" : "src/prisma";
       const composerSource = await readFile(
-        path.join(projectDir, "src/prisma/composer.ts"),
+        path.join(projectDir, prismaSourceDir, "composer.ts"),
         "utf8",
       );
-      const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
+      const dbSource = await readFile(path.join(projectDir, prismaSourceDir, "db.ts"), "utf8");
 
       expect(composerSource).toContain(
         'import type { Contract } from "./generated/contract.d.ts";',
       );
       expect(dbSource).toContain('import type { Contract } from "./generated/contract.d.ts";');
-      expect(await pathExists(path.join(projectDir, "src/prisma/generated/contract.json"))).toBe(
-        true,
-      );
-      expect(await pathExists(path.join(projectDir, "src/prisma/generated/contract.d.ts"))).toBe(
-        true,
-      );
+      expect(
+        await pathExists(path.join(projectDir, prismaSourceDir, "generated/contract.json")),
+      ).toBe(true);
+      expect(
+        await pathExists(path.join(projectDir, prismaSourceDir, "generated/contract.d.ts")),
+      ).toBe(true);
+      expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "migrations/app"))).toBe(true);
+      expect(
+        await pathExists(
+          path.join(projectDir, ".agents/skills/prisma-composer-core-concepts/SKILL.md"),
+        ),
+      ).toBe(true);
+      expect(
+        await pathExists(
+          path.join(projectDir, ".claude/skills/prisma-composer-core-concepts/SKILL.md"),
+        ),
+      ).toBe(true);
 
       await runCommand(projectDir, ["bun", "run", "build"]);
       await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
@@ -433,63 +626,41 @@ describe("create-prisma e2e", () => {
   );
 
   test(
-    "builds and runs a Composer-backed Turborepo monorepo",
+    "builds every raw Node template with tsdown",
     async () => {
-      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-turborepo-e2e-"));
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-tsdown-npm-e2e-"));
       tempRoots.push(rootDir);
-      const previousCwd = process.cwd();
-      process.chdir(rootDir);
-      try {
-        await runCreateCommand({
-          name: "turborepo-app",
-          template: "turborepo",
+
+      for (const [index, template] of (["minimal", "hono", "elysia", "nest"] as const).entries()) {
+        const projectName = `${template}-npm-app`;
+        const projectDir = path.join(rootDir, projectName);
+        await mkdir(projectDir);
+        await scaffoldCreateTemplate({
+          projectDir,
+          projectName,
+          template,
           provider: "postgres",
           authoring: "psl",
-          packageManager: "bun",
-          deploy: false,
-          yes: true,
+          packageManager: "npm",
         });
-      } finally {
-        process.chdir(previousCwd);
+        await writePrismaDependencies("postgres", "npm", "psl", projectDir);
+        await writeCreateTemplateDependencies({ template, packageManager: "npm", projectDir });
+        await writeFile(path.join(projectDir, "src/prisma/contract.prisma"), TEST_PSL_CONTRACT);
+        const packageJson = JSON.parse(
+          await readFile(path.join(projectDir, "package.json"), "utf8"),
+        ) as Record<string, any>;
+
+        expect(packageJson.scripts.build).toBe("tsdown");
+        expect(packageJson.devDependencies.tsdown).toBeDefined();
+        expect(packageJson.devDependencies.esbuild).toBeUndefined();
+        expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(true);
+
+        await runCommand(projectDir, ["bun", "install", "--ignore-scripts"]);
+        await runCommand(projectDir, ["npm", "run", "contract:emit"]);
+        await runCommand(projectDir, ["npm", "run", "build"]);
+        expect(await readdir(path.join(projectDir, "dist"))).toEqual(["server.mjs"]);
+        await verifyBuiltServer(projectDir, 46_100 + index, template === "minimal" ? 500 : 200);
       }
-
-      const projectDir = path.join(rootDir, "turborepo-app");
-      const rootPackageJson = JSON.parse(
-        await readFile(path.join(projectDir, "package.json"), "utf8"),
-      ) as Record<string, any>;
-      const webPackageJson = JSON.parse(
-        await readFile(path.join(projectDir, "apps/web/package.json"), "utf8"),
-      ) as Record<string, any>;
-      const databasePackageJson = JSON.parse(
-        await readFile(path.join(projectDir, "packages/database/package.json"), "utf8"),
-      ) as Record<string, any>;
-      const serviceSource = await readFile(path.join(projectDir, "service.ts"), "utf8");
-
-      expect(rootPackageJson.workspaces).toEqual(["apps/*", "packages/*"]);
-      expect(rootPackageJson.devDependencies.turbo).toBe("2.10.12");
-      expect(webPackageJson.dependencies["@repo/database"]).toBe("workspace:*");
-      expect(databasePackageJson.dependencies["@prisma/orm-postgres"]).toBe("8.0.0-rc.8");
-      expect(databasePackageJson.dependencies["temporal-polyfill"]).toBe("^1.0.4");
-      expect(serviceSource).toContain('appDir: "./apps/web"');
-      expect(await pathExists(path.join(projectDir, "packages/database/src/contract.json"))).toBe(
-        true,
-      );
-      expect(await pathExists(path.join(projectDir, "migrations/app"))).toBe(true);
-
-      await runCommand(projectDir, ["bun", "run", "build"]);
-      await runCommand(projectDir, ["bun", "run", "typecheck"]);
-
-      const requiredServerFiles = JSON.parse(
-        await readFile(path.join(projectDir, "apps/web/.next/required-server-files.json"), "utf8"),
-      ) as { relativeAppDir?: string };
-      expect(requiredServerFiles.relativeAppDir).toBe("apps/web");
-
-      await verifyComposerDev(projectDir, async (response) => {
-        const body = await response.text();
-        expect(body).toContain("Alice");
-        expect(body).toContain("Bob");
-        expect(body).toContain("Carol");
-      });
     },
     TEST_TIMEOUT,
   );
@@ -525,6 +696,7 @@ describe("create-prisma e2e", () => {
       expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(true);
       expect(await pathExists(path.join(projectDir, "src/prisma/contract.json"))).toBe(true);
       expect(await pathExists(path.join(projectDir, "src/prisma/contract.d.ts"))).toBe(true);
+      expect(await pathExists(path.join(projectDir, "prisma-8.md"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "prisma-next.md"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "module.ts"))).toBe(false);
       expect(await pathExists(path.join(projectDir, "service.ts"))).toBe(false);

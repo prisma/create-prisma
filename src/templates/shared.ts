@@ -1,9 +1,9 @@
+import { Effect, FileSystem } from "effect";
 import Handlebars from "handlebars";
-import fs from "fs-extra";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { applicationRuntime } from "../runtime";
 import type { PackageManager } from "../types";
 import {
   getPackageManagerManifestValue,
@@ -31,118 +31,113 @@ Handlebars.registerHelper(
     sourceEntrypoint: string,
     builtEntrypoint: string | undefined,
     _options: Handlebars.HelperOptions,
-  ) => {
-    if (!packageManager) {
-      return "";
-    }
-    return getRuntimeScriptCommand(packageManager, kind, {
-      sourceEntrypoint,
-      builtEntrypoint,
-    });
-  },
+  ) =>
+    packageManager
+      ? getRuntimeScriptCommand(packageManager, kind, { sourceEntrypoint, builtEntrypoint })
+      : "",
 );
 
-export function findPackageRoot(startDir: string): string {
+export const findPackageRootEffect = Effect.fn("Templates.findPackageRoot")(function* (
+  startDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   let currentDir = startDir;
 
   while (true) {
-    const packageJsonPath = path.join(currentDir, "package.json");
-    if (existsSync(packageJsonPath)) {
-      return currentDir;
-    }
-
+    if (yield* fs.exists(path.join(currentDir, "package.json"))) return currentDir;
     const parentDir = path.dirname(currentDir);
     if (parentDir === currentDir) {
-      break;
+      return yield* Effect.fail(new Error(`Unable to locate package root from: ${startDir}`));
     }
-
     currentDir = parentDir;
   }
+});
 
-  throw new Error(`Unable to locate package root from: ${startDir}`);
-}
-
-export function resolveTemplatesDir(relativeTemplatesDir: string): string {
+export const resolveTemplatesDirEffect = Effect.fn("Templates.resolveDirectory")(function* (
+  relativeTemplatesDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
   const currentFilePath = fileURLToPath(import.meta.url);
-  const packageRoot = findPackageRoot(path.dirname(currentFilePath));
+  const packageRoot = yield* findPackageRootEffect(path.dirname(currentFilePath));
   const templatePath = path.join(packageRoot, relativeTemplatesDir);
-
-  if (!existsSync(templatePath)) {
-    throw new Error(`Template directory not found at: ${templatePath}`);
+  if (!(yield* fs.exists(templatePath))) {
+    return yield* Effect.fail(new Error(`Template directory not found at: ${templatePath}`));
   }
-
   return templatePath;
-}
+});
 
-async function getTemplateFilesRecursively(dir: string): Promise<string[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
-  const files = await Promise.all(
-    entries.map(async (entry): Promise<string[]> => {
-      const entryPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        return getTemplateFilesRecursively(entryPath);
-      }
+const ensureTrailingNewline = (content: string) =>
+  content.endsWith("\n") ? content : `${content}\n`;
+const stripHbsExtension = (filePath: string) =>
+  filePath.endsWith(".hbs") ? filePath.slice(0, -4) : filePath;
 
-      if (!entry.isFile()) {
-        return [];
-      }
+export const renderTemplateFileEffect = Effect.fn("Templates.renderFile")(function* <
+  TContext,
+>(opts: { templateFilePath: string; outputPath: string; context: TContext }) {
+  const fs = yield* FileSystem.FileSystem;
+  const templateContent = yield* fs.readFileString(opts.templateFilePath);
+  const outputContent = yield* Effect.try({
+    try: () =>
+      opts.templateFilePath.endsWith(".hbs")
+        ? Handlebars.compile<TContext>(templateContent, { noEscape: true, strict: true })(
+            opts.context,
+          )
+        : templateContent,
+    catch: (cause) => new Error(`Could not render ${opts.templateFilePath}`, { cause }),
+  });
+  if (opts.templateFilePath.endsWith(".hbs") && outputContent.trim().length === 0) return;
 
-      return [entryPath];
-    }),
-  );
+  yield* fs.makeDirectory(path.dirname(opts.outputPath), { recursive: true });
+  yield* fs.writeFileString(opts.outputPath, ensureTrailingNewline(outputContent));
+});
 
-  return files.flat();
-}
-
-function stripHbsExtension(filePath: string): string {
-  return filePath.endsWith(".hbs") ? filePath.slice(0, -4) : filePath;
-}
-
-function ensureTrailingNewline(content: string): string {
-  return content.endsWith("\n") ? content : `${content}\n`;
-}
-
-export async function renderTemplateFile<TContext>(opts: {
-  templateFilePath: string;
-  outputPath: string;
-  context: TContext;
-}): Promise<void> {
-  const { templateFilePath, outputPath, context } = opts;
-  const templateContent = await fs.readFile(templateFilePath, "utf8");
-  const outputContent = templateFilePath.endsWith(".hbs")
-    ? Handlebars.compile<TContext>(templateContent, {
-        noEscape: true,
-        strict: true,
-      })(context)
-    : templateContent;
-
-  if (templateFilePath.endsWith(".hbs") && outputContent.trim().length === 0) {
-    return;
-  }
-
-  await fs.outputFile(outputPath, ensureTrailingNewline(outputContent), "utf8");
-}
-
-export async function renderTemplateTree<TContext>(opts: {
+export const renderTemplateTreeEffect = Effect.fn("Templates.renderTree")(function* <
+  TContext,
+>(opts: {
   templateRoot: string;
   outputDir: string;
   context: TContext;
   mapRelativeOutputPath?: (relativePath: string) => string;
-}): Promise<void> {
-  const { templateRoot, outputDir, context, mapRelativeOutputPath } = opts;
-  const templateFiles = await getTemplateFilesRecursively(templateRoot);
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const entries = yield* fs.readDirectory(opts.templateRoot, { recursive: true });
 
-  for (const templateFilePath of templateFiles) {
-    const relativeTemplatePath = path.relative(templateRoot, templateFilePath);
-    const renderedRelativePath = stripHbsExtension(relativeTemplatePath);
-    const relativeOutputPath = mapRelativeOutputPath
-      ? mapRelativeOutputPath(renderedRelativePath)
-      : renderedRelativePath;
-    const outputPath = path.join(outputDir, relativeOutputPath);
-    await renderTemplateFile({
+  for (const relativePath of entries) {
+    const templateFilePath = path.join(opts.templateRoot, relativePath);
+    const info = yield* fs.stat(templateFilePath);
+    if (info.type !== "File") continue;
+    const renderedRelativePath = stripHbsExtension(relativePath);
+    yield* renderTemplateFileEffect({
       templateFilePath,
-      outputPath,
-      context,
+      outputPath: path.join(
+        opts.outputDir,
+        opts.mapRelativeOutputPath?.(renderedRelativePath) ?? renderedRelativePath,
+      ),
+      context: opts.context,
     });
   }
+});
+
+export function findPackageRoot(startDir: string): Promise<string> {
+  return applicationRuntime.runPromise(findPackageRootEffect(startDir));
+}
+
+export function resolveTemplatesDir(relativeTemplatesDir: string): Promise<string> {
+  return applicationRuntime.runPromise(resolveTemplatesDirEffect(relativeTemplatesDir));
+}
+
+export function renderTemplateFile<TContext>(opts: {
+  templateFilePath: string;
+  outputPath: string;
+  context: TContext;
+}): Promise<void> {
+  return applicationRuntime.runPromise(renderTemplateFileEffect(opts));
+}
+
+export function renderTemplateTree<TContext>(opts: {
+  templateRoot: string;
+  outputDir: string;
+  context: TContext;
+}): Promise<void> {
+  return applicationRuntime.runPromise(renderTemplateTreeEffect(opts));
 }

@@ -1,3 +1,5 @@
+import { PrismaCliCommandError } from "../create-outcome";
+
 export function redactSecrets(message: string): string {
   return message
     .replace(
@@ -12,6 +14,7 @@ export function redactSecrets(message: string): string {
 }
 
 export function getErrorMessage(error: unknown): string {
+  if (error instanceof PrismaCliCommandError) return redactSecrets(error.message);
   if (error instanceof Error && "stderr" in error) {
     const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
     if (stderr) return redactSecrets(stderr);

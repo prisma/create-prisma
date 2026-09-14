@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { dependencyVersionMap, PRISMA_DENO_CLI_PACKAGE } from "../src/constants/dependencies";
+import { applicationRuntime } from "../src/runtime";
+import { CommandRunner } from "../src/services/command-runner";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import {
   getComposerScriptMap,
@@ -13,17 +16,23 @@ import {
 import { authoringStyles, createTemplates, databaseProviders, packageManagers } from "../src/types";
 import {
   getInstallArgs,
+  getLocalPackageBinaryArgs,
   getPackageExecutionArgs,
   getRunScriptCommand,
+  verifyPackageManagerEffect,
 } from "../src/utils/package-manager";
 
 type PackageJson = {
   name?: string;
   workspaces?: string[];
+  packageManager?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  engines?: Record<string, string>;
   scripts?: Record<string, string>;
 };
+
+const tsdownTemplates: ReadonlySet<string> = new Set(["minimal", "hono", "elysia", "nest"]);
 
 async function withPackageJson<T>(run: (projectDir: string) => Promise<T>): Promise<T> {
   const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-install-"));
@@ -70,6 +79,16 @@ describe("writePrismaDependencies", () => {
     });
   });
 
+  test("omits the skills:sync script when no agent skills are wanted", async () => {
+    await withPackageJson(async (projectDir) => {
+      await writePrismaDependencies("postgres", "pnpm", "psl", projectDir, { skillsSync: false });
+      const packageJson = await readPackageJson(projectDir);
+
+      expect(packageJson.scripts?.["skills:sync"]).toBeUndefined();
+      expect(packageJson.scripts?.["contract:emit"]).toBe("prisma contract emit");
+    });
+  });
+
   test("adds the MongoDB runtime and direct peer dependencies", async () => {
     await withPackageJson(async (projectDir) => {
       await writePrismaDependencies("mongo", "bun", "typescript", projectDir);
@@ -107,6 +126,59 @@ describe("writePrismaDependencies", () => {
 });
 
 describe("Composer package-manager commands", () => {
+  test("checks the selected npm binary against the supported resolver version", async () => {
+    const invalidVersions = ["", "11.6.", "11..0", "11.6.1e3", "11.0x6.0", "11.06.0"];
+    for (const version of [
+      "10.9.7",
+      "11.5.1",
+      "11.5.2",
+      "11.6.0",
+      "11.6.1",
+      "11.6.2",
+      "11.19.0",
+      "12.0.2",
+      ...invalidVersions,
+    ]) {
+      const result = applicationRuntime.runPromise(
+        verifyPackageManagerEffect("npm").pipe(
+          Effect.provideService(CommandRunner, {
+            run: () => Effect.die("Unexpected unchecked command"),
+            runChecked: (spec) => {
+              expect(spec.command).toBe("npm");
+              expect(spec.args).toEqual(["--version"]);
+              return Effect.succeed({ exitCode: 0, stdout: `${version}\n`, stderr: "" });
+            },
+          }),
+        ),
+      );
+      if (invalidVersions.includes(version)) {
+        await expect(result).rejects.toMatchObject({
+          message: `Could not determine the installed npm version: ${version}`,
+        });
+      } else if (["10.9.7", "11.5.1", "11.5.2"].includes(version)) {
+        await expect(result).rejects.toMatchObject({
+          reason: "unsupported_package_manager_version",
+          message: expect.stringContaining("npm install --global npm@11"),
+        });
+      } else {
+        await expect(result).resolves.toBeUndefined();
+      }
+    }
+  });
+
+  test("does not require npm when another package manager is selected", async () => {
+    for (const manager of ["bun", "pnpm", "yarn", "deno"] as const) {
+      await applicationRuntime.runPromise(
+        verifyPackageManagerEffect(manager).pipe(
+          Effect.provideService(CommandRunner, {
+            run: () => Effect.die("npm must not run"),
+            runChecked: () => Effect.die("npm must not run"),
+          }),
+        ),
+      );
+    }
+  });
+
   test("uses each selected package manager for Prisma CLI execution", () => {
     for (const packageManager of ["npm", "pnpm", "yarn", "bun"] as const) {
       expect(getComposerScriptMap(packageManager)["composer:deploy"]).toBe(
@@ -133,9 +205,52 @@ describe("Composer package-manager commands", () => {
       args: ["run", "-A", "--minimum-dependency-age=0", "npm:prisma@8.0.0-rc.11", "orm", "init"],
     });
   });
+
+  test("runs the installed Prisma CLI without registry fallback", () => {
+    expect(getLocalPackageBinaryArgs("npm", "prisma", ["contract", "emit"])).toEqual({
+      command: "npm",
+      args: ["exec", "--offline", "--yes=false", "--", "prisma", "contract", "emit"],
+    });
+    expect(getLocalPackageBinaryArgs("deno", "prisma", ["contract", "emit"])).toEqual({
+      command: "deno",
+      args: ["run", "-A", "--frozen", "npm:prisma@latest", "contract", "emit"],
+    });
+  });
 });
 
 describe("generated templates", () => {
+  test("records the agent skills choice in prisma.config.ts and the Nuxt postinstall", async () => {
+    for (const skillAgents of [[], ["claude", "cursor"]] as const) {
+      for (const template of ["minimal", "nuxt"] as const) {
+        const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-skills-"));
+        try {
+          await scaffoldCreateTemplate({
+            projectDir,
+            projectName: "skills-app",
+            template,
+            provider: "postgres",
+            authoring: "psl",
+            packageManager: "npm",
+            skillAgents,
+          });
+          const prismaConfig = await readFile(path.join(projectDir, "prisma.config.ts"), "utf8");
+          const packageJson = await readPackageJson(projectDir);
+
+          expect(prismaConfig).toContain(
+            `agents: [${skillAgents.map((agent) => `"${agent}"`).join(", ")}],`,
+          );
+          if (template === "nuxt") {
+            expect(packageJson.scripts?.postinstall).toBe(
+              skillAgents.length === 0 ? "nuxt prepare" : "nuxt prepare && npm run skills:sync",
+            );
+          }
+        } finally {
+          await rm(projectDir, { recursive: true, force: true });
+        }
+      }
+    }
+  });
+
   test("renders Composer into every supported combination", async () => {
     for (const template of createTemplates) {
       for (const provider of databaseProviders) {
@@ -158,13 +273,23 @@ describe("generated templates", () => {
               await writeCreateTemplateDependencies({ template, packageManager, projectDir });
 
               const packageJson = await readPackageJson(projectDir);
-              const prismaSourceDir = path.join(
-                projectDir,
-                template === "turborepo" ? "packages/database/src" : "src/prisma",
+              if (packageManager === "bun") {
+                expect(packageJson.packageManager).toBe("bun@1.4.1");
+              }
+              const prismaSourceRelative =
+                template === "turborepo" ? "packages/database/src" : "src/prisma";
+              const dbSource = await readFile(
+                path.join(projectDir, prismaSourceRelative, "db.ts"),
+                "utf8",
               );
-              const dbSource = await readFile(path.join(prismaSourceDir, "db.ts"), "utf8");
-              const seedSource = await readFile(path.join(prismaSourceDir, "seed.ts"), "utf8");
-              const usersSource = await readFile(path.join(prismaSourceDir, "users.ts"), "utf8");
+              const seedSource = await readFile(
+                path.join(projectDir, prismaSourceRelative, "seed.ts"),
+                "utf8",
+              );
+              const usersSource = await readFile(
+                path.join(projectDir, prismaSourceRelative, "users.ts"),
+                "utf8",
+              );
               const tsconfig = await readFile(path.join(projectDir, "tsconfig.json"), "utf8");
 
               if (packageManager === "deno") {
@@ -203,46 +328,67 @@ describe("generated templates", () => {
               expect(prismaConfig).toContain('import { definePrismaConfig } from "prisma/config"');
               expect(prismaConfig).toContain('agents: ["claude", "cursor", "agents", "devin"]');
               expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
+              expect(
+                await readFile(path.join(projectDir, "prisma-composer.config.ts"), "utf8"),
+              ).toContain('prismaCloud({ region: "us-east-1" })');
               expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");
               expect(seedSource).toContain("await connectDatabase()");
               expect(seedSource).toContain("export function seed()");
               expect(usersSource).toContain("await seed()");
-              expect(await pathExists(path.join(prismaSourceDir, "starter-data.ts"))).toBe(false);
+              expect(
+                await pathExists(path.join(projectDir, prismaSourceRelative, "starter-data.ts")),
+              ).toBe(false);
               if (template === "turborepo") {
-                const webPackageJson = await readPackageJson(path.join(projectDir, "apps/web"));
-                const databasePackageJson = await readPackageJson(
-                  path.join(projectDir, "packages/database"),
-                );
-                const nextConfig = await readFile(
-                  path.join(projectDir, "apps/web/next.config.ts"),
-                  "utf8",
-                );
-                const pageSource = await readFile(
-                  path.join(projectDir, "apps/web/src/app/page.tsx"),
-                  "utf8",
-                );
-
+                await writePrismaDependencies(provider, packageManager, authoring, projectDir, {
+                  template,
+                });
+                const web = await readPackageJson(path.join(projectDir, "apps/web"));
+                const database = await readPackageJson(path.join(projectDir, "packages/database"));
                 expect(packageJson.workspaces).toEqual(["apps/*", "packages/*"]);
                 expect(packageJson.devDependencies?.turbo).toBe(dependencyVersionMap.turbo);
-                expect(webPackageJson.name).toBe("@repo/web");
-                expect(webPackageJson.dependencies?.["@repo/database"]).toBe(
+                expect(web.name).toBe("@repo/web");
+                expect(web.dependencies?.["@repo/database"]).toBe(
                   packageManager === "npm" ? "*" : "workspace:*",
                 );
-                expect(databasePackageJson.name).toBe("@repo/database");
-                expect(databasePackageJson.devDependencies?.typescript).toBe(
-                  dependencyVersionMap.typescript,
+                expect(database.name).toBe("@repo/database");
+                expect(database.dependencies).toHaveProperty(
+                  provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
                 );
-                expect(databasePackageJson.scripts).toEqual({
+                expect(database.dependencies?.["temporal-polyfill"]).toBe(
+                  provider === "postgres" ? dependencyVersionMap["temporal-polyfill"] : undefined,
+                );
+                expect(database.scripts).toEqual({
                   typecheck: "tsc --noEmit --project tsconfig.json",
                 });
-                expect(nextConfig).toContain("outputFileTracingRoot: monorepoRoot");
-                expect(nextConfig).toContain('transpilePackages: ["@repo/database"]');
-                expect(pageSource).toContain('import("@repo/database")');
                 expect(serviceSource).toContain('appDir: "./apps/web"');
                 expect(dbSource).toContain('import service from "../../../service.ts"');
                 expect(await pathExists(path.join(projectDir, "src/prisma"))).toBe(false);
+              }
+              if (tsdownTemplates.has(template)) {
+                expect(packageJson.engines?.node).toBe("^22.18.0 || >=24.11.0");
+                expect(packageJson.scripts?.build).toBe("tsdown");
+                expect(packageJson.devDependencies).toHaveProperty("tsdown");
+                expect(packageJson.devDependencies).not.toHaveProperty("esbuild");
+                const buildSource = await readFile(
+                  path.join(projectDir, "tsdown.config.ts"),
+                  "utf8",
+                );
+                expect(buildSource).toContain("defineConfig({");
+                expect(buildSource).toContain(
+                  `entry: { server: "${template === "nest" ? "src/main.ts" : "src/index.ts"}" }`,
+                );
+                expect(buildSource).toContain("alwaysBundle: (id)");
+                expect(buildSource).toContain("onlyBundle: false");
+                expect(buildSource).toContain("codeSplitting: false");
+                if (template === "nest") {
+                  expect(buildSource).toContain("neverBundle: optionalNestDependencies");
+                } else {
+                  expect(buildSource).not.toContain("optionalNestDependencies");
+                }
+              } else {
+                expect(await pathExists(path.join(projectDir, "tsdown.config.ts"))).toBe(false);
               }
               if (template === "elysia") {
                 const serverSource = await readFile(path.join(projectDir, "src/index.ts"), "utf8");
@@ -250,7 +396,6 @@ describe("generated templates", () => {
                 expect(serverSource).toContain('.listen({ port, hostname: "0.0.0.0" })');
               }
               if (template === "nest") {
-                expect(packageJson.scripts?.build).toContain("--external:'@nestjs/websockets/*'");
                 const usersServiceSource = await readFile(
                   path.join(projectDir, "src/users.service.ts"),
                   "utf8",
@@ -277,7 +422,7 @@ describe("generated templates", () => {
                 expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
-                  path.join(prismaSourceDir, "composer.ts"),
+                  path.join(projectDir, prismaSourceRelative, "composer.ts"),
                   "utf8",
                 );
                 if (authoring === "typescript") {
@@ -299,13 +444,7 @@ describe("generated templates", () => {
                 expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {
-                expect(prismaConfig).toContain(
-                  `output: "./${
-                    template === "turborepo"
-                      ? "packages/database/src/generated"
-                      : "src/prisma/generated"
-                  }"`,
-                );
+                expect(prismaConfig).toContain(`output: "./${prismaSourceRelative}/generated"`);
                 expect(dbSource).toContain(
                   'import type { Contract } from "./generated/contract.d.ts";',
                 );
