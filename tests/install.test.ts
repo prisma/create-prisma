@@ -364,7 +364,11 @@ describe("generated templates", () => {
                   expect(database.dependencies?.[name]).toBe(
                     provider === "mongo" ? dependencyVersionMap[name] : undefined,
                   );
-                  expect(root.dependencies?.[name]).toBeUndefined();
+                  expect(root.dependencies?.[name]).toBe(
+                    provider === "mongo" && name === "arktype"
+                      ? dependencyVersionMap.arktype
+                      : undefined,
+                  );
                 }
                 expect(root.dependencies?.["temporal-polyfill"]).toBeUndefined();
                 expect(root.dependencies).toHaveProperty(

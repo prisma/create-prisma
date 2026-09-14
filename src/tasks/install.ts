@@ -169,7 +169,9 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   }
   if (provider === "mongo") databaseDependencies.push("arktype", "mongodb");
   const dependencies =
-    options.template === "turborepo" ? [getDbPackages(provider)] : [...databaseDependencies];
+    options.template === "turborepo"
+      ? [getDbPackages(provider), ...(provider === "mongo" ? ["arktype"] : [])]
+      : [...databaseDependencies];
   if (packageManager === "deno") dependencies.push("dotenv");
   yield* addPackageDependencyEffect({
     dependencies,
