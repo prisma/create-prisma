@@ -567,9 +567,12 @@ describe("create-prisma e2e", () => {
     TEST_TIMEOUT,
   );
 
-  test.each(["next", "turborepo"] as const)(
+  test.each([
+    ["Next.js", "next"],
+    ["Turborepo", "turborepo"],
+  ] as const)(
     "builds a %s app with a TypeScript-authored contract",
-    async (template) => {
+    async (_label, template) => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-typescript-e2e-"));
       tempRoots.push(rootDir);
       const previousCwd = process.cwd();
