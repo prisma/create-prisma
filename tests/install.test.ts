@@ -69,6 +69,7 @@ describe("writePrismaDependencies", () => {
       expect(packageJson.dependencies?.dotenv).toBeUndefined();
       expect(packageJson.devDependencies).toMatchObject({
         prisma: dependencyVersionMap.prisma,
+        "@prisma/dev": dependencyVersionMap["@prisma/dev"],
       });
       expect(packageJson.scripts).toMatchObject({
         "contract:emit": "prisma contract emit",
@@ -99,6 +100,7 @@ describe("writePrismaDependencies", () => {
         mongodb: dependencyVersionMap.mongodb,
       });
       expect(packageJson.dependencies?.["@prisma/orm-postgres"]).toBeUndefined();
+      expect(packageJson.devDependencies?.["@prisma/dev"]).toBeUndefined();
       expect(packageJson.scripts?.["db:seed"]).toBeUndefined();
     });
   });
@@ -117,6 +119,7 @@ describe("writePrismaDependencies", () => {
         prisma: dependencyVersionMap.prisma,
       });
       expect(packageJson.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
+      expect(packageJson.devDependencies?.["@prisma/dev"]).toBeUndefined();
       expect(packageJson.scripts).toMatchObject({
         "contract:emit": `deno run -A npm:${PRISMA_DENO_CLI_PACKAGE} contract emit`,
         "db:init": `deno run -A --env-file=.env npm:${PRISMA_DENO_CLI_PACKAGE} db init`,
@@ -271,8 +274,17 @@ describe("generated templates", () => {
                 packageManager,
               });
               await writeCreateTemplateDependencies({ template, packageManager, projectDir });
+              await writePrismaDependencies(provider, packageManager, authoring, projectDir, {
+                template,
+              });
 
               const packageJson = await readPackageJson(projectDir);
+              expect(packageJson.devDependencies?.["@prisma/dev"]).toBe(
+                provider === "postgres" && packageManager !== "deno"
+                  ? dependencyVersionMap["@prisma/dev"]
+                  : undefined,
+              );
+              expect(packageJson.dependencies?.["@prisma/dev"]).toBeUndefined();
               if (packageManager === "bun") {
                 expect(packageJson.packageManager).toBe("bun@1.4.1");
               }
@@ -341,11 +353,10 @@ describe("generated templates", () => {
                 await pathExists(path.join(projectDir, prismaSourceRelative, "starter-data.ts")),
               ).toBe(false);
               if (template === "turborepo") {
-                await writePrismaDependencies(provider, packageManager, authoring, projectDir, {
-                  template,
-                });
                 const server = await readPackageJson(path.join(projectDir, "apps/server"));
                 const database = await readPackageJson(path.join(projectDir, "packages/database"));
+                expect(server.devDependencies?.["@prisma/dev"]).toBeUndefined();
+                expect(database.devDependencies?.["@prisma/dev"]).toBeUndefined();
                 const root = await readPackageJson(projectDir);
                 expect(packageJson.workspaces).toEqual(["apps/*", "packages/*"]);
                 expect(packageJson.devDependencies?.turbo).toBe(dependencyVersionMap.turbo);

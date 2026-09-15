@@ -15,6 +15,10 @@ bunx create-prisma@latest my-app
 
 The CLI initializes Prisma 8 with `prisma@latest`, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
 
+PostgreSQL apps with Composer include `@prisma/dev` as a project devDependency for
+local Postgres. In a monorepo it belongs at the root, where Composer runs. Prisma 8
+does not include this runtime itself. MongoDB and Deno-only apps do not need it.
+
 For npm, use 11.6.0 or newer, which includes the [upstream resolver fix](https://github.com/npm/cli/pull/8448).
 Older npm releases can crash resolving the dependency tree (`Cannot read properties of null (reading 'edgesOut')`). Run
 `npm install --global npm@11` to update. create-prisma checks the selected npm

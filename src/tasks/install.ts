@@ -164,8 +164,10 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   options: { skillsSync?: boolean; template?: CreateTemplate } = {},
 ) {
   const databaseDependencies = [getDbPackages(provider)];
+  const devDependencies = ["@types/node", "prisma"];
   if (provider === "postgres" && packageManager !== "deno") {
     databaseDependencies.push("temporal-polyfill");
+    devDependencies.push("@prisma/dev");
   }
   if (provider === "mongo") databaseDependencies.push("arktype", "mongodb");
   const dependencies =
@@ -175,7 +177,7 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   if (packageManager === "deno") dependencies.push("dotenv");
   yield* addPackageDependencyEffect({
     dependencies,
-    devDependencies: ["@types/node", "prisma"],
+    devDependencies,
     scripts: getPrismaScriptMap(packageManager, options.skillsSync ?? true),
     projectDir,
   });
