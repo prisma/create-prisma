@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import path from "node:path";
 
 import { applicationRuntime } from "../runtime";
 import {
@@ -10,6 +11,13 @@ import {
   type PackageManager,
 } from "../types";
 import { renderTemplateTreeEffect, resolveTemplatesDirEffect } from "./shared";
+
+const DEFAULT_PRISMA_SOURCE_DIR = "src/prisma";
+const TURBOREPO_PRISMA_SOURCE_DIR = "packages/database/src";
+
+export function getCreatePrismaSourceDir(template: CreateTemplate): string {
+  return template === "turborepo" ? TURBOREPO_PRISMA_SOURCE_DIR : DEFAULT_PRISMA_SOURCE_DIR;
+}
 
 type CreateTemplateContext = {
   projectName: string;
@@ -37,6 +45,7 @@ const tsdownEntries: Partial<Record<CreateTemplate, string>> = {
   hono: "src/index.ts",
   elysia: "src/index.ts",
   nest: "src/main.ts",
+  turborepo: "src/index.ts",
 };
 
 function createTemplateContext(options: ScaffoldCreateTemplateOptions): CreateTemplateContext {
@@ -59,6 +68,20 @@ export const scaffoldCreateSharedTemplatesEffect = Effect.fn("Templates.scaffold
     templateRoot,
     outputDir: options.projectDir,
     context: createTemplateContext(options),
+    mapRelativeOutputPath(relativePath) {
+      if (options.template !== "turborepo") return relativePath;
+      if (relativePath === "tsdown.config.ts") {
+        return path.join("apps/server", relativePath);
+      }
+      const relativePrismaPath = path.relative(DEFAULT_PRISMA_SOURCE_DIR, relativePath);
+      if (
+        relativePrismaPath === ".." ||
+        relativePrismaPath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePrismaPath)
+      )
+        return relativePath;
+      return path.join(TURBOREPO_PRISMA_SOURCE_DIR, relativePrismaPath);
+    },
   });
 });
 

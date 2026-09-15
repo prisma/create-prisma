@@ -11,6 +11,7 @@ describe("Prisma 8 dependency versions", () => {
     expect(getDependencyVersion("prisma")).toBe("latest");
     expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.74");
     expect(getDependencyVersion("effect")).toBe("4.0.0-rc.112");
+    expect(getDependencyVersion("turbo")).toBe("2.10.12");
   });
 
   test("returns undefined for dependencies missing from the version map", () => {

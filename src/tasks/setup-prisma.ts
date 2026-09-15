@@ -63,7 +63,7 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
         context.packageManager,
         context.authoring,
         projectDir,
-        { skillsSync: context.skillAgents.length > 0 },
+        { skillsSync: context.skillAgents.length > 0, template },
       ),
       "configure_project",
       "project_configuration_failed",
@@ -85,7 +85,7 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
 
     yield* Effect.sync(() => progress?.message("Preparing Prisma 8 project files..."));
     yield* atCreateStage(
-      runPrismaInit(context, projectDir, options.force),
+      runPrismaInit(context, projectDir, options.force, template),
       "initialize_prisma",
       "prisma_init_failed",
     );

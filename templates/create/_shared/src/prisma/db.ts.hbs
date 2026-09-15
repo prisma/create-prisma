@@ -14,7 +14,7 @@ export const db = postgres<Contract>({ contractJson, url: databaseUrl });
 {{else}}
 import "temporal-polyfill/global";
 
-import service from "../../service.ts";
+import service from "{{#if (eq template "turborepo")}}../../../service.ts{{else}}../../service.ts{{/if}}";
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
 
@@ -35,7 +35,7 @@ export const db =
 {{else}}
 import mongo from "@prisma/orm-mongo/runtime";
 
-import service from "../../service.ts";
+import service from "{{#if (eq template "turborepo")}}../../../service.ts{{else}}../../service.ts{{/if}}";
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
 

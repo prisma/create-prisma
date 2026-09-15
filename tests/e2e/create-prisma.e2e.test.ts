@@ -140,10 +140,12 @@ async function verifyBuiltServer(projectDir: string, port: number, expectedStatu
     new Response(process.stderr).text(),
   ]);
   let failure: unknown;
+  let body = "";
 
   try {
     const response = await fetchUntilResponding(`http://127.0.0.1:${port}`, Date.now() + 10_000);
     expect(response.status).toBe(expectedStatus);
+    body = await response.text();
   } catch (error) {
     failure = error;
   } finally {
@@ -157,9 +159,10 @@ async function verifyBuiltServer(projectDir: string, port: number, expectedStatu
       cause: failure,
     });
   }
+  return body;
 }
 
-async function verifyComposerDev(projectDir: string) {
+async function verifyComposerDev(projectDir: string, usersPath = "") {
   const process = Bun.spawn({
     cmd: ["bun", "run", "dev:composer"],
     cwd: projectDir,
@@ -200,7 +203,7 @@ async function verifyComposerDev(projectDir: string) {
 
       // The endpoint frame can precede the app process binding its port, so
       // retry connection refusals until the deadline.
-      const response = await fetchUntilReady(appUrl, deadline);
+      const response = await fetchUntilReady(`${appUrl}${usersPath}`, deadline);
       expect(response.status).toBe(200);
       const body = (await response.json()) as { users: Array<{ name: string }> };
       expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
@@ -567,9 +570,12 @@ describe("create-prisma e2e", () => {
     TEST_TIMEOUT,
   );
 
-  test(
-    "builds a Next.js app with a TypeScript-authored contract",
-    async () => {
+  test.each([
+    ["Next.js", "next"],
+    ["Turborepo", "turborepo"],
+  ] as const)(
+    "builds a %s app with a TypeScript-authored contract",
+    async (_label, template) => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-typescript-e2e-"));
       tempRoots.push(rootDir);
       const previousCwd = process.cwd();
@@ -577,7 +583,7 @@ describe("create-prisma e2e", () => {
       try {
         await runCreateCommand({
           name: "next-typescript-app",
-          template: "next",
+          template,
           provider: "postgres",
           authoring: "typescript",
           packageManager: "bun",
@@ -589,22 +595,23 @@ describe("create-prisma e2e", () => {
       }
 
       const projectDir = path.join(rootDir, "next-typescript-app");
+      const prismaSourceDir = template === "turborepo" ? "packages/database/src" : "src/prisma";
       const composerSource = await readFile(
-        path.join(projectDir, "src/prisma/composer.ts"),
+        path.join(projectDir, prismaSourceDir, "composer.ts"),
         "utf8",
       );
-      const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
+      const dbSource = await readFile(path.join(projectDir, prismaSourceDir, "db.ts"), "utf8");
 
       expect(composerSource).toContain(
         'import type { Contract } from "./generated/contract.d.ts";',
       );
       expect(dbSource).toContain('import type { Contract } from "./generated/contract.d.ts";');
-      expect(await pathExists(path.join(projectDir, "src/prisma/generated/contract.json"))).toBe(
-        true,
-      );
-      expect(await pathExists(path.join(projectDir, "src/prisma/generated/contract.d.ts"))).toBe(
-        true,
-      );
+      expect(
+        await pathExists(path.join(projectDir, prismaSourceDir, "generated/contract.json")),
+      ).toBe(true);
+      expect(
+        await pathExists(path.join(projectDir, prismaSourceDir, "generated/contract.d.ts")),
+      ).toBe(true);
       expect(await pathExists(path.join(projectDir, "prisma.config.ts"))).toBe(true);
       expect(await pathExists(path.join(projectDir, "migrations/app"))).toBe(true);
       expect(
@@ -620,6 +627,13 @@ describe("create-prisma e2e", () => {
 
       await runCommand(projectDir, ["bun", "run", "build"]);
       await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
+      if (template === "turborepo") {
+        await runCommand(projectDir, ["bun", "run", "typecheck"]);
+        const serverDir = path.join(projectDir, "apps/server");
+        expect(await readdir(path.join(serverDir, "dist"))).toEqual(["server.mjs"]);
+        expect(await verifyBuiltServer(serverDir, 46_150, 200)).toBe("Hello World!");
+        if (process.platform !== "win32") await verifyComposerDev(projectDir, "/users");
+      }
     },
     TEST_TIMEOUT,
   );

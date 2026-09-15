@@ -92,7 +92,12 @@ export const renderTemplateFileEffect = Effect.fn("Templates.renderFile")(functi
 
 export const renderTemplateTreeEffect = Effect.fn("Templates.renderTree")(function* <
   TContext,
->(opts: { templateRoot: string; outputDir: string; context: TContext }) {
+>(opts: {
+  templateRoot: string;
+  outputDir: string;
+  context: TContext;
+  mapRelativeOutputPath?: (relativePath: string) => string;
+}) {
   const fs = yield* FileSystem.FileSystem;
   const entries = yield* fs.readDirectory(opts.templateRoot, { recursive: true });
 
@@ -100,9 +105,13 @@ export const renderTemplateTreeEffect = Effect.fn("Templates.renderTree")(functi
     const templateFilePath = path.join(opts.templateRoot, relativePath);
     const info = yield* fs.stat(templateFilePath);
     if (info.type !== "File") continue;
+    const renderedRelativePath = stripHbsExtension(relativePath);
     yield* renderTemplateFileEffect({
       templateFilePath,
-      outputPath: path.join(opts.outputDir, stripHbsExtension(relativePath)),
+      outputPath: path.join(
+        opts.outputDir,
+        opts.mapRelativeOutputPath?.(renderedRelativePath) ?? renderedRelativePath,
+      ),
       context: opts.context,
     });
   }

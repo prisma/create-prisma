@@ -1,4 +1,9 @@
 {{#if (eq packageManager "pnpm")}}
+{{#if (eq template "turborepo")}}
+packages:
+  - "apps/*"
+  - "packages/*"
+{{/if}}
 allowBuilds:
   esbuild: true
   msgpackr-extract: true

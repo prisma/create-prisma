@@ -89,6 +89,11 @@ const promptForCreateTemplate = Effect.fn("Prompts.template")(function* (output:
           hint: "Structured Node API with controllers and services",
         },
         { value: "next", label: "Next.js", hint: "Full-stack React app with App Router" },
+        {
+          value: "turborepo",
+          label: "Monorepo (Turborepo)",
+          hint: "Hello World server with a shared Prisma database package",
+        },
         { value: "svelte", label: "SvelteKit", hint: "Full-stack Svelte 5 app with Vite" },
         { value: "astro", label: "Astro", hint: "Content-oriented web app with server routes" },
         { value: "nuxt", label: "Nuxt", hint: "Full-stack Vue app with Nitro server routes" },

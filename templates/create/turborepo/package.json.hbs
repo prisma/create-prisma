@@ -1,0 +1,20 @@
+{
+  "name": "{{projectName}}",
+  "version": "0.1.0",
+  "private": true,
+  {{#if (packageManagerManifestValue packageManager)}}
+  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{/if}}
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "start": "turbo run start",
+    "typecheck": "tsc --noEmit && turbo run typecheck"
+  },
+  "devDependencies": {}
+}

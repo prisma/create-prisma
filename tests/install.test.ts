@@ -23,6 +23,8 @@ import {
 } from "../src/utils/package-manager";
 
 type PackageJson = {
+  name?: string;
+  workspaces?: string[];
   packageManager?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -274,13 +276,18 @@ describe("generated templates", () => {
               if (packageManager === "bun") {
                 expect(packageJson.packageManager).toBe("bun@1.4.1");
               }
-              const dbSource = await readFile(path.join(projectDir, "src/prisma/db.ts"), "utf8");
+              const prismaSourceRelative =
+                template === "turborepo" ? "packages/database/src" : "src/prisma";
+              const dbSource = await readFile(
+                path.join(projectDir, prismaSourceRelative, "db.ts"),
+                "utf8",
+              );
               const seedSource = await readFile(
-                path.join(projectDir, "src/prisma/seed.ts"),
+                path.join(projectDir, prismaSourceRelative, "seed.ts"),
                 "utf8",
               );
               const usersSource = await readFile(
-                path.join(projectDir, "src/prisma/users.ts"),
+                path.join(projectDir, prismaSourceRelative, "users.ts"),
                 "utf8",
               );
               const tsconfig = await readFile(path.join(projectDir, "tsconfig.json"), "utf8");
@@ -330,9 +337,64 @@ describe("generated templates", () => {
               expect(seedSource).toContain("await connectDatabase()");
               expect(seedSource).toContain("export function seed()");
               expect(usersSource).toContain("await seed()");
-              expect(await pathExists(path.join(projectDir, "src/prisma/starter-data.ts"))).toBe(
-                false,
-              );
+              expect(
+                await pathExists(path.join(projectDir, prismaSourceRelative, "starter-data.ts")),
+              ).toBe(false);
+              if (template === "turborepo") {
+                await writePrismaDependencies(provider, packageManager, authoring, projectDir, {
+                  template,
+                });
+                const server = await readPackageJson(path.join(projectDir, "apps/server"));
+                const database = await readPackageJson(path.join(projectDir, "packages/database"));
+                const root = await readPackageJson(projectDir);
+                expect(packageJson.workspaces).toEqual(["apps/*", "packages/*"]);
+                expect(packageJson.devDependencies?.turbo).toBe(dependencyVersionMap.turbo);
+                expect(server.name).toBe("@repo/server");
+                expect(server.dependencies?.["@repo/database"]).toBe(
+                  packageManager === "npm" ? "*" : "workspace:*",
+                );
+                expect(database.name).toBe("@repo/database");
+                expect(database.dependencies).toHaveProperty(
+                  provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
+                );
+                expect(database.dependencies?.["temporal-polyfill"]).toBe(
+                  provider === "postgres" ? dependencyVersionMap["temporal-polyfill"] : undefined,
+                );
+                for (const name of ["arktype", "mongodb"] as const) {
+                  expect(database.dependencies?.[name]).toBe(
+                    provider === "mongo" ? dependencyVersionMap[name] : undefined,
+                  );
+                  expect(root.dependencies?.[name]).toBe(
+                    provider === "mongo" && name === "arktype"
+                      ? dependencyVersionMap.arktype
+                      : undefined,
+                  );
+                }
+                expect(root.dependencies?.["temporal-polyfill"]).toBeUndefined();
+                expect(root.dependencies).toHaveProperty(
+                  provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
+                );
+                expect(database.scripts).toEqual({
+                  typecheck: "tsc --noEmit --project tsconfig.json",
+                });
+                expect(serviceSource).toContain('entry: "./apps/server/dist/server.mjs"');
+                expect(serviceSource).not.toContain("nextjs");
+                expect(server.scripts?.build).toBe("tsdown");
+                expect(server.devDependencies?.tsdown).toBe(dependencyVersionMap.tsdown);
+                expect(await pathExists(path.join(projectDir, "apps/web"))).toBe(false);
+                for (const manifest of [root, server, database]) {
+                  expect(manifest.dependencies?.next).toBeUndefined();
+                  expect(manifest.dependencies?.react).toBeUndefined();
+                }
+                expect(
+                  await readFile(path.join(projectDir, "apps/server/tsdown.config.ts"), "utf8"),
+                ).toContain('entry: { server: "src/index.ts" }');
+                expect(
+                  await readFile(path.join(projectDir, "apps/server/src/index.ts"), "utf8"),
+                ).toContain('response.end("Hello World!")');
+                expect(dbSource).toContain('import service from "../../../service.ts"');
+                expect(await pathExists(path.join(projectDir, "src/prisma"))).toBe(false);
+              }
               if (tsdownTemplates.has(template)) {
                 expect(packageJson.engines?.node).toBe("^22.18.0 || >=24.11.0");
                 expect(packageJson.scripts?.build).toBe("tsdown");
@@ -389,7 +451,7 @@ describe("generated templates", () => {
                 expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).toContain("conflictOn: { email: user.email }");
                 const composerSource = await readFile(
-                  path.join(projectDir, "src/prisma/composer.ts"),
+                  path.join(projectDir, prismaSourceRelative, "composer.ts"),
                   "utf8",
                 );
                 if (authoring === "typescript") {
@@ -411,7 +473,7 @@ describe("generated templates", () => {
                 expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {
-                expect(prismaConfig).toContain('output: "./src/prisma/generated"');
+                expect(prismaConfig).toContain(`output: "./${prismaSourceRelative}/generated"`);
                 expect(dbSource).toContain(
                   'import type { Contract } from "./generated/contract.d.ts";',
                 );
@@ -433,6 +495,9 @@ describe("generated templates", () => {
                       : [];
                 expect(await readFile(path.join(projectDir, "pnpm-workspace.yaml"), "utf8")).toBe(
                   [
+                    ...(template === "turborepo"
+                      ? ["packages:", '  - "apps/*"', '  - "packages/*"']
+                      : []),
                     "allowBuilds:",
                     "  esbuild: true",
                     "  msgpackr-extract: true",

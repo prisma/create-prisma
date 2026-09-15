@@ -44,6 +44,7 @@ workspace. Choosing another workspace also updates the Prisma CLI's active works
 - `elysia`
 - `nest`
 - `next`
+- `turborepo` (Hello World Node.js server in `apps/server`, shared Prisma package in `packages/database`)
 - `svelte` (SvelteKit)
 - `astro`
 - `nuxt`

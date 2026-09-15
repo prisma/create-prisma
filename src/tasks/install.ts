@@ -161,11 +161,17 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
   packageManager: PackageManager,
   _authoring: AuthoringStyle,
   projectDir = process.cwd(),
-  options: { skillsSync?: boolean } = {},
+  options: { skillsSync?: boolean; template?: CreateTemplate } = {},
 ) {
-  const dependencies = [getDbPackages(provider)];
-  if (provider === "postgres" && packageManager !== "deno") dependencies.push("temporal-polyfill");
-  if (provider === "mongo") dependencies.push("arktype", "mongodb");
+  const databaseDependencies = [getDbPackages(provider)];
+  if (provider === "postgres" && packageManager !== "deno") {
+    databaseDependencies.push("temporal-polyfill");
+  }
+  if (provider === "mongo") databaseDependencies.push("arktype", "mongodb");
+  const dependencies =
+    options.template === "turborepo"
+      ? [getDbPackages(provider), ...(provider === "mongo" ? ["arktype"] : [])]
+      : [...databaseDependencies];
   if (packageManager === "deno") dependencies.push("dotenv");
   yield* addPackageDependencyEffect({
     dependencies,
@@ -173,6 +179,12 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
     scripts: getPrismaScriptMap(packageManager, options.skillsSync ?? true),
     projectDir,
   });
+  if (options.template === "turborepo") {
+    yield* addPackageDependencyEffect({
+      dependencies: databaseDependencies,
+      projectDir: path.join(projectDir, "packages/database"),
+    });
+  }
 });
 
 export const writeCreateTemplateDependenciesEffect = Effect.fn("Dependencies.writeTemplate")(
@@ -189,7 +201,10 @@ export const writeCreateTemplateDependenciesEffect = Effect.fn("Dependencies.wri
         dependencies: target.dependencies,
         devDependencies: target.devDependencies,
         customDependencies: target.customDependencies,
-        scripts: getComposerScriptMap(opts.packageManager),
+        scripts:
+          target.packageJsonPath === "package.json"
+            ? getComposerScriptMap(opts.packageManager)
+            : undefined,
         projectDir: path.join(projectDir, path.dirname(target.packageJsonPath)),
       });
     }

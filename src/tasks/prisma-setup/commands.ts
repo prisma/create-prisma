@@ -2,14 +2,15 @@ import { log } from "@clack/prompts";
 import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
-import type { AuthoringStyle, DatabaseProvider } from "../../types";
+import { getCreatePrismaSourceDir } from "../../templates/render-create-template";
+import type { AuthoringStyle, CreateTemplate, DatabaseProvider } from "../../types";
 import { getLocalPackageBinaryArgs } from "../../utils/package-manager";
 import { redactSecrets } from "../../utils/errors";
 import { runPrismaJsonCommandEffect } from "../prisma-cli";
 import type { PrismaSetupContext } from "./types";
 
-const getContractPath = (authoring: AuthoringStyle) =>
-  `src/prisma/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
+const getContractPath = (authoring: AuthoringStyle, template: CreateTemplate) =>
+  `${getCreatePrismaSourceDir(template)}/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
 
 const getInitTarget = (provider: DatabaseProvider) =>
   provider === "mongo" ? ("mongodb" as const) : ("postgres" as const);
@@ -43,6 +44,7 @@ export const runPrismaInit = Effect.fn("PrismaSetup.init")(function* (
   context: PrismaSetupContext,
   projectDir: string,
   force = false,
+  template: CreateTemplate = "minimal",
 ) {
   yield* runPrismaCli(context, projectDir, [
     "orm",
@@ -54,7 +56,7 @@ export const runPrismaInit = Effect.fn("PrismaSetup.init")(function* (
     "--authoring",
     context.authoring,
     "--schema-path",
-    getContractPath(context.authoring),
+    getContractPath(context.authoring, template),
     "--skip-install",
   ]);
   if (context.packageManager === "deno") {

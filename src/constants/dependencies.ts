@@ -22,6 +22,7 @@ export const dependencyVersionMap = {
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
   tsdown: "^0.22.14",
+  turbo: "2.10.12",
   tsx: "^4.21.0",
   typescript: "^5.9.3",
 } as const;
@@ -54,7 +55,7 @@ function usesTsdown(template: CreateTemplate): boolean {
 
 export function getCreateTemplateDependencies(
   template: CreateTemplate,
-  _packageManager: PackageManager,
+  packageManager: PackageManager,
 ): CreateTemplateDependencyTarget[] {
   const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud", "alchemy"];
   const devDependencies: string[] = [];
@@ -79,12 +80,29 @@ export function getCreateTemplateDependencies(
   if (template === "tanstack-start") {
     devDependencies.push("nitro");
   }
+  if (template === "turborepo") devDependencies.push("turbo", "typescript");
 
-  return [
+  const targets: CreateTemplateDependencyTarget[] = [
     {
       packageJsonPath: "package.json",
       dependencies,
       devDependencies,
     },
   ];
+  if (template === "turborepo") {
+    targets.push({
+      packageJsonPath: "apps/server/package.json",
+      dependencies: [],
+      devDependencies: ["@types/node", "tsdown", "tsx", "typescript"],
+      customDependencies: {
+        "@repo/database": packageManager === "npm" ? "*" : "workspace:*",
+      },
+    });
+    targets.push({
+      packageJsonPath: "packages/database/package.json",
+      dependencies: [],
+      devDependencies: ["typescript"],
+    });
+  }
+  return targets;
 }

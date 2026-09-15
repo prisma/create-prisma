@@ -12,6 +12,7 @@ export const createTemplates = [
   "elysia",
   "nest",
   "next",
+  "turborepo",
   "svelte",
   "astro",
   "nuxt",
