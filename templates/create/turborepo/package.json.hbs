@@ -13,9 +13,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
-    "lint": "turbo run lint",
     "start": "turbo run start --parallel",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "tsc --noEmit && turbo run typecheck"
   },
   "devDependencies": {}
 }

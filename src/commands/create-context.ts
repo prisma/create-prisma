@@ -92,7 +92,7 @@ const promptForCreateTemplate = Effect.fn("Prompts.template")(function* (output:
         {
           value: "turborepo",
           label: "Monorepo (Turborepo)",
-          hint: "Next.js app with a shared Prisma database package",
+          hint: "Hello World server with a shared Prisma database package",
         },
         { value: "svelte", label: "SvelteKit", hint: "Full-stack Svelte 5 app with Vite" },
         { value: "astro", label: "Astro", hint: "Content-oriented web app with server routes" },

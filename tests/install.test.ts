@@ -344,13 +344,13 @@ describe("generated templates", () => {
                 await writePrismaDependencies(provider, packageManager, authoring, projectDir, {
                   template,
                 });
-                const web = await readPackageJson(path.join(projectDir, "apps/web"));
+                const server = await readPackageJson(path.join(projectDir, "apps/server"));
                 const database = await readPackageJson(path.join(projectDir, "packages/database"));
                 const root = await readPackageJson(projectDir);
                 expect(packageJson.workspaces).toEqual(["apps/*", "packages/*"]);
                 expect(packageJson.devDependencies?.turbo).toBe(dependencyVersionMap.turbo);
-                expect(web.name).toBe("@repo/web");
-                expect(web.dependencies?.["@repo/database"]).toBe(
+                expect(server.name).toBe("@repo/server");
+                expect(server.dependencies?.["@repo/database"]).toBe(
                   packageManager === "npm" ? "*" : "workspace:*",
                 );
                 expect(database.name).toBe("@repo/database");
@@ -377,7 +377,21 @@ describe("generated templates", () => {
                 expect(database.scripts).toEqual({
                   typecheck: "tsc --noEmit --project tsconfig.json",
                 });
-                expect(serviceSource).toContain('appDir: "./apps/web"');
+                expect(serviceSource).toContain('entry: "./apps/server/dist/server.mjs"');
+                expect(serviceSource).not.toContain("nextjs");
+                expect(server.scripts?.build).toBe("tsdown");
+                expect(server.devDependencies?.tsdown).toBe(dependencyVersionMap.tsdown);
+                expect(await pathExists(path.join(projectDir, "apps/web"))).toBe(false);
+                for (const manifest of [root, server, database]) {
+                  expect(manifest.dependencies?.next).toBeUndefined();
+                  expect(manifest.dependencies?.react).toBeUndefined();
+                }
+                expect(
+                  await readFile(path.join(projectDir, "apps/server/tsdown.config.ts"), "utf8"),
+                ).toContain('entry: { server: "src/index.ts" }');
+                expect(
+                  await readFile(path.join(projectDir, "apps/server/src/index.ts"), "utf8"),
+                ).toContain('response.end("Hello World!")');
                 expect(dbSource).toContain('import service from "../../../service.ts"');
                 expect(await pathExists(path.join(projectDir, "src/prisma"))).toBe(false);
               }
@@ -474,7 +488,7 @@ describe("generated templates", () => {
               if (packageManager === "pnpm") {
                 expect(packageJson.pnpm).toBeUndefined();
                 const frameworkBuildAllowances =
-                  template === "next" || template === "turborepo"
+                  template === "next"
                     ? ["  sharp: true", "  unrs-resolver: true"]
                     : template === "astro"
                       ? ["  sharp: true"]

@@ -140,10 +140,12 @@ async function verifyBuiltServer(projectDir: string, port: number, expectedStatu
     new Response(process.stderr).text(),
   ]);
   let failure: unknown;
+  let body = "";
 
   try {
     const response = await fetchUntilResponding(`http://127.0.0.1:${port}`, Date.now() + 10_000);
     expect(response.status).toBe(expectedStatus);
+    body = await response.text();
   } catch (error) {
     failure = error;
   } finally {
@@ -157,9 +159,10 @@ async function verifyBuiltServer(projectDir: string, port: number, expectedStatu
       cause: failure,
     });
   }
+  return body;
 }
 
-async function verifyComposerDev(projectDir: string) {
+async function verifyComposerDev(projectDir: string, usersPath = "") {
   const process = Bun.spawn({
     cmd: ["bun", "run", "dev:composer"],
     cwd: projectDir,
@@ -200,7 +203,7 @@ async function verifyComposerDev(projectDir: string) {
 
       // The endpoint frame can precede the app process binding its port, so
       // retry connection refusals until the deadline.
-      const response = await fetchUntilReady(appUrl, deadline);
+      const response = await fetchUntilReady(`${appUrl}${usersPath}`, deadline);
       expect(response.status).toBe(200);
       const body = (await response.json()) as { users: Array<{ name: string }> };
       expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
@@ -624,6 +627,13 @@ describe("create-prisma e2e", () => {
 
       await runCommand(projectDir, ["bun", "run", "build"]);
       await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
+      if (template === "turborepo") {
+        await runCommand(projectDir, ["bun", "run", "typecheck"]);
+        const serverDir = path.join(projectDir, "apps/server");
+        expect(await readdir(path.join(serverDir, "dist"))).toEqual(["server.mjs"]);
+        expect(await verifyBuiltServer(serverDir, 46_150, 200)).toBe("Hello World!");
+        if (process.platform !== "win32") await verifyComposerDev(projectDir, "/users");
+      }
     },
     TEST_TIMEOUT,
   );

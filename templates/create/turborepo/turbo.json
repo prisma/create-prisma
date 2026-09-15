@@ -1,16 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["service.ts", "packages/database/src/**"],
+  "globalPassThroughEnv": ["PORT", "DATABASE_URL", "MONGODB_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": ["dist/**"]
     },
     "dev": {
       "cache": false,
       "persistent": true
-    },
-    "lint": {
-      "dependsOn": ["^lint"]
     },
     "start": {
       "cache": false,

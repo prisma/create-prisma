@@ -45,6 +45,7 @@ const tsdownEntries: Partial<Record<CreateTemplate, string>> = {
   hono: "src/index.ts",
   elysia: "src/index.ts",
   nest: "src/main.ts",
+  turborepo: "src/index.ts",
 };
 
 function createTemplateContext(options: ScaffoldCreateTemplateOptions): CreateTemplateContext {
@@ -69,6 +70,9 @@ export const scaffoldCreateSharedTemplatesEffect = Effect.fn("Templates.scaffold
     context: createTemplateContext(options),
     mapRelativeOutputPath(relativePath) {
       if (options.template !== "turborepo") return relativePath;
+      if (relativePath === "tsdown.config.ts") {
+        return path.join("apps/server", relativePath);
+      }
       const relativePrismaPath = path.relative(DEFAULT_PRISMA_SOURCE_DIR, relativePath);
       if (
         relativePrismaPath === ".." ||
@@ -100,14 +104,6 @@ export const scaffoldCreateFrameworkTemplateEffect = Effect.fn("Templates.scaffo
       outputDir: options.projectDir,
       context: createTemplateContext(options),
     });
-    if (options.template === "turborepo") {
-      const nextTemplateRoot = yield* resolveTemplatesDirEffect("templates/create/next");
-      yield* renderTemplateTreeEffect({
-        templateRoot: nextTemplateRoot,
-        outputDir: path.join(options.projectDir, "apps/web"),
-        context: createTemplateContext(options),
-      });
-    }
   },
 );
 

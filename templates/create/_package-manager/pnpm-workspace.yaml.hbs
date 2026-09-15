@@ -7,7 +7,7 @@ packages:
 allowBuilds:
   esbuild: true
   msgpackr-extract: true
-{{#if (or (eq template "next") (eq template "turborepo"))}}
+{{#if (eq template "next")}}
   sharp: true
   unrs-resolver: true
 {{else if (eq template "astro")}}

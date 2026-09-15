@@ -55,7 +55,7 @@ function usesTsdown(template: CreateTemplate): boolean {
 
 export function getCreateTemplateDependencies(
   template: CreateTemplate,
-  _packageManager: PackageManager,
+  packageManager: PackageManager,
 ): CreateTemplateDependencyTarget[] {
   const dependencies = ["@prisma/composer", "@prisma/composer-prisma-cloud", "alchemy"];
   const devDependencies: string[] = [];
@@ -80,7 +80,7 @@ export function getCreateTemplateDependencies(
   if (template === "tanstack-start") {
     devDependencies.push("nitro");
   }
-  if (template === "turborepo") devDependencies.push("turbo");
+  if (template === "turborepo") devDependencies.push("turbo", "typescript");
 
   const targets: CreateTemplateDependencyTarget[] = [
     {
@@ -90,6 +90,14 @@ export function getCreateTemplateDependencies(
     },
   ];
   if (template === "turborepo") {
+    targets.push({
+      packageJsonPath: "apps/server/package.json",
+      dependencies: [],
+      devDependencies: ["@types/node", "tsdown", "tsx", "typescript"],
+      customDependencies: {
+        "@repo/database": packageManager === "npm" ? "*" : "workspace:*",
+      },
+    });
     targets.push({
       packageJsonPath: "packages/database/package.json",
       dependencies: [],

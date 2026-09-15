@@ -1,7 +1,6 @@
 node_modules
 .turbo
-apps/web/.next
-apps/web/out
+dist
 coverage
 .env
 .env.*

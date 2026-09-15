@@ -32,11 +32,11 @@ deno task contract:emit
 
 Prisma Compute does not support Deno deployments yet.
 {{else if (eq template "turborepo")}}
-A Prisma 8 monorepo powered by Turborepo, Next.js, and Prisma Composer.
+A minimal Prisma 8 monorepo with Turborepo and a plain Node.js HTTP server.
 
 ## Workspace layout
 
-- `apps/web` — Next.js application
+- `apps/server` — Hello World server; `/users` reads from the shared database package
 - `packages/database` — Prisma contract, generated artifacts, runtime client, and seed data
 - `module.ts` and `service.ts` — Composer deployment topology
 
@@ -54,9 +54,9 @@ This builds the workspace and starts it with Composer. PostgreSQL projects get a
 {{runScriptCommand packageManager "deploy"}}
 ```
 
-The deploy script runs the Turborepo build, provisions Prisma Postgres when selected, applies migrations, and deploys the Next.js app to Prisma Compute.
+The deploy script builds the server with tsdown, provisions Prisma Postgres when selected, applies migrations, and deploys the server to Prisma Compute.
 
-The starter users are inserted idempotently from `packages/database/src/seed.ts` on the first database query through the Composer service binding.
+The home page returns `Hello World!` without querying the database. Visiting `/users` queries the shared Prisma package and inserts starter users idempotently from `packages/database/src/seed.ts`.
 
 {{#if (eq provider "mongo")}}
 MongoDB is not provisioned by Composer. Set `MONGODB_URL` before running Composer locally or deploying.

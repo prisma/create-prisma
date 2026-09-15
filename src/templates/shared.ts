@@ -12,7 +12,6 @@ import {
 } from "../utils/package-manager";
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
-Handlebars.registerHelper("or", (...args: unknown[]) => args.slice(0, -1).some(Boolean));
 Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>
