@@ -73,6 +73,7 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
         redactSecrets(result.stderr.trim() || result.stdout.trim()) || getErrorMessage(cause),
       stderr: redactSecrets(result.stderr),
       exitCode: result.exitCode,
+      childProcessFailure: result.childProcessFailure,
     });
   }
 
@@ -90,6 +91,7 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
       ...(envelope.error?.code ? { code: envelope.error.code } : {}),
       stderr: redactSecrets(result.stderr),
       exitCode: result.exitCode,
+      childProcessFailure: result.childProcessFailure,
     });
   }
   return envelope.result;

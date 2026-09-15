@@ -289,9 +289,9 @@ describe("create-prisma e2e", () => {
         ok: false,
         error: { stage: "collect_context", message: expect.stringContaining("migration history") },
       });
-      expect(await readdir(path.join(projectDir, "migrations"), { recursive: true })).toEqual(
-        migrationPaths,
-      );
+      expect(
+        (await readdir(path.join(projectDir, "migrations"), { recursive: true })).sort(),
+      ).toEqual(migrationPaths.toSorted());
       expect(
         await Promise.all(
           preservedPaths.map((filePath) => readFile(path.join(projectDir, filePath), "utf8")),
@@ -301,7 +301,7 @@ describe("create-prisma e2e", () => {
     TEST_TIMEOUT,
   );
 
-  test("returns a non-zero exit code when project setup fails", async () => {
+  test("returns a non-zero exit code before scaffolding when npm is unavailable", async () => {
     const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-exit-code-e2e-"));
     tempRoots.push(rootDir);
     const emptyBinDir = path.join(rootDir, "empty-bin");
@@ -349,7 +349,7 @@ describe("create-prisma e2e", () => {
       error: { stage: "install_dependencies" },
     });
     expect(stderr).toBe("");
-    expect(await pathExists(path.join(rootDir, "failed-app", "package.json"))).toBe(true);
+    expect(await pathExists(path.join(rootDir, "failed-app"))).toBe(false);
   });
 
   test("rejects unsupported Deno combinations with a non-zero exit code", async () => {

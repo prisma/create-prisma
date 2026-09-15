@@ -3,10 +3,14 @@ import { Effect } from "effect";
 
 import type { CreatePromptContext } from "../src/commands/create";
 import type { CreateCommandInput } from "../src/types";
+import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
+import { runPrismaJsonCommandEffect } from "../src/tasks/prisma-cli";
+import { getChildProcessFailure } from "../src/utils/child-process-failure";
 
 const trackCliTelemetry = mock(async () => {});
 
 mock.module("../src/telemetry/client", () => ({
+  TELEMETRY_TIMEOUT_MS: 2_000,
   trackCliTelemetryEffect: (event: string, properties: Record<string, unknown>) =>
     Effect.promise(() => trackCliTelemetry(event, properties)),
 }));
@@ -132,6 +136,108 @@ describe("create telemetry", () => {
       }),
     );
     expect(JSON.stringify(properties)).not.toContain("secret");
+  });
+
+  test("classifies child-process failures without capturing command output", async () => {
+    const cases = [
+      [{ timedOut: true }, "timed_out"],
+      [{ isCanceled: true }, "cancelled"],
+      [{ isMaxBuffer: true }, "max_buffer"],
+      [{ signal: "SIGINT", isTerminated: true }, "interrupted"],
+      [{ exitCode: 0xc000013a }, "interrupted"],
+      [{ signal: "SIGTERM", isTerminated: true }, "terminated"],
+      [{ code: "ENOENT" }, "command_not_found"],
+      [{ code: "EACCES" }, "permission_denied"],
+      [{ exitCode: 1 }, "non_zero_exit"],
+      [{ code: "UNKNOWN" }, "spawn_failed"],
+    ] as const;
+
+    for (const [details, expectedFailure] of cases) {
+      await trackCreateFailed({
+        input: createInput,
+        context: createContext,
+        durationMs: 10,
+        error: new CommandExecutionError({
+          command: "secret-command",
+          args: ["secret-argument"],
+          stdout: "token=secret",
+          stderr: "token=secret",
+          childProcessFailure: getChildProcessFailure({
+            name: "ExecaError",
+            failed: true,
+            ...details,
+          }),
+        }),
+        stage: "install_dependencies",
+        reason: "dependency_install_failed",
+      });
+
+      const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(properties["child-process-failure"]).toBe(expectedFailure);
+      expect(JSON.stringify(properties)).not.toContain("secret");
+    }
+  });
+
+  test("preserves real process failures through checked and Prisma JSON commands", async () => {
+    const cases = [
+      { command: "create-prisma-nonexistent-test-command", args: [], failure: "command_not_found" },
+      { command: process.execPath, args: ["-e", "process.exit(130)"], failure: "interrupted" },
+      {
+        command: process.execPath,
+        args: ["-e", "console.error('token=secret'); process.exit(2)"],
+        failure: "non_zero_exit",
+      },
+      {
+        command: process.execPath,
+        args: [
+          "-e",
+          `console.log(JSON.stringify({ok: false, error: {code: "AUTH.LOGIN_DENIED", summary: "Sign-in was not authorized."}})); process.exit(1)`,
+        ],
+        failure: "non_zero_exit",
+      },
+    ];
+
+    for (const spec of cases) {
+      for (const json of [false, true]) {
+        const error = await Effect.runPromise(
+          Effect.gen(function* () {
+            const runner = yield* CommandRunner;
+            const command = { command: spec.command, args: spec.args, cwd: process.cwd() };
+            return yield* json
+              ? runPrismaJsonCommandEffect({
+                  packageManager: "npm",
+                  projectDir: process.cwd(),
+                  args: ["init"],
+                }).pipe(
+                  Effect.provideService(CommandRunner, {
+                    ...runner,
+                    run: () => runner.run(command),
+                  }),
+                )
+              : runner.runChecked(command);
+          }).pipe(Effect.provide(CommandRunner.layer), Effect.flip),
+        );
+        await trackCreateFailed({
+          input: createInput,
+          durationMs: 10,
+          error,
+          stage: json ? "initialize_prisma" : "install_dependencies",
+          reason: json ? "prisma_init_failed" : "dependency_install_failed",
+        });
+        const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
+          string,
+          Record<string, unknown>,
+        ];
+        expect(properties["child-process-failure"]).toBe(spec.failure);
+        expect(properties["error-name"]).toBe(
+          json ? "PrismaCliCommandError" : "CommandExecutionError",
+        );
+        expect(JSON.stringify(properties)).not.toContain("secret");
+      }
+    }
   });
 
   test("tracks prompt cancellation as a separate outcome", async () => {

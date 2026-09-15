@@ -1,13 +1,15 @@
 import { Effect } from "effect";
 
 import type { CreatePromptContext } from "../commands/create";
-import type {
-  CreateCancellationStage,
-  CreateFailureReason,
-  CreateFailureStage,
+import {
+  PrismaCliCommandError,
+  type CreateCancellationStage,
+  type CreateFailureReason,
+  type CreateFailureStage,
 } from "../create-outcome";
 import type { CreateCommandInput } from "../types";
 import { applicationRuntime } from "../runtime";
+import { CommandExecutionError } from "../services/command-runner";
 
 import { TELEMETRY_TIMEOUT_MS, trackCliTelemetryEffect } from "./client";
 
@@ -91,6 +93,12 @@ function getErrorCode(error: unknown): number | string | null {
   return typeof code === "number" || typeof code === "string" ? code : null;
 }
 
+function getChildProcessFailureProperty(error: unknown): string | null {
+  return error instanceof CommandExecutionError || error instanceof PrismaCliCommandError
+    ? (error.childProcessFailure ?? null)
+    : null;
+}
+
 function getPrismaCliFailureProperty(
   error: unknown,
   property: "prismaCliCommand" | "prismaCliErrorCode",
@@ -136,6 +144,7 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
     "failure-reason": params.reason,
     "error-name": getErrorName(params.error),
     "error-code": getErrorCode(params.error),
+    "child-process-failure": getChildProcessFailureProperty(params.error),
     "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
     "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
   }).pipe(

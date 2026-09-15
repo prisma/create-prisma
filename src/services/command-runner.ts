@@ -2,6 +2,12 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { execa } from "execa";
 import { createInterface } from "node:readline";
 
+import {
+  ChildProcessFailureSchema,
+  getChildProcessFailure,
+  type ChildProcessFailure,
+} from "../utils/child-process-failure";
+
 export type CommandSpec = {
   command: string;
   args: readonly string[];
@@ -15,6 +21,7 @@ export type CommandResult = {
   exitCode: number;
   stdout: string;
   stderr: string;
+  childProcessFailure?: ChildProcessFailure;
 };
 
 export class CommandExecutionError extends Schema.TaggedError<CommandExecutionError>()(
@@ -26,6 +33,7 @@ export class CommandExecutionError extends Schema.TaggedError<CommandExecutionEr
     stdout: Schema.String,
     stderr: Schema.String,
     cause: Schema.optionalKey(Schema.Defect()),
+    childProcessFailure: Schema.optional(ChildProcessFailureSchema),
   },
 ) {
   override get message(): string {
@@ -81,6 +89,7 @@ export class CommandRunner extends Context.Service<
             exitCode: result.exitCode ?? 1,
             stdout: typeof result.stdout === "string" ? result.stdout : "",
             stderr: typeof result.stderr === "string" ? result.stderr : "",
+            childProcessFailure: getChildProcessFailure(result),
           };
         },
         catch: (cause) =>
@@ -90,6 +99,7 @@ export class CommandRunner extends Context.Service<
             stdout: "",
             stderr: "",
             cause,
+            childProcessFailure: getChildProcessFailure(cause),
           }),
       }),
     );
@@ -104,6 +114,7 @@ export class CommandRunner extends Context.Service<
                 exitCode: result.exitCode,
                 stdout: result.stdout,
                 stderr: result.stderr,
+                childProcessFailure: result.childProcessFailure,
               }),
             ),
       ),

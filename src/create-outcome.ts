@@ -1,5 +1,7 @@
 import { Schema } from "effect";
 
+import { ChildProcessFailureSchema } from "./utils/child-process-failure";
+
 export const CreateFailureStageSchema = Schema.Literals([
   "validate_input",
   "collect_context",
@@ -91,6 +93,7 @@ export class PrismaCliCommandError extends Schema.TaggedError<PrismaCliCommandEr
     code: Schema.optionalKey(Schema.String),
     stderr: Schema.optionalKey(Schema.String),
     exitCode: Schema.optionalKey(Schema.Number),
+    childProcessFailure: Schema.optional(ChildProcessFailureSchema),
   },
 ) {
   readonly prismaCliCommand = this.command;
