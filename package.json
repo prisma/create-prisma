@@ -45,6 +45,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "typecheck": "tsc --noEmit",
+    "check:pins": "bun run scripts/check-pins.ts",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run bump",
     "release-notes": "bunx changelogithub"

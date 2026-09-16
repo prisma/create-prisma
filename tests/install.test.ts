@@ -216,7 +216,14 @@ describe("Composer package-manager commands", () => {
     });
     expect(getLocalPackageBinaryArgs("deno", "prisma", ["contract", "emit"])).toEqual({
       command: "deno",
-      args: ["run", "-A", "--frozen", "npm:prisma@latest", "contract", "emit"],
+      args: [
+        "run",
+        "-A",
+        "--frozen",
+        `npm:prisma@${dependencyVersionMap.prisma}`,
+        "contract",
+        "emit",
+      ],
     });
   });
 });

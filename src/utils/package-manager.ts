@@ -1,6 +1,7 @@
 import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
+import { getDependencyVersion } from "../constants/dependencies";
 import { CreateFailure } from "../create-outcome";
 import { applicationRuntime } from "../runtime";
 import { CommandRunner } from "../services/command-runner";
@@ -312,7 +313,13 @@ export function getLocalPackageBinaryArgs(
     case "deno":
       return {
         command: "deno",
-        args: ["run", "-A", "--frozen", `npm:${binaryName}@latest`, ...binaryArgs],
+        args: [
+          "run",
+          "-A",
+          "--frozen",
+          `npm:${binaryName}@${getDependencyVersion(binaryName) ?? "latest"}`,
+          ...binaryArgs,
+        ],
       };
     case "pnpm":
       return { command: "pnpm", args: ["exec", binaryName, ...binaryArgs] };
