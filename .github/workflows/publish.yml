@@ -136,6 +136,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Check dependency pins
+        run: bun run check:pins
+
       - name: Unit tests
         run: bun run test:unit
 
@@ -306,6 +309,10 @@ jobs:
       - name: Typecheck
         if: steps.check-version.outputs.exists == 'false'
         run: bun run typecheck
+
+      - name: Check dependency pins
+        if: steps.check-version.outputs.exists == 'false'
+        run: bun run check:pins
 
       - name: Unit tests
         if: steps.check-version.outputs.exists == 'false'

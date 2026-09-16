@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { runCreateCommand } from "../../src/commands/create";
+import { dependencyVersionMap } from "../../src/constants/dependencies";
 import type { CreateCommandResult } from "../../src/result";
 import { scaffoldCreateTemplate } from "../../src/templates/render-create-template";
 import { writeCreateTemplateDependencies, writePrismaDependencies } from "../../src/tasks/install";
@@ -513,7 +514,7 @@ describe("create-prisma e2e", () => {
           path.join(projectDir, ".claude/skills/prisma-composer-core-concepts/SKILL.md"),
         ),
       ).toBe(true);
-      expect(packageJson.devDependencies.prisma).toBe("latest");
+      expect(packageJson.devDependencies.prisma).toBe(dependencyVersionMap.prisma);
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
       expect(packageJson.overrides.effect).toBe("4.0.0-rc.112");

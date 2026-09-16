@@ -3,12 +3,12 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@prisma/composer": "0.19.0",
-  "@prisma/composer-prisma-cloud": "0.19.0",
+  "@prisma/composer": "0.20.0",
+  "@prisma/composer-prisma-cloud": "0.20.0",
   "@prisma/dev": "0.25.2",
-  "@prisma/orm-mongo": "8.0.0-rc.10",
+  "@prisma/orm-mongo": "8.0.0-rc.11",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency.
-  "@prisma/orm-postgres": "8.0.0-rc.10",
+  "@prisma/orm-postgres": "8.0.0-rc.11",
   "@sveltejs/adapter-node": "^5.3.2",
   "@types/node": "^25.6.2",
   alchemy: "2.0.0-beta.74",
@@ -18,7 +18,10 @@ export const dependencyVersionMap = {
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
-  prisma: "latest",
+  // The CLI bundles a matching @prisma/orm-toolchain, and the toolchain is only
+  // tested against the ORM release it ships with. Bump this in the same change
+  // as the @prisma/orm-* pins; `bun run check:pins` verifies the pair.
+  prisma: "8.0.0-rc.15",
   // The ORM runtime's timestamp columns need a global Temporal, which no
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
@@ -28,9 +31,7 @@ export const dependencyVersionMap = {
   typescript: "^5.9.3",
 } as const;
 
-// `prisma@next` is a compatibility tag that may intentionally lag behind the
-// current release. New scaffolds and every delegated command use `latest`.
-export const PRISMA_PLATFORM_CLI_PACKAGE = "prisma@latest";
+export const PRISMA_PLATFORM_CLI_PACKAGE = `prisma@${dependencyVersionMap.prisma}`;
 // Deno runs the same consolidated CLI. The former `prisma-next` fallback is
 // frozen and cannot emit against the current ORM releases.
 export const PRISMA_DENO_CLI_PACKAGE = PRISMA_PLATFORM_CLI_PACKAGE;
