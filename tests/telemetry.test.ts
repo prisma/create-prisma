@@ -240,20 +240,23 @@ describe("create telemetry", () => {
     }
   });
 
-  test("tracks prompt cancellation as a separate outcome", async () => {
-    await trackCreateCancelled({
-      input: createInput,
-      context: createContext,
-      durationMs: 789,
-      stage: "select_workspace",
-    });
-    expect(trackCliTelemetry).toHaveBeenCalledWith(
-      CREATE_PRISMA_NEXT_CANCELLED_EVENT,
-      expect.objectContaining({
-        "duration-ms": 789,
-        "cancellation-stage": "select_workspace",
-        "should-deploy": true,
-      }),
-    );
-  });
+  test.each(["select_workspace", "authenticate"] as const)(
+    "tracks %s cancellation as a separate outcome",
+    async (stage) => {
+      await trackCreateCancelled({
+        input: createInput,
+        context: createContext,
+        durationMs: 789,
+        stage,
+      });
+      expect(trackCliTelemetry).toHaveBeenCalledWith(
+        CREATE_PRISMA_NEXT_CANCELLED_EVENT,
+        expect.objectContaining({
+          "duration-ms": 789,
+          "cancellation-stage": stage,
+          "should-deploy": true,
+        }),
+      );
+    },
+  );
 });

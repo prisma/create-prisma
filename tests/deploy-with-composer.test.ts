@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { Cause, Effect, Exit } from "effect";
 import { PassThrough } from "node:stream";
 
+import { CreateCancellationError, CreateFailure } from "../src/create-outcome";
+import { applicationRuntime } from "../src/runtime";
+import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
 import {
   deployNewProjectWithComposer,
+  deployNewProjectWithComposerEffect,
   findProjectNameCollisions,
   getConsoleProjectUrl,
   parseComposerDeployResult,
@@ -188,6 +193,87 @@ describe("parseComposerDeployResult", () => {
 });
 
 describe("deployNewProjectWithComposer", () => {
+  test("reports interrupted sign-in as cancellation without hiding real login failures", async () => {
+    const originalTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+    try {
+      for (const exitCode of [130, 0xc000013a, 1]) {
+        const output = new PassThrough();
+        let text = "";
+        output.on("data", (chunk) => {
+          text += chunk.toString();
+        });
+        const result = await applicationRuntime.runPromiseExit(
+          Effect.gen(function* () {
+            const realRunner = yield* CommandRunner;
+            return yield* deployNewProjectWithComposerEffect({
+              appName: "test-app",
+              packageManager: "npm",
+              projectDir: process.cwd(),
+              shouldPromptForWorkspace: false,
+              verbose: false,
+              output,
+            }).pipe(
+              Effect.provideService(CommandRunner, {
+                run: (spec) => {
+                  expect(spec.args).toContain("whoami");
+                  return Effect.succeed({
+                    exitCode: 0,
+                    stdout: JSON.stringify({
+                      ok: true,
+                      result: { authenticated: false, workspace: null, source: null },
+                    }),
+                    stderr: "",
+                  });
+                },
+                runChecked: (spec) => {
+                  expect(spec.args).toContain("login");
+                  if (exitCode === 0xc000013a && process.platform !== "win32") {
+                    return Effect.fail(
+                      new CommandExecutionError({
+                        command: spec.command,
+                        args: [...spec.args],
+                        exitCode,
+                        stdout: "",
+                        stderr: "",
+                        childProcessFailure: "interrupted",
+                      }),
+                    );
+                  }
+                  return realRunner.runChecked({
+                    ...spec,
+                    command: process.execPath,
+                    args: ["-e", `process.exit(${exitCode})`],
+                  });
+                },
+              }),
+            );
+          }),
+        );
+        expect(Exit.isFailure(result)).toBe(true);
+        if (Exit.isSuccess(result)) throw new Error("Expected sign-in to stop deployment");
+        const error = Cause.squash(result.cause);
+        if (exitCode === 1) {
+          expect(error).toBeInstanceOf(CreateFailure);
+          expect(error).toMatchObject({
+            stage: "authenticate",
+            reason: "prisma_auth_command_failed",
+          });
+          expect(text).toContain("Deploy failed:");
+        } else {
+          expect(error).toBeInstanceOf(CreateCancellationError);
+          expect(error).toMatchObject({ stage: "authenticate" });
+          expect(text).toContain("Operation cancelled.");
+          expect(text).not.toContain("Deployment failed");
+          expect(text).not.toContain("Deploy failed:");
+        }
+      }
+    } finally {
+      if (originalTTY) Object.defineProperty(process.stdin, "isTTY", originalTTY);
+      else Reflect.deleteProperty(process.stdin, "isTTY");
+    }
+  });
+
   test("returns the authentication failure instead of swallowing it", async () => {
     const originalPath = process.env.PATH;
     process.env.PATH = "";
