@@ -6,6 +6,15 @@ import type { CreateCommandInput } from "../src/types";
 import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
 import { runPrismaJsonCommandEffect } from "../src/tasks/prisma-cli";
 import { getChildProcessFailure } from "../src/utils/child-process-failure";
+import {
+  childProcessFailedResult,
+  composerRunReport,
+  runFakeComposerDeploy,
+} from "./fixtures/composer-deploy";
+import {
+  getPackageManagerOutputFixture,
+  packageManagerOutputFixtures,
+} from "./fixtures/package-manager-output";
 
 const trackCliTelemetry = mock(async () => {});
 
@@ -237,6 +246,108 @@ describe("create telemetry", () => {
         );
         expect(JSON.stringify(properties)).not.toContain("secret");
       }
+    }
+  });
+
+  test("tracks the package manager's own error identifier for install failures", async () => {
+    for (const fixture of packageManagerOutputFixtures) {
+      await trackCreateFailed({
+        input: createInput,
+        context: createContext,
+        durationMs: 10,
+        error: new CommandExecutionError({
+          command: fixture.command,
+          args: ["install"],
+          exitCode: 1,
+          stdout: fixture.stdout,
+          stderr: fixture.stderr,
+          childProcessFailure: "non_zero_exit",
+        }),
+        stage: "install_dependencies",
+        reason: "dependency_install_failed",
+      });
+
+      const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(properties["package-manager-error-code"]).toBe(fixture.expected ?? null);
+      expect(JSON.stringify(properties)).not.toMatch(/jane|left-pad|registry|127\.0\.0\.1/);
+    }
+  });
+
+  test("reports a package manager identifier only for the install stage", async () => {
+    const fixture = getPackageManagerOutputFixture("pnpm 11: lifecycle script failed");
+    await trackCreateFailed({
+      input: createInput,
+      context: createContext,
+      durationMs: 10,
+      error: new CommandExecutionError({
+        command: fixture.command,
+        args: ["run", "build"],
+        exitCode: 1,
+        stdout: fixture.stdout,
+        stderr: fixture.stderr,
+      }),
+      stage: "build",
+      reason: "build_failed",
+    });
+    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
+    expect(properties["package-manager-error-code"]).toBeNull();
+  });
+
+  test("tracks Composer's failure code behind a generic Prisma CLI failure", async () => {
+    const { error } = await runFakeComposerDeploy({
+      result: childProcessFailedResult,
+      report: composerRunReport({
+        code: "DEPLOY.ENGINE_FAILED",
+        message: "alchemy failed in /Users/jane/projects/my-app",
+      }),
+    });
+    await trackCreateFailed({
+      input: createInput,
+      context: createContext,
+      durationMs: 10,
+      error,
+      stage: "composer_deploy",
+      reason: "composer_deploy_failed",
+    });
+    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
+    expect(properties).toEqual(
+      expect.objectContaining({
+        "prisma-cli-command": "deploy",
+        "prisma-cli-error-code": "CLI.CHILD_PROCESS_FAILED",
+        "prisma-cli-cause-code": "DEPLOY.ENGINE_FAILED",
+        "package-manager-error-code": null,
+      }),
+    );
+    expect(JSON.stringify(properties)).not.toContain("jane");
+  });
+
+  test("omits the cause code when the run report is missing or unstructured", async () => {
+    const { error: withoutReport } = await runFakeComposerDeploy({
+      result: childProcessFailedResult,
+    });
+    for (const error of [
+      withoutReport,
+      Object.assign(new Error("failed"), {
+        prismaCliCauseCode: "failed in /Users/jane/projects/my-app",
+      }),
+    ]) {
+      await trackCreateFailed({
+        input: createInput,
+        context: createContext,
+        durationMs: 10,
+        error,
+        stage: "composer_deploy",
+        reason: "composer_deploy_failed",
+      });
+      const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(properties["prisma-cli-cause-code"]).toBeNull();
+      expect(JSON.stringify(properties)).not.toContain("jane");
     }
   });
 

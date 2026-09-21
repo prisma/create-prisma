@@ -20,7 +20,8 @@ import {
   ComposerDeployCommandResultSchema,
   parseComposerDeployResult,
 } from "./composer/deployment-result";
-import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "./prisma-cli";
+import { runComposerDeployEffect } from "./composer/deploy-report";
+import { decodePrismaCommandResult } from "./prisma-cli";
 import { ensureProjectNameAvailable, getProjectDetails } from "./composer/projects";
 
 export type ComposerDeployExecutionResult =
@@ -149,10 +150,9 @@ export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")
       }
     });
     const rawDeployment = yield* atCreateStage(
-      runPrismaJsonCommandEffect({
+      runComposerDeployEffect({
         packageManager: options.packageManager,
         projectDir: options.projectDir,
-        args: ["deploy", "module.ts"],
         onStderrLine: (line) => {
           const redacted = redactSecrets(line);
           if (options.verbose) output.write(`${redacted}\n`);

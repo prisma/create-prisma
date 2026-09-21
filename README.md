@@ -110,4 +110,4 @@ bun run build
 
 ## Telemetry
 
-Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.
+Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Failure events describe the cause only with stable identifiers, such as an exit code, the package manager's own error code (`E404`, `ERR_PNPM_FETCH_404`, `YN0035`), or a Prisma error code (`DEPLOY.ENGINE_FAILED`); error messages and command output are never sent. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.

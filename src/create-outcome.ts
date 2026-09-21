@@ -85,12 +85,21 @@ export class CreateFailure extends Schema.TaggedError<CreateFailure>()("CreateFa
   errorReported: Schema.optionalKey(Schema.Boolean),
 }) {}
 
+/** The `DOMAIN.REASON` grammar shared by Prisma CLI and Composer error codes. */
+const STRUCTURED_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]*(\.[A-Z0-9_]+)+$/;
+
+export function isStructuredErrorCode(value: unknown): value is string {
+  return typeof value === "string" && STRUCTURED_ERROR_CODE_PATTERN.test(value);
+}
+
 export class PrismaCliCommandError extends Schema.TaggedError<PrismaCliCommandError>()(
   "PrismaCliCommandError",
   {
     message: Schema.String,
     command: Schema.optionalKey(Schema.String),
     code: Schema.optionalKey(Schema.String),
+    // The delegated tool's own failure code, when the CLI reports only a generic one.
+    causeCode: Schema.optionalKey(Schema.String),
     stderr: Schema.optionalKey(Schema.String),
     exitCode: Schema.optionalKey(Schema.Number),
     childProcessFailure: Schema.optional(ChildProcessFailureSchema),
@@ -98,6 +107,7 @@ export class PrismaCliCommandError extends Schema.TaggedError<PrismaCliCommandEr
 ) {
   readonly prismaCliCommand = this.command;
   readonly prismaCliErrorCode = this.code;
+  readonly prismaCliCauseCode = this.causeCode;
 }
 
 export function isCreateFailure(error: unknown): error is CreateFailure {
