@@ -21,14 +21,8 @@ does not include this runtime itself. MongoDB and Deno-only apps do not need it.
 
 For npm, use 11.6.0 or newer, which includes the [upstream resolver fix](https://github.com/npm/cli/pull/8448).
 Older npm releases can crash resolving the dependency tree (`Cannot read properties of null (reading 'edgesOut')`). Run
-`npm install --global npm@11` to update.
-
-For Yarn, use Yarn 2 or newer, through [Corepack](https://yarnpkg.com/corepack) or a Yarn 4 install. Generated
-projects pin Yarn 4 in `"packageManager"`, which a global Yarn 1 refuses to install.
-
-create-prisma runs the selected package manager's version command before writing project files. It stops with
-instructions if the package manager is not installed or is too old, and never installs or upgrades a package
-manager automatically.
+`npm install --global npm@11` to update. create-prisma checks the selected package manager
+before writing project files and never upgrades your package manager automatically. Yarn 1 is not supported.
 
 The deployment prompt is:
 

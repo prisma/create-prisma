@@ -56,10 +56,8 @@ function isFile(filePath: string): boolean {
   }
 }
 
-// execa runs every Windows command that is not a .exe or .com through `cmd.exe /d /s /c`, so a
-// missing pnpm, yarn, or bun never raises ENOENT: cmd.exe starts, fails, and exits non-zero. Its
-// "is not recognized" text is localized, so look the command up the way the spawn layer does
-// (cross-spawn resolves it with `which`: the working directory, then PATH, each with PATHEXT).
+// execa runs non-.exe Windows commands through cmd.exe, so a missing one exits non-zero instead
+// of raising ENOENT.
 function isCommandOnWindowsPath({ command, cwd, env }: SpawnedCommand): boolean {
   const environment = { ...process.env, ...env };
   const pathKey = Object.keys(environment)

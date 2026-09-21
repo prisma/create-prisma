@@ -32,7 +32,6 @@ const packageManagerManifestValues = {
 
 type PackageManagerVersion = readonly [major: number, minor: number, patch: number];
 
-// A minimum is listed only where an older release is known to break a generated project.
 const packageManagerChecks: Record<
   PackageManager,
   {
@@ -75,7 +74,7 @@ const packageManagerChecks: Record<
   },
   deno: {
     name: "Deno",
-    // `deno --version` also prints the V8 and TypeScript versions; `-V` prints only "deno 2.9.4".
+    // `deno -V` prints one line; `deno --version` adds the V8 and TypeScript versions.
     versionArgs: ["-V"],
     install: "Install it from https://docs.deno.com/runtime/getting_started/installation",
   },
@@ -145,11 +144,8 @@ const probePackageManagerEffect = Effect.fn("PackageManager.probe")(function* (
   }
 });
 
-// The version a package manager reports depends on where it runs. Corepack's yarn is Yarn 1 outside
-// a project and the pinned release inside one, and pnpm and Corepack refuse to run in a directory
-// whose "packageManager" names another tool. Only the generated project's own manifest decides what
-// the install will run, so the probe runs in a temporary directory that holds that manifest value
-// and never in the working directory. Deno projects have no value, so their manifest omits it.
+// The reported version depends on the directory's "packageManager", so probe in a temporary
+// directory carrying the generated project's value.
 export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(function* (
   packageManager: PackageManager,
 ) {

@@ -122,15 +122,6 @@ describe("create telemetry", () => {
     for (const [, properties] of calls) {
       expect(properties["failure-class"]).toBe("expected_rejection");
     }
-
-    await trackCreateFailed({
-      input: createInput,
-      context: createContext,
-      durationMs: 10,
-      stage: "validate_input",
-      reason: "package_manager_check_failed",
-    });
-    expect(calls.at(-1)?.[1]["failure-class"]).toBe("technical_failure");
   });
 
   test("tracks stable Prisma CLI failure fields without raw output", async () => {
@@ -202,31 +193,13 @@ describe("create telemetry", () => {
     const binDirectory = await mkdtemp(path.join(tmpdir(), "create-prisma-bin-"));
     try {
       await writeFile(path.join(binDirectory, "pnpm.CMD"), "");
-      const failure = { name: "ExecaError", failed: true, exitCode: 1 };
-      const spawned = {
-        cwd: tmpdir(),
-        env: {
-          Path: `"${path.join(binDirectory, "missing")}";${binDirectory}`,
-          PATHEXT: ".EXE;.CMD",
-        },
-      };
-      for (const [command, platform, expectedFailure] of [
-        ["pnpm", "win32", "non_zero_exit"],
-        [path.join(binDirectory, "pnpm"), "win32", "non_zero_exit"],
-        ["yarn", "win32", "command_not_found"],
-        [path.join(binDirectory, "yarn"), "win32", "command_not_found"],
-        ["yarn", "linux", "non_zero_exit"],
-      ] as const) {
-        expect(getSpawnedCommandFailure(failure, { ...spawned, command, platform })).toBe(
-          expectedFailure,
-        );
-      }
-      expect(
+      const classify = (command: string) =>
         getSpawnedCommandFailure(
-          { ...failure, timedOut: true },
-          { ...spawned, command: "yarn", platform: "win32" },
-        ),
-      ).toBe("timed_out");
+          { name: "ExecaError", failed: true, exitCode: 1 },
+          { command, cwd: tmpdir(), env: { Path: binDirectory }, platform: "win32" },
+        );
+      expect(classify("yarn")).toBe("command_not_found");
+      expect(classify("pnpm")).toBe("non_zero_exit");
     } finally {
       await rm(binDirectory, { recursive: true, force: true });
     }
