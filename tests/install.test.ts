@@ -1,23 +1,35 @@
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, FileSystem, PlatformError } from "effect";
+import { existsSync, readFileSync } from "node:fs";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { dependencyVersionMap, PRISMA_DENO_CLI_PACKAGE } from "../src/constants/dependencies";
 import { applicationRuntime } from "../src/runtime";
-import { CommandRunner } from "../src/services/command-runner";
+import {
+  CommandExecutionError,
+  CommandRunner,
+  type CommandSpec,
+} from "../src/services/command-runner";
 import { scaffoldCreateTemplate } from "../src/templates/render-create-template";
 import {
   getComposerScriptMap,
   writeCreateTemplateDependencies,
   writePrismaDependencies,
 } from "../src/tasks/install";
-import { authoringStyles, createTemplates, databaseProviders, packageManagers } from "../src/types";
+import {
+  authoringStyles,
+  createTemplates,
+  databaseProviders,
+  packageManagers,
+  type PackageManager,
+} from "../src/types";
 import {
   getInstallArgs,
   getLocalPackageBinaryArgs,
   getPackageExecutionArgs,
+  getPackageManagerManifestValue,
   getRunScriptCommand,
   verifyPackageManagerEffect,
 } from "../src/utils/package-manager";
@@ -46,6 +58,36 @@ async function withPackageJson<T>(run: (projectDir: string) => Promise<T>): Prom
 
 async function readPackageJson(projectDir: string): Promise<PackageJson> {
   return JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8")) as PackageJson;
+}
+
+function verifyPackageManager(manager: PackageManager, respond: (spec: CommandSpec) => string) {
+  const specs: CommandSpec[] = [];
+  const manifests: PackageJson[] = [];
+  const result = applicationRuntime.runPromise(
+    verifyPackageManagerEffect(manager).pipe(
+      Effect.provideService(CommandRunner, {
+        run: () => Effect.die("Unexpected unchecked command"),
+        runChecked: (spec) => {
+          specs.push(spec);
+          manifests.push(JSON.parse(readFileSync(path.join(spec.cwd, "package.json"), "utf8")));
+          const response = respond(spec);
+          return response === "command_not_found" || response === "non_zero_exit"
+            ? Effect.fail(
+                new CommandExecutionError({
+                  command: spec.command,
+                  args: [...spec.args],
+                  ...(response === "non_zero_exit" ? { exitCode: 1 } : {}),
+                  stdout: "",
+                  stderr: response === "non_zero_exit" ? "probe failed" : "",
+                  childProcessFailure: response,
+                }),
+              )
+            : Effect.succeed({ exitCode: 0, stdout: response, stderr: "" });
+        },
+      }),
+    ),
+  );
+  return { result, specs, manifests };
 }
 
 async function pathExists(filePath: string) {
@@ -142,24 +184,20 @@ describe("Composer package-manager commands", () => {
       "12.0.2",
       ...invalidVersions,
     ]) {
-      const result = applicationRuntime.runPromise(
-        verifyPackageManagerEffect("npm").pipe(
-          Effect.provideService(CommandRunner, {
-            run: () => Effect.die("Unexpected unchecked command"),
-            runChecked: (spec) => {
-              expect(spec.command).toBe("npm");
-              expect(spec.args).toEqual(["--version"]);
-              return Effect.succeed({ exitCode: 0, stdout: `${version}\n`, stderr: "" });
-            },
-          }),
-        ),
-      );
+      const { result } = verifyPackageManager("npm", (spec) => {
+        expect(spec.command).toBe("npm");
+        expect(spec.args).toEqual(["--version"]);
+        return `${version}\n`;
+      });
       if (invalidVersions.includes(version)) {
         await expect(result).rejects.toMatchObject({
+          stage: "validate_input",
+          reason: "package_manager_check_failed",
           message: `Could not determine the installed npm version: ${version}`,
         });
       } else if (["10.9.7", "11.5.1", "11.5.2"].includes(version)) {
         await expect(result).rejects.toMatchObject({
+          stage: "validate_input",
           reason: "unsupported_package_manager_version",
           message: expect.stringContaining("npm install --global npm@11"),
         });
@@ -169,17 +207,115 @@ describe("Composer package-manager commands", () => {
     }
   });
 
-  test("does not require npm when another package manager is selected", async () => {
-    for (const manager of ["bun", "pnpm", "yarn", "deno"] as const) {
-      await applicationRuntime.runPromise(
-        verifyPackageManagerEffect(manager).pipe(
-          Effect.provideService(CommandRunner, {
-            run: () => Effect.die("npm must not run"),
-            runChecked: () => Effect.die("npm must not run"),
+  test("probes every selected package manager once, inside the generated project's manifest", async () => {
+    for (const [manager, args, stdout, manifestValue] of [
+      ["npm", ["--version"], "11.6.0\n", "npm@11.6.0"],
+      ["pnpm", ["--version"], "11.0.0-rc.1\n", "pnpm@11.21.0"],
+      ["yarn", ["--version"], "4.13.0\n", "yarn@4.13.0"],
+      ["yarn", ["--version"], "2.0.0\n", "yarn@4.13.0"],
+      ["bun", ["--version"], "1.4.1\n", "bun@1.4.1"],
+      ["deno", ["-V"], "deno 2.9.4\n", undefined],
+      ["deno", ["-V"], "deno 2.9.4+a1b2c3d\n", undefined],
+    ] as const) {
+      const { result, specs, manifests } = verifyPackageManager(manager, () => stdout);
+      await expect(result).resolves.toBeUndefined();
+      expect(specs).toHaveLength(1);
+      expect(specs[0]).toMatchObject({ command: manager, args: [...args] });
+      // Corepack's yarn is Yarn 1 outside a project, and pnpm and Corepack refuse to run where
+      // "packageManager" names another tool, so the working directory must never be probed.
+      expect(specs[0]!.cwd).not.toBe(process.cwd());
+      expect(manifests[0]?.packageManager).toBe(manifestValue);
+      expect("packageManager" in manifests[0]!).toBe(manifestValue !== undefined);
+      expect(getPackageManagerManifestValue(manager)).toBe(manifestValue);
+      expect(existsSync(specs[0]!.cwd)).toBe(false);
+    }
+  });
+
+  test("rejects a package manager that is not installed", async () => {
+    for (const manager of packageManagers) {
+      const { result, specs } = verifyPackageManager(manager, () => "command_not_found");
+      await expect(result).rejects.toMatchObject({
+        stage: "validate_input",
+        reason: "package_manager_not_found",
+        message: expect.stringContaining("choose another package manager with --package-manager"),
+        cause: { childProcessFailure: "command_not_found" },
+      });
+      expect(specs).toHaveLength(1);
+      expect(existsSync(specs[0]!.cwd)).toBe(false);
+    }
+  });
+
+  test("rejects Yarn 1, which refuses the generated project's Yarn 4 manifest", async () => {
+    const { result, specs, manifests } = verifyPackageManager("yarn", () => "1.22.22\n");
+    await expect(result).rejects.toMatchObject({
+      stage: "validate_input",
+      reason: "unsupported_package_manager_version",
+      message: expect.stringMatching(/^Yarn 1\.22\.22 is unsupported\..*Corepack.*Yarn 4/),
+    });
+    expect(specs).toHaveLength(1);
+    expect(manifests[0]?.packageManager).toBe("yarn@4.13.0");
+    expect(existsSync(specs[0]!.cwd)).toBe(false);
+  });
+
+  test("rejects version output it cannot read", async () => {
+    for (const [manager, stdout] of [
+      ["pnpm", "v11.21.0"],
+      ["yarn", "4.13"],
+      ["bun", "1.4.1 (34cbb9a4)"],
+      ["deno", "deno 2.9.4 (stable, release, aarch64-apple-darwin)\nv8 15.0.245.2-rusty"],
+      ["deno", "bun 1.4.1"],
+    ] as const) {
+      await expect(verifyPackageManager(manager, () => stdout).result).rejects.toMatchObject({
+        stage: "validate_input",
+        reason: "package_manager_check_failed",
+        message: expect.stringContaining(`version: ${stdout}`),
+      });
+    }
+  });
+
+  test("reports a failed probe before installation, keeping its diagnostics", async () => {
+    for (const manager of packageManagers) {
+      const { result, specs } = verifyPackageManager(manager, () => "non_zero_exit");
+      await expect(result).rejects.toMatchObject({
+        stage: "validate_input",
+        reason: "package_manager_check_failed",
+        message: expect.stringContaining("probe failed"),
+        cause: { childProcessFailure: "non_zero_exit", exitCode: 1 },
+      });
+      expect(specs).toHaveLength(1);
+      expect(existsSync(specs[0]!.cwd)).toBe(false);
+    }
+  });
+
+  test("reports a probe directory it cannot create instead of skipping the check", async () => {
+    const result = applicationRuntime.runPromise(
+      verifyPackageManagerEffect("pnpm").pipe(
+        Effect.provideService(CommandRunner, {
+          run: () => Effect.die("Unexpected unchecked command"),
+          runChecked: () => Effect.die("The probe must not run without its directory"),
+        }),
+        Effect.provide(
+          FileSystem.layerNoop({
+            makeTempDirectoryScoped: () =>
+              Effect.fail(
+                new PlatformError.PlatformError(
+                  new PlatformError.SystemError({
+                    _tag: "PermissionDenied",
+                    module: "FileSystem",
+                    method: "makeTempDirectoryScoped",
+                    description: "read-only temporary directory",
+                  }),
+                ),
+              ),
           }),
         ),
-      );
-    }
+      ),
+    );
+    await expect(result).rejects.toMatchObject({
+      stage: "validate_input",
+      reason: "package_manager_check_failed",
+      message: expect.stringContaining("Could not prepare a directory to check pnpm"),
+    });
   });
 
   test("uses each selected package manager for Prisma CLI execution", () => {

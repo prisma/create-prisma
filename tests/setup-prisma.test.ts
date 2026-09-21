@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, FileSystem } from "effect";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -40,6 +41,9 @@ test("writes pnpm build permissions before the first dependency installation", a
           runChecked: (spec) =>
             Effect.gen(function* () {
               expect(spec.command).toBe("pnpm");
+              if (spec.args[0] === "--version") {
+                return { exitCode: 0, stdout: "11.21.0\n", stderr: "" };
+              }
               expect(spec.args).toEqual(["install"]);
               const fs = yield* FileSystem.FileSystem;
               const config = yield* fs
@@ -68,6 +72,40 @@ test("writes pnpm build permissions before the first dependency installation", a
     );
     expect(installChecked).toBe(true);
     expect(result).toMatchObject({ ok: false, error: { stage: "install_dependencies" } });
+  });
+});
+
+test("rejects a missing package manager before writing project files", async () => {
+  await withTempProject(async (projectDir) => {
+    const targetDirectory = path.join(projectDir, "app");
+    const result = await applicationRuntime.runPromise(
+      runCreateCommandEffect({
+        name: path.relative(process.cwd(), targetDirectory),
+        template: "minimal",
+        packageManager: "bun",
+        json: true,
+        deploy: false,
+      }).pipe(
+        Effect.provideService(CommandRunner, {
+          run: () => Effect.die("Unexpected unchecked command"),
+          runChecked: (spec) =>
+            Effect.fail(
+              new CommandExecutionError({
+                command: spec.command,
+                args: [...spec.args],
+                stdout: "",
+                stderr: "",
+                childProcessFailure: "command_not_found",
+              }),
+            ),
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      error: { stage: "validate_input", message: expect.stringContaining("--package-manager") },
+    });
+    expect(existsSync(targetDirectory)).toBe(false);
   });
 });
 

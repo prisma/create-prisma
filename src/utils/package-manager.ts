@@ -6,6 +6,7 @@ import { CreateFailure } from "../create-outcome";
 import { applicationRuntime } from "../runtime";
 import { CommandRunner } from "../services/command-runner";
 import { packageManagers, type PackageManager } from "../types";
+import { getErrorMessage } from "./errors";
 
 type CommandAndArgs = {
   command: string;
@@ -29,35 +30,153 @@ const packageManagerManifestValues = {
   bun: "bun@1.4.1",
 } as const;
 
-export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(function* (
-  packageManager: PackageManager,
-) {
-  if (packageManager !== "npm") return;
-  const runner = yield* CommandRunner;
-  const result = yield* runner.runChecked({
-    command: "npm",
-    args: ["--version"],
-    cwd: process.cwd(),
-  });
-  const version = result.stdout.trim();
-  const parts = version.split(".").map(Number);
-  if (
-    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) ||
-    parts.some((part) => !Number.isInteger(part))
-  ) {
-    return yield* Effect.fail(
-      new Error(`Could not determine the installed npm version: ${version}`),
-    );
+type PackageManagerVersion = readonly [major: number, minor: number, patch: number];
+
+// A minimum is listed only where an older release is known to break a generated project.
+const packageManagerChecks: Record<
+  PackageManager,
+  {
+    name: string;
+    versionArgs: string[];
+    install: string;
+    minimum?: { version: PackageManagerVersion; guidance: string };
   }
-  const [major, minor] = parts;
-  if (major! < 11 || (major === 11 && minor! < 6)) {
+> = {
+  npm: {
+    name: "npm",
+    versionArgs: ["--version"],
+    install: "Install Node.js from https://nodejs.org to get npm",
+    // https://github.com/npm/cli/pull/8448 shipped in npm 11.6.0.
+    minimum: {
+      version: [11, 6, 0],
+      guidance:
+        "Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.",
+    },
+  },
+  pnpm: {
+    name: "pnpm",
+    versionArgs: ["--version"],
+    install: "Install it from https://pnpm.io/installation",
+  },
+  yarn: {
+    name: "Yarn",
+    versionArgs: ["--version"],
+    install: "Install it with Corepack (https://yarnpkg.com/corepack)",
+    // Yarn 1 exits with an error in a project whose "packageManager" names a newer Yarn.
+    minimum: {
+      version: [2, 0, 0],
+      guidance: `Generated projects use ${packageManagerManifestValues.yarn}, which Yarn 1 refuses to install. Enable Corepack (https://yarnpkg.com/corepack) or install Yarn 4, then retry create-prisma, or choose another package manager with --package-manager.`,
+    },
+  },
+  bun: {
+    name: "Bun",
+    versionArgs: ["--version"],
+    install: "Install it from https://bun.sh",
+  },
+  deno: {
+    name: "Deno",
+    // `deno --version` also prints the V8 and TypeScript versions; `-V` prints only "deno 2.9.4".
+    versionArgs: ["-V"],
+    install: "Install it from https://docs.deno.com/runtime/getting_started/installation",
+  },
+};
+
+const PACKAGE_MANAGER_VERSION_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+function parsePackageManagerVersion(
+  packageManager: PackageManager,
+  version: string,
+): PackageManagerVersion | undefined {
+  const prefix = `${packageManager} `;
+  const match = PACKAGE_MANAGER_VERSION_PATTERN.exec(
+    version.startsWith(prefix) ? version.slice(prefix.length) : version,
+  );
+  if (!match) return undefined;
+  const parts = [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+  return parts.every(Number.isSafeInteger) ? parts : undefined;
+}
+
+function isOlderVersion(version: PackageManagerVersion, minimum: PackageManagerVersion): boolean {
+  for (const [index, part] of version.entries()) {
+    if (part !== minimum[index]) return part < minimum[index]!;
+  }
+  return false;
+}
+
+const probePackageManagerEffect = Effect.fn("PackageManager.probe")(function* (
+  packageManager: PackageManager,
+  cwd: string,
+) {
+  const runner = yield* CommandRunner;
+  const { name, versionArgs, install, minimum } = packageManagerChecks[packageManager];
+  const result = yield* runner.runChecked({ command: packageManager, args: versionArgs, cwd }).pipe(
+    Effect.mapError((cause) =>
+      cause.childProcessFailure === "command_not_found"
+        ? new CreateFailure({
+            stage: "validate_input",
+            reason: "package_manager_not_found",
+            message: `${name} is not installed or is not on your PATH. ${install}, then retry create-prisma, or choose another package manager with --package-manager.`,
+            cause,
+          })
+        : new CreateFailure({
+            stage: "validate_input",
+            reason: "package_manager_check_failed",
+            message: `Could not run ${[packageManager, ...versionArgs].join(" ")}: ${getErrorMessage(cause)}`,
+            cause,
+          }),
+    ),
+  );
+  const output = result.stdout.trim();
+  const version = parsePackageManagerVersion(packageManager, output);
+  if (!version) {
+    return yield* new CreateFailure({
+      stage: "validate_input",
+      reason: "package_manager_check_failed",
+      message: `Could not determine the installed ${name} version: ${output}`,
+    });
+  }
+  if (minimum && isOlderVersion(version, minimum.version)) {
     return yield* new CreateFailure({
       stage: "validate_input",
       reason: "unsupported_package_manager_version",
-      message: `npm ${version} is unsupported. Required: npm 11.6.0 or newer. Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.`,
+      message: `${name} ${version.join(".")} is unsupported. Required: ${name} ${minimum.version.join(".")} or newer. ${minimum.guidance}`,
     });
   }
 });
+
+// The version a package manager reports depends on where it runs. Corepack's yarn is Yarn 1 outside
+// a project and the pinned release inside one, and pnpm and Corepack refuse to run in a directory
+// whose "packageManager" names another tool. Only the generated project's own manifest decides what
+// the install will run, so the probe runs in a temporary directory that holds that manifest value
+// and never in the working directory. Deno projects have no value, so their manifest omits it.
+export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(function* (
+  packageManager: PackageManager,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const probeDir = yield* fs.makeTempDirectoryScoped({ prefix: "create-prisma-" }).pipe(
+    Effect.tap((directory) =>
+      fs.writeFileString(
+        path.join(directory, "package.json"),
+        JSON.stringify({
+          name: "create-prisma-probe",
+          private: true,
+          packageManager: getPackageManagerManifestValue(packageManager),
+        }),
+      ),
+    ),
+    Effect.mapError(
+      (cause) =>
+        new CreateFailure({
+          stage: "validate_input",
+          reason: "package_manager_check_failed",
+          message: `Could not prepare a directory to check ${packageManagerChecks[packageManager].name}: ${getErrorMessage(cause)}`,
+          cause,
+        }),
+    ),
+  );
+  yield* probePackageManagerEffect(packageManager, probeDir);
+}, Effect.scoped);
 
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
   if (userAgent?.startsWith("pnpm")) {

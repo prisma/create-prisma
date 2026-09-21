@@ -347,7 +347,10 @@ describe("create-prisma e2e", () => {
     expect(JSON.parse(stdout)).toMatchObject({
       schemaVersion: 1,
       ok: false,
-      error: { stage: "install_dependencies" },
+      error: {
+        stage: "validate_input",
+        message: expect.stringContaining("npm is not installed or is not on your PATH."),
+      },
     });
     expect(stderr).toBe("");
     expect(await pathExists(path.join(rootDir, "failed-app"))).toBe(false);
