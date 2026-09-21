@@ -5,9 +5,7 @@ import { isStructuredErrorCode, PrismaCliCommandError } from "../../create-outco
 import type { PackageManager } from "../../types";
 import { runPrismaJsonCommandEffect } from "../prisma-cli";
 
-// `prisma deploy --report <path>` writes the deploy's outcome before the CLI
-// settles a failed child process as the generic `CLI.CHILD_PROCESS_FAILED`.
-// Only the failure code is read; the message can contain local paths.
+// Only `failure.code` is read; the message can contain local paths.
 const ComposerRunReportSchema = Schema.fromJsonString(
   Schema.Struct({
     version: Schema.Literal(1),
@@ -37,7 +35,6 @@ const readComposerDeployFailureCode = Effect.fn("Deployment.readFailureCode")(fu
   reportPath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  // A deploy that never reached Composer leaves no report behind.
   const report = yield* fs.readFileString(reportPath).pipe(Effect.option);
   return Option.isSome(report) ? parseComposerDeployFailureCode(report.value) : undefined;
 });
@@ -49,7 +46,7 @@ export const runComposerDeployEffect = Effect.fn("Deployment.runComposerDeploy")
     onStderrLine?: (line: string) => void;
   }) {
     const fs = yield* FileSystem.FileSystem;
-    // The report is diagnostic only, so a missing temp directory must not block the deploy.
+    // The report is diagnostic, so its absence never blocks the deploy.
     const reportPath = yield* fs.makeTempDirectoryScoped({ prefix: "create-prisma-deploy-" }).pipe(
       Effect.map((directory) => path.join(directory, "report.json")),
       Effect.option,

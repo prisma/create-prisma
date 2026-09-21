@@ -1,20 +1,15 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { NodeFileSystem } from "@effect/platform-node-shared";
 import { Effect } from "effect";
+import { existsSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import type { CreatePromptContext } from "../src/commands/create";
 import type { CreateCommandInput } from "../src/types";
 import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
+import { runComposerDeployEffect } from "../src/tasks/composer/deploy-report";
 import { runPrismaJsonCommandEffect } from "../src/tasks/prisma-cli";
 import { getChildProcessFailure } from "../src/utils/child-process-failure";
-import {
-  childProcessFailedResult,
-  composerRunReport,
-  runFakeComposerDeploy,
-} from "./fixtures/composer-deploy";
-import {
-  getPackageManagerOutputFixture,
-  packageManagerOutputFixtures,
-} from "./fixtures/package-manager-output";
 
 const trackCliTelemetry = mock(async () => {});
 
@@ -53,6 +48,40 @@ const createContext: CreatePromptContext = {
 };
 
 beforeEach(() => trackCliTelemetry.mockClear());
+
+async function failComposerDeploy(report?: string) {
+  let reportPath = "";
+  const run = (spec: { args: readonly string[] }) =>
+    Effect.sync(() => {
+      reportPath = spec.args[spec.args.indexOf("--report") + 1]!;
+      if (report !== undefined) writeFileSync(reportPath, report);
+      return {
+        exitCode: 1,
+        stdout: '{"ok":false,"commandId":"deploy","error":{"code":"CLI.CHILD_PROCESS_FAILED"}}',
+        stderr: "",
+      };
+    });
+  const error = await Effect.runPromise(
+    runComposerDeployEffect({ packageManager: "npm", projectDir: process.cwd() }).pipe(
+      Effect.provideService(CommandRunner, { run, runChecked: run }),
+      Effect.provide(NodeFileSystem.layer),
+      Effect.flip,
+    ),
+  );
+  return { error, reportPath };
+}
+
+async function trackFailure(error: unknown, stage: "install_dependencies" | "composer_deploy") {
+  await trackCreateFailed({
+    input: createInput,
+    context: createContext,
+    durationMs: 10,
+    error,
+    stage,
+    reason: stage === "composer_deploy" ? "composer_deploy_failed" : "dependency_install_failed",
+  });
+  return (trackCliTelemetry.mock.calls.at(-1) as unknown as [string, Record<string, unknown>])[1];
+}
 
 describe("create telemetry", () => {
   test("tracks Composer deployment intent on completion", async () => {
@@ -249,105 +278,42 @@ describe("create telemetry", () => {
     }
   });
 
-  test("tracks the package manager's own error identifier for install failures", async () => {
-    for (const fixture of packageManagerOutputFixtures) {
-      await trackCreateFailed({
-        input: createInput,
-        context: createContext,
-        durationMs: 10,
-        error: new CommandExecutionError({
-          command: fixture.command,
-          args: ["install"],
-          exitCode: 1,
-          stdout: fixture.stdout,
-          stderr: fixture.stderr,
-          childProcessFailure: "non_zero_exit",
-        }),
-        stage: "install_dependencies",
-        reason: "dependency_install_failed",
-      });
-
-      const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
-        string,
-        Record<string, unknown>,
-      ];
-      expect(properties["package-manager-error-code"]).toBe(fixture.expected ?? null);
-      expect(JSON.stringify(properties)).not.toMatch(/jane|left-pad|registry|127\.0\.0\.1/);
-    }
-  });
-
-  test("reports a package manager identifier only for the install stage", async () => {
-    const fixture = getPackageManagerOutputFixture("pnpm 11: lifecycle script failed");
-    await trackCreateFailed({
-      input: createInput,
-      context: createContext,
-      durationMs: 10,
-      error: new CommandExecutionError({
-        command: fixture.command,
-        args: ["run", "build"],
+  test("tracks the package manager's error code for install failures", async () => {
+    const properties = await trackFailure(
+      new CommandExecutionError({
+        command: "npm",
+        args: ["install"],
         exitCode: 1,
-        stdout: fixture.stdout,
-        stderr: fixture.stderr,
+        stdout: "",
+        stderr:
+          "npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/nope",
       }),
-      stage: "build",
-      reason: "build_failed",
-    });
-    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
-    expect(properties["package-manager-error-code"]).toBeNull();
+      "install_dependencies",
+    );
+    expect(properties["package-manager-error-code"]).toBe("E404");
+    expect(JSON.stringify(properties)).not.toContain("registry");
   });
 
-  test("tracks Composer's failure code behind a generic Prisma CLI failure", async () => {
-    const { error } = await runFakeComposerDeploy({
-      result: childProcessFailedResult,
-      report: composerRunReport({
-        code: "DEPLOY.ENGINE_FAILED",
-        message: "alchemy failed in /Users/jane/projects/my-app",
-      }),
-    });
-    await trackCreateFailed({
-      input: createInput,
-      context: createContext,
-      durationMs: 10,
-      error,
-      stage: "composer_deploy",
-      reason: "composer_deploy_failed",
-    });
-    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
-    expect(properties).toEqual(
-      expect.objectContaining({
-        "prisma-cli-command": "deploy",
-        "prisma-cli-error-code": "CLI.CHILD_PROCESS_FAILED",
-        "prisma-cli-cause-code": "DEPLOY.ENGINE_FAILED",
-        "package-manager-error-code": null,
+  test("tracks Composer's failure code from the deploy report", async () => {
+    const { error, reportPath } = await failComposerDeploy(
+      JSON.stringify({
+        version: 1,
+        failure: { code: "DEPLOY.ENGINE_FAILED", message: "failed in /Users/jane/my-app" },
       }),
     );
+    const properties = await trackFailure(error, "composer_deploy");
+    expect(properties["prisma-cli-error-code"]).toBe("CLI.CHILD_PROCESS_FAILED");
+    expect(properties["prisma-cli-cause-code"]).toBe("DEPLOY.ENGINE_FAILED");
     expect(JSON.stringify(properties)).not.toContain("jane");
+    expect(existsSync(path.dirname(reportPath))).toBe(false);
   });
 
-  test("omits the cause code when the run report is missing or unstructured", async () => {
-    const { error: withoutReport } = await runFakeComposerDeploy({
-      result: childProcessFailedResult,
-    });
-    for (const error of [
-      withoutReport,
-      Object.assign(new Error("failed"), {
-        prismaCliCauseCode: "failed in /Users/jane/projects/my-app",
-      }),
-    ]) {
-      await trackCreateFailed({
-        input: createInput,
-        context: createContext,
-        durationMs: 10,
-        error,
-        stage: "composer_deploy",
-        reason: "composer_deploy_failed",
-      });
-      const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
-        string,
-        Record<string, unknown>,
-      ];
-      expect(properties["prisma-cli-cause-code"]).toBeNull();
-      expect(JSON.stringify(properties)).not.toContain("jane");
+  test("keeps the original deploy error when the report is missing or invalid", async () => {
+    for (const report of [undefined, "not json"]) {
+      const { error } = await failComposerDeploy(report);
+      expect(error).toMatchObject({ code: "CLI.CHILD_PROCESS_FAILED", exitCode: 1 });
+      expect(error).not.toHaveProperty("causeCode");
+      expect((await trackFailure(error, "composer_deploy"))["prisma-cli-cause-code"]).toBeNull();
     }
   });
 

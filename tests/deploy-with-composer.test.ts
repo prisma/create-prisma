@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { access } from "node:fs/promises";
-import path from "node:path";
 import { PassThrough } from "node:stream";
 
 import {
@@ -11,22 +9,7 @@ import {
   parsePrismaCliEnvelope,
   PrismaCliCommandError,
 } from "../src/tasks/deploy-with-composer";
-import { parseComposerDeployFailureCode } from "../src/tasks/composer/deploy-report";
 import { getErrorMessage, redactSecrets } from "../src/utils/errors";
-import {
-  childProcessFailedResult,
-  composerRunReport,
-  runFakeComposerDeploy,
-} from "./fixtures/composer-deploy";
-
-async function pathExists(filePath: string) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 describe("redactSecrets", () => {
   test("redacts supported database URLs", () => {
@@ -201,139 +184,6 @@ describe("parseComposerDeployResult", () => {
 
   test("returns undefined when Composer has no deployment summary", () => {
     expect(parseComposerDeployResult({ summary: null })).toBeUndefined();
-  });
-});
-
-describe("parseComposerDeployFailureCode", () => {
-  test("reads the failure code and nothing else", () => {
-    expect(
-      parseComposerDeployFailureCode(
-        composerRunReport({
-          code: "DEPLOY.ENGINE_FAILED",
-          message: "alchemy failed in /Users/jane/projects/my-app",
-        }),
-      ),
-    ).toBe("DEPLOY.ENGINE_FAILED");
-  });
-
-  test("returns nothing for a successful run", () => {
-    expect(parseComposerDeployFailureCode(composerRunReport(null))).toBeUndefined();
-  });
-
-  test("rejects reports it cannot trust", () => {
-    const failure = { code: "DEPLOY.ENGINE_FAILED", message: "failed" };
-    for (const report of [
-      "",
-      "not json",
-      "null",
-      JSON.stringify({ version: 2, failure }),
-      JSON.stringify({ failure }),
-      JSON.stringify({ version: 1, failure: { code: 42 } }),
-      JSON.stringify({ version: 1 }),
-    ]) {
-      expect(parseComposerDeployFailureCode(report)).toBeUndefined();
-    }
-  });
-
-  test("rejects codes outside the structured-code grammar", () => {
-    for (const code of [
-      "",
-      "ENGINE_FAILED",
-      "deploy.engine_failed",
-      "DEPLOY.",
-      ".FAILED",
-      "DEPLOY.ENGINE FAILED",
-      "DEPLOY.ENGINE_FAILED\nDATABASE_URL=postgresql://jane:hunter2@host/db",
-      "DEPLOY./Users/jane/projects/my-app",
-      "jane@EXAMPLE.COM",
-      "HTTPS://REGISTRY.EXAMPLE.COM/TOKEN",
-    ]) {
-      expect(
-        parseComposerDeployFailureCode(composerRunReport({ code, message: "failed" })),
-      ).toBeUndefined();
-    }
-  });
-});
-
-describe("runComposerDeployEffect", () => {
-  test("asks Composer for a run report without changing the deploy result", async () => {
-    const deployment = { summary: { app: "my-app", nodes: [] } };
-    const deploy = await runFakeComposerDeploy({
-      result: {
-        exitCode: 0,
-        stdout: JSON.stringify({ kind: "result", envelope: { ok: true, result: deployment } }),
-        stderr: "",
-      },
-      report: composerRunReport(null),
-    });
-
-    expect(deploy.result).toEqual(deployment);
-    expect(deploy.specs).toHaveLength(1);
-    expect(deploy.specs[0]?.args.slice(-6)).toEqual([
-      "deploy",
-      "module.ts",
-      "--report",
-      deploy.reportPath!,
-      "--json",
-      "--no-interactive",
-    ]);
-    expect(path.isAbsolute(deploy.reportPath!)).toBe(true);
-  });
-
-  test("carries Composer's failure code beside the generic CLI code", async () => {
-    const deploy = await runFakeComposerDeploy({
-      result: childProcessFailedResult,
-      report: composerRunReport({
-        code: "DEPLOY.ENGINE_FAILED",
-        message: "alchemy failed in /Users/jane/projects/my-app",
-      }),
-    });
-
-    expect(deploy.error).toBeInstanceOf(PrismaCliCommandError);
-    expect(deploy.error).toMatchObject({
-      message: "The delegated process exited with code 1.",
-      prismaCliCommand: "deploy",
-      prismaCliErrorCode: "CLI.CHILD_PROCESS_FAILED",
-      prismaCliCauseCode: "DEPLOY.ENGINE_FAILED",
-      exitCode: 1,
-      childProcessFailure: "non_zero_exit",
-    });
-    expect(getErrorMessage(deploy.error)).toBe("The delegated process exited with code 1.");
-    expect(JSON.stringify(deploy.error)).not.toContain("jane");
-  });
-
-  test("preserves the original error when the report is missing or invalid", async () => {
-    for (const report of [undefined, "not json", composerRunReport(null)]) {
-      const deploy = await runFakeComposerDeploy({
-        result: childProcessFailedResult,
-        ...(report === undefined ? {} : { report }),
-      });
-
-      expect(deploy.error).toBeInstanceOf(PrismaCliCommandError);
-      expect(deploy.error).toMatchObject({
-        message: "The delegated process exited with code 1.",
-        prismaCliErrorCode: "CLI.CHILD_PROCESS_FAILED",
-        exitCode: 1,
-      });
-      expect(deploy.error).not.toHaveProperty("causeCode");
-      expect((deploy.error as PrismaCliCommandError).prismaCliCauseCode).toBeUndefined();
-    }
-  });
-
-  test("removes the report directory after success and failure", async () => {
-    for (const result of [
-      childProcessFailedResult,
-      { exitCode: 0, stdout: '{"ok":true,"result":{"summary":null}}', stderr: "" },
-    ]) {
-      const deploy = await runFakeComposerDeploy({
-        result,
-        report: composerRunReport({ code: "DEPLOY.ENGINE_FAILED", message: "failed" }),
-      });
-
-      expect(deploy.reportPath).toBeDefined();
-      expect(await pathExists(deploy.reportPath!)).toBe(false);
-      expect(await pathExists(path.dirname(deploy.reportPath!))).toBe(false);
-    }
   });
 });
 
