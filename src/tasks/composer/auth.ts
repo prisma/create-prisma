@@ -1,4 +1,4 @@
-import { cancel, isCancel, log, select } from "@clack/prompts";
+import { isCancel, log, select } from "@clack/prompts";
 import { Effect, Schema } from "effect";
 import type { Writable } from "node:stream";
 
@@ -70,13 +70,21 @@ export const ensureAuthentication = Effect.fn("Deployment.ensureAuthentication")
     });
     const runner = yield* CommandRunner;
     const login = getLocalPackageBinaryArgs(options.packageManager, "prisma", ["auth", "login"]);
-    yield* runner.runChecked({
-      command: login.command,
-      args: login.args,
-      cwd: options.projectDir,
-      env: process.env,
-      stdio: "inherit",
-    });
+    yield* runner
+      .runChecked({
+        command: login.command,
+        args: login.args,
+        cwd: options.projectDir,
+        env: process.env,
+        stdio: "inherit",
+      })
+      .pipe(
+        Effect.mapError((error) =>
+          error.childProcessFailure === "interrupted" || error.childProcessFailure === "cancelled"
+            ? new CreateCancellationError({ stage: "authenticate" })
+            : error,
+        ),
+      );
 
     const authenticatedState = yield* whoami();
     if (!authenticatedState.authenticated) {
@@ -167,7 +175,6 @@ export const selectDeploymentWorkspace = Effect.fn("Deployment.selectWorkspace")
       }),
     );
     if (isCancel(selectedWorkspaceId)) {
-      yield* Effect.sync(() => cancel("Operation cancelled.", { output: options.output }));
       return yield* new CreateCancellationError({ stage: "select_workspace" });
     }
     yield* Effect.sync(() => options.afterPrompt?.());
