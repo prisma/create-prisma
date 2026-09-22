@@ -110,4 +110,4 @@ bun run build
 
 ## Telemetry
 
-Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.
+Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Failure events carry only stable identifiers such as exit codes and tool error codes, never messages or command output. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.

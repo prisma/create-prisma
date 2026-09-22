@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type { CreatePromptContext } from "../commands/create";
 import {
+  isStructuredErrorCode,
   PrismaCliCommandError,
   type CreateCancellationStage,
   type CreateFailureReason,
@@ -10,6 +11,7 @@ import {
 import type { CreateCommandInput } from "../types";
 import { applicationRuntime } from "../runtime";
 import { CommandExecutionError } from "../services/command-runner";
+import { getPackageManagerErrorCode } from "../utils/package-manager-error-code";
 
 import { TELEMETRY_TIMEOUT_MS, trackCliTelemetryEffect } from "./client";
 
@@ -100,9 +102,15 @@ function getChildProcessFailureProperty(error: unknown): string | null {
     : null;
 }
 
+function getPackageManagerErrorCodeProperty(error: unknown): string | null {
+  return error instanceof CommandExecutionError
+    ? (getPackageManagerErrorCode(error.command, error) ?? null)
+    : null;
+}
+
 function getPrismaCliFailureProperty(
   error: unknown,
-  property: "prismaCliCommand" | "prismaCliErrorCode",
+  property: "prismaCliCommand" | "prismaCliErrorCode" | "prismaCliCauseCode",
 ): string | null {
   if (typeof error !== "object" || error === null) {
     return null;
@@ -110,6 +118,11 @@ function getPrismaCliFailureProperty(
 
   const value = Reflect.get(error, property);
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function getPrismaCliCauseCodeProperty(error: unknown): string | null {
+  const causeCode = getPrismaCliFailureProperty(error, "prismaCliCauseCode");
+  return isStructuredErrorCode(causeCode) ? causeCode : null;
 }
 
 export const trackCreateCompletedEffect = Effect.fn("Telemetry.createCompleted")(
@@ -148,6 +161,11 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
     "child-process-failure": getChildProcessFailureProperty(params.error),
     "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
     "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
+    "prisma-cli-cause-code": getPrismaCliCauseCodeProperty(params.error),
+    "package-manager-error-code":
+      params.stage === "install_dependencies"
+        ? getPackageManagerErrorCodeProperty(params.error)
+        : null,
   }).pipe(
     Effect.scoped,
     Effect.timeout(TELEMETRY_TIMEOUT_MS),
