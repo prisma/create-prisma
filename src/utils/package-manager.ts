@@ -61,7 +61,6 @@ const packageManagerChecks: Record<
     name: "Yarn",
     versionArgs: ["--version"],
     install: "Install it with Corepack (https://yarnpkg.com/corepack)",
-    // Yarn 1 exits with an error in a project whose "packageManager" names a newer Yarn.
     minimum: {
       version: [2, 0, 0],
       guidance: `Generated projects use ${packageManagerManifestValues.yarn}, which Yarn 1 refuses to install. Enable Corepack (https://yarnpkg.com/corepack) or install Yarn 4, then retry create-prisma, or choose another package manager with --package-manager.`,
