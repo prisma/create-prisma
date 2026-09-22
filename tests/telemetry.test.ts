@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { NodeFileSystem } from "@effect/platform-node-shared";
 import { Effect } from "effect";
 import { existsSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { CreatePromptContext } from "../src/commands/create";
@@ -9,7 +11,10 @@ import type { CreateCommandInput } from "../src/types";
 import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
 import { runComposerDeployEffect } from "../src/tasks/composer/deploy-report";
 import { runPrismaJsonCommandEffect } from "../src/tasks/prisma-cli";
-import { getChildProcessFailure } from "../src/utils/child-process-failure";
+import {
+  getChildProcessFailure,
+  getSpawnedCommandFailure,
+} from "../src/utils/child-process-failure";
 
 const trackCliTelemetry = mock(async () => {});
 
@@ -132,6 +137,7 @@ describe("create telemetry", () => {
       "target_has_migrations",
       "workspace_missing",
       "unsupported_package_manager_version",
+      "package_manager_not_found",
     ] as const) {
       await trackCreateFailed({
         input: createInput,
@@ -142,12 +148,13 @@ describe("create telemetry", () => {
       });
     }
     const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     expect(calls.map(([, properties]) => properties["failure-reason"])).toEqual([
       "target_directory_not_empty",
       "target_has_migrations",
       "workspace_missing",
       "unsupported_package_manager_version",
+      "package_manager_not_found",
     ]);
     for (const [, properties] of calls) {
       expect(properties["failure-class"]).toBe("expected_rejection");
@@ -216,6 +223,22 @@ describe("create telemetry", () => {
       ];
       expect(properties["child-process-failure"]).toBe(expectedFailure);
       expect(JSON.stringify(properties)).not.toContain("secret");
+    }
+  });
+
+  test("recognizes a missing Windows command that cmd.exe reports as a failed exit", async () => {
+    const binDirectory = await mkdtemp(path.join(tmpdir(), "create-prisma-bin-"));
+    try {
+      await writeFile(path.join(binDirectory, "pnpm.CMD"), "");
+      const classify = (command: string) =>
+        getSpawnedCommandFailure(
+          { name: "ExecaError", failed: true, exitCode: 1 },
+          { command, cwd: tmpdir(), env: { Path: binDirectory }, platform: "win32" },
+        );
+      expect(classify("yarn")).toBe("command_not_found");
+      expect(classify("pnpm")).toBe("non_zero_exit");
+    } finally {
+      await rm(binDirectory, { recursive: true, force: true });
     }
   });
 

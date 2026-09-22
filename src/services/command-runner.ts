@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import {
   ChildProcessFailureSchema,
   getChildProcessFailure,
+  getSpawnedCommandFailure,
   type ChildProcessFailure,
 } from "../utils/child-process-failure";
 
@@ -89,7 +90,7 @@ export class CommandRunner extends Context.Service<
             exitCode: result.exitCode ?? 1,
             stdout: typeof result.stdout === "string" ? result.stdout : "",
             stderr: typeof result.stderr === "string" ? result.stderr : "",
-            childProcessFailure: getChildProcessFailure(result),
+            childProcessFailure: getSpawnedCommandFailure(result, spec),
           };
         },
         catch: (cause) =>

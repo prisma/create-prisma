@@ -156,8 +156,8 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
   yield* Ref.set(contextRef, Option.some(context));
   yield* atCreateStage(
     verifyPackageManagerEffect(context.prismaSetupContext.packageManager),
-    "install_dependencies",
-    "dependency_install_failed",
+    "validate_input",
+    "package_manager_check_failed",
   );
   return { input, context, result: yield* executeCreateContext(context) };
 });
