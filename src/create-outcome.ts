@@ -61,6 +61,7 @@ export const CreateCancellationStageSchema = Schema.Literals([
   "package_manager",
   "agent_skills",
   "deployment_intent",
+  "authenticate",
   "select_workspace",
 ]);
 export type CreateCancellationStage = typeof CreateCancellationStageSchema.Type;

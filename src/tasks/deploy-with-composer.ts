@@ -1,10 +1,11 @@
-import { log, spinner, taskLog } from "@clack/prompts";
+import { cancel, log, spinner, taskLog } from "@clack/prompts";
 import { Cause, Effect, Exit } from "effect";
 import type { Writable } from "node:stream";
 
 import {
   CreateCancellationError,
   CreateFailure,
+  type CreateCancellationStage,
   type CreateFailureReason,
   type CreateFailureStage,
 } from "../create-outcome";
@@ -26,7 +27,7 @@ import { ensureProjectNameAvailable, getProjectDetails } from "./composer/projec
 
 export type ComposerDeployExecutionResult =
   | { ok: true; deployment: ComposerDeployResult }
-  | { ok: false; cancelled: true; stage: "select_workspace" }
+  | { ok: false; cancelled: true; stage: CreateCancellationStage }
   | {
       ok: false;
       cancelled?: false;
@@ -199,6 +200,11 @@ export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")
     Effect.tapCause((cause) =>
       Effect.sync(() => {
         const error = Cause.squash(cause);
+        if (error instanceof CreateCancellationError) {
+          clearProgress();
+          cancel(error.message ?? "Operation cancelled.", { output });
+          return;
+        }
         if (deploymentLog) {
           deploymentLog.error("Deployment failed.");
           deploymentLog = undefined;
@@ -206,9 +212,7 @@ export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")
           progress?.error("Deployment failed.");
         }
         progressRunning = false;
-        if (!(error instanceof CreateCancellationError)) {
-          log.error(`Deploy failed: ${getErrorMessage(error)}`, { output });
-        }
+        log.error(`Deploy failed: ${getErrorMessage(error)}`, { output });
       }),
     ),
     Effect.mapError((error) =>
@@ -239,7 +243,7 @@ export async function deployNewProjectWithComposer(
   const failureReason = exit.cause.reasons.find(Cause.isFailReason);
   const error = failureReason?.error ?? Cause.squash(exit.cause);
   if (error instanceof CreateCancellationError) {
-    return { ok: false, cancelled: true, stage: "select_workspace" };
+    return { ok: false, cancelled: true, stage: error.stage };
   }
   const failure =
     error instanceof CreateFailure
