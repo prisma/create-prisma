@@ -255,9 +255,9 @@ describe("Composer package-manager commands", () => {
   });
 
   test("allows create-prisma to resolve freshly published packages with Deno", () => {
-    expect(getPackageExecutionArgs("deno", ["prisma@8.0.0-rc.11", "orm", "init"])).toEqual({
+    expect(getPackageExecutionArgs("deno", ["prisma@8.0.0-rc.17", "orm", "init"])).toEqual({
       command: "deno",
-      args: ["run", "-A", "--minimum-dependency-age=0", "npm:prisma@8.0.0-rc.11", "orm", "init"],
+      args: ["run", "-A", "--minimum-dependency-age=0", "npm:prisma@8.0.0-rc.17", "orm", "init"],
     });
   });
 
