@@ -3,25 +3,25 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@prisma/composer": "0.20.0",
-  "@prisma/composer-prisma-cloud": "0.20.0",
+  "@prisma/composer": "0.23.0",
+  "@prisma/composer-prisma-cloud": "0.23.0",
   "@prisma/dev": "0.25.2",
-  "@prisma/orm-mongo": "8.0.0-rc.11",
+  "@prisma/orm-mongo": "8.0.0-rc.12",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency.
-  "@prisma/orm-postgres": "8.0.0-rc.11",
+  "@prisma/orm-postgres": "8.0.0-rc.12",
   "@sveltejs/adapter-node": "^5.3.2",
   "@types/node": "^25.6.2",
-  alchemy: "2.0.0-beta.74",
+  alchemy: "2.0.0-beta.78",
   arktype: "^2.2.3",
   dotenv: "^17.4.2",
-  effect: "4.0.0-rc.112",
+  effect: "4.0.0-rc.115",
   mongodb: "^7.1.0",
   "mongodb-memory-server": "^11.1.0",
   nitro: "^3.0.260610-beta",
   // The CLI bundles a matching @prisma/orm-toolchain, and the toolchain is only
   // tested against the ORM release it ships with. Bump this in the same change
   // as the @prisma/orm-* pins; `bun run check:pins` verifies the pair.
-  prisma: "8.0.0-rc.15",
+  prisma: "8.0.0-rc.17",
   // The ORM runtime's timestamp columns need a global Temporal, which no
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
