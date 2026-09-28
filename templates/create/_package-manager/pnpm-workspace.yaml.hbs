@@ -18,4 +18,9 @@ minimumReleaseAgeExclude:
   - "@prisma/*"
 overrides:
   effect: "4.0.0-rc.115"
+{{#if (eq provider "mongo")}}
+peerDependencyRules:
+  allowedVersions:
+    "alchemy>mongodb": "7"
+{{/if}}
 {{/if}}

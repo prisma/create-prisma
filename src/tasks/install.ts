@@ -2,6 +2,7 @@ import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
 import {
+  dependencyVersionMap,
   getCreateTemplateDependencies,
   getDependencyVersion,
   PRISMA_DENO_CLI_PACKAGE,
@@ -17,7 +18,7 @@ type PackageJson = {
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
   resolutions?: Record<string, string>;
-  overrides?: Record<string, string>;
+  overrides?: Record<string, string | Record<string, string>>;
   [key: string]: unknown;
 };
 
@@ -156,6 +157,21 @@ export const addPackageDependencyEffect = Effect.fn("Dependencies.add")(function
   yield* writePackageJson(packageJsonPath, packageJson);
 });
 
+// alchemy declares an optional peer on mongodb 6 for resources the scaffold
+// never loads, and @prisma/orm-mongo requires mongodb 7. npm fails the install
+// on that conflict; the other package managers only warn.
+const resolveAlchemyMongoPeerForNpm = Effect.fn("Dependencies.resolveAlchemyMongoPeerForNpm")(
+  function* (projectDir: string) {
+    const packageJsonPath = path.join(projectDir, "package.json");
+    const packageJson = yield* readPackageJson(packageJsonPath);
+    packageJson.overrides = {
+      ...packageJson.overrides,
+      alchemy: { mongodb: dependencyVersionMap.mongodb },
+    };
+    yield* writePackageJson(packageJsonPath, packageJson);
+  },
+);
+
 export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma")(function* (
   provider: DatabaseProvider,
   packageManager: PackageManager,
@@ -186,6 +202,9 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
       dependencies: databaseDependencies,
       projectDir: path.join(projectDir, "packages/database"),
     });
+  }
+  if (provider === "mongo" && packageManager === "npm") {
+    yield* resolveAlchemyMongoPeerForNpm(projectDir);
   }
 });
 
