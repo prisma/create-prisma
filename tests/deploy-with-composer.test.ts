@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream";
 
 import { CreateCancellationError, CreateFailure } from "../src/create-outcome";
 import { applicationRuntime } from "../src/runtime";
-import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
+import { CommandRunner } from "../src/services/command-runner";
 import {
   deployNewProjectWithComposer,
   deployNewProjectWithComposerEffect,
@@ -193,11 +193,11 @@ describe("parseComposerDeployResult", () => {
 });
 
 describe("deployNewProjectWithComposer", () => {
-  test("reports interrupted sign-in as cancellation without hiding real login failures", async () => {
+  test("classifies structured sign-in refusals as cancellation and preserves real failures", async () => {
     const originalTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
     Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
     try {
-      for (const exitCode of [130, 0xc000013a, 1]) {
+      for (const code of ["AUTH.LOGIN_DENIED", "CLI.PROMPT_CANCELLED", "AUTH.NETWORK_ERROR"]) {
         const output = new PassThrough();
         let text = "";
         output.on("data", (chunk) => {
@@ -205,7 +205,6 @@ describe("deployNewProjectWithComposer", () => {
         });
         const result = await applicationRuntime.runPromiseExit(
           Effect.gen(function* () {
-            const realRunner = yield* CommandRunner;
             return yield* deployNewProjectWithComposerEffect({
               appName: "test-app",
               packageManager: "npm",
@@ -215,37 +214,32 @@ describe("deployNewProjectWithComposer", () => {
               output,
             }).pipe(
               Effect.provideService(CommandRunner, {
-                run: (spec) => {
-                  expect(spec.args).toContain("whoami");
-                  return Effect.succeed({
-                    exitCode: 0,
-                    stdout: JSON.stringify({
-                      ok: true,
-                      result: { authenticated: false, workspace: null, source: null },
-                    }),
-                    stderr: "",
-                  });
-                },
-                runChecked: (spec) => {
-                  expect(spec.args).toContain("login");
-                  if (exitCode === 0xc000013a && process.platform !== "win32") {
-                    return Effect.fail(
-                      new CommandExecutionError({
-                        command: spec.command,
-                        args: [...spec.args],
-                        exitCode,
-                        stdout: "",
+                run: (spec) =>
+                  Effect.sync(() => {
+                    if (spec.args.includes("whoami")) {
+                      return {
+                        exitCode: 0,
+                        stdout: JSON.stringify({
+                          ok: true,
+                          result: { authenticated: false, workspace: null, source: null },
+                        }),
                         stderr: "",
-                        childProcessFailure: "interrupted",
+                      };
+                    }
+                    expect(spec.args).toContain("login");
+                    expect(spec.args).toContain("--json");
+                    expect(spec.args).not.toContain("--no-interactive");
+                    expect(spec.stdio).toEqual(["inherit", "pipe", "inherit"]);
+                    return {
+                      exitCode: code === "CLI.PROMPT_CANCELLED" ? 130 : 2,
+                      stdout: JSON.stringify({
+                        ok: false,
+                        error: { code, summary: "Sign-in did not complete." },
                       }),
-                    );
-                  }
-                  return realRunner.runChecked({
-                    ...spec,
-                    command: process.execPath,
-                    args: ["-e", `process.exit(${exitCode})`],
-                  });
-                },
+                      stderr: "",
+                    };
+                  }),
+                runChecked: () => Effect.die("Not used"),
               }),
             );
           }),
@@ -253,11 +247,14 @@ describe("deployNewProjectWithComposer", () => {
         expect(Exit.isFailure(result)).toBe(true);
         if (Exit.isSuccess(result)) throw new Error("Expected sign-in to stop deployment");
         const error = Cause.squash(result.cause);
-        if (exitCode === 1) {
+        if (code === "AUTH.NETWORK_ERROR") {
           expect(error).toBeInstanceOf(CreateFailure);
           expect(error).toMatchObject({
             stage: "authenticate",
             reason: "prisma_auth_command_failed",
+          });
+          expect((error as CreateFailure).cause).toMatchObject({
+            prismaCliErrorCode: code,
           });
           expect(text).toContain("Deploy failed:");
         } else {

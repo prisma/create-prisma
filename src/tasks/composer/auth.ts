@@ -4,14 +4,13 @@ import type { Writable } from "node:stream";
 
 import { CreateCancellationError, CreateFailure } from "../../create-outcome";
 import { PrismaWorkspaceSchema } from "../../result";
-import { CommandRunner } from "../../services/command-runner";
 import type { PackageManager } from "../../types";
+import { getLocalPackageBinaryCommand, getRunScriptCommand } from "../../utils/package-manager";
 import {
-  getLocalPackageBinaryArgs,
-  getLocalPackageBinaryCommand,
-  getRunScriptCommand,
-} from "../../utils/package-manager";
-import { decodePrismaCommandResult, runPrismaJsonCommandEffect } from "../prisma-cli";
+  decodePrismaCommandResult,
+  PrismaCliCommandError,
+  runPrismaJsonCommandEffect,
+} from "../prisma-cli";
 import { getWorkspaceLabel } from "./workspace";
 
 const WhoamiResultSchema = Schema.Struct({
@@ -68,23 +67,23 @@ export const ensureAuthentication = Effect.fn("Deployment.ensureAuthentication")
       options.beforeInteractiveLogin?.();
       log.info("Sign in to Prisma to deploy.", { output: options.output });
     });
-    const runner = yield* CommandRunner;
-    const login = getLocalPackageBinaryArgs(options.packageManager, "prisma", ["auth", "login"]);
-    yield* runner
-      .runChecked({
-        command: login.command,
-        args: login.args,
-        cwd: options.projectDir,
-        env: process.env,
-        stdio: "inherit",
-      })
-      .pipe(
-        Effect.mapError((error) =>
-          error.childProcessFailure === "interrupted" || error.childProcessFailure === "cancelled"
-            ? new CreateCancellationError({ stage: "authenticate" })
-            : error,
-        ),
-      );
+    yield* runPrismaJsonCommandEffect({
+      packageManager: options.packageManager,
+      projectDir: options.projectDir,
+      args: ["auth", "login"],
+      interactive: true,
+    }).pipe(
+      Effect.mapError((error) =>
+        (error instanceof PrismaCliCommandError &&
+          (error.code === "AUTH.LOGIN_DENIED" ||
+            error.code === "CLI.PROMPT_CANCELLED" ||
+            error.code === "CLI.ABORTED")) ||
+        error.childProcessFailure === "interrupted" ||
+        error.childProcessFailure === "cancelled"
+          ? new CreateCancellationError({ stage: "authenticate" })
+          : error,
+      ),
+    );
 
     const authenticatedState = yield* whoami();
     if (!authenticatedState.authenticated) {
