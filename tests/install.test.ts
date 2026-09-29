@@ -577,13 +577,21 @@ describe("generated templates", () => {
                     '  - "@prisma/*"',
                     "overrides:",
                     `  effect: "${dependencyVersionMap.effect}"`,
+                    ...(provider === "mongo"
+                      ? ["peerDependencyRules:", "  allowedVersions:", '    "alchemy>mongodb": "7"']
+                      : []),
                     "",
                   ].join("\n"),
                 );
               } else if (packageManager === "yarn") {
                 expect(packageJson.resolutions?.effect).toBe(dependencyVersionMap.effect);
               } else {
-                expect(packageJson.overrides?.effect).toBe(dependencyVersionMap.effect);
+                expect(packageJson.overrides).toEqual({
+                  effect: dependencyVersionMap.effect,
+                  ...(provider === "mongo" && packageManager === "npm"
+                    ? { alchemy: { mongodb: dependencyVersionMap.mongodb } }
+                    : {}),
+                });
               }
             } finally {
               await rm(projectDir, { recursive: true, force: true });

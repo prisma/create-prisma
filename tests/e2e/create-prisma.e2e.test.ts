@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { MongoMemoryReplSet } from "mongodb-memory-server";
+
 import { runCreateCommand } from "../../src/commands/create";
 import { dependencyVersionMap } from "../../src/constants/dependencies";
 import type { CreateCommandResult } from "../../src/result";
@@ -128,11 +130,16 @@ async function fetchUntilResponding(url: string, deadline: number): Promise<Resp
   }
 }
 
-async function verifyBuiltServer(projectDir: string, port: number, expectedStatus: number) {
+async function verifyBuiltServer(
+  projectDir: string,
+  port: number,
+  expectedStatus: number,
+  env: Record<string, string> = {},
+) {
   const process = Bun.spawn({
     cmd: ["node", "dist/server.mjs"],
     cwd: projectDir,
-    env: { ...Bun.env, PORT: String(port) },
+    env: { ...Bun.env, ...env, PORT: String(port) },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -677,6 +684,63 @@ describe("create-prisma e2e", () => {
         await runCommand(projectDir, ["npm", "run", "build"]);
         expect(await readdir(path.join(projectDir, "dist"))).toEqual(["server.mjs"]);
         await verifyBuiltServer(projectDir, 46_100 + index, template === "minimal" ? 500 : 200);
+      }
+    },
+    TEST_TIMEOUT,
+  );
+
+  test(
+    "installs a MongoDB app with npm and runs it against MongoDB",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-mongo-npm-e2e-"));
+      tempRoots.push(rootDir);
+      const { result, exitCode } = await runCreatePrismaJson(rootDir, [
+        "mongo-npm-app",
+        "--template",
+        "minimal",
+        "--provider",
+        "mongodb",
+        "--authoring",
+        "psl",
+        "--package-manager",
+        "npm",
+        "--no-deploy",
+        "--json",
+      ]);
+
+      expect(result).toMatchObject({
+        ok: true,
+        project: { databaseProvider: "mongo", packageManager: "npm" },
+        deployment: null,
+      });
+      expect(exitCode).toBe(0);
+
+      const projectDir = path.join(rootDir, "mongo-npm-app");
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectDir, "package.json"), "utf8"),
+      ) as Record<string, any>;
+      expect(packageJson.overrides.alchemy).toEqual({ mongodb: dependencyVersionMap.mongodb });
+      const installedDriver = JSON.parse(
+        await readFile(path.join(projectDir, "node_modules/mongodb/package.json"), "utf8"),
+      ) as { version: string };
+      expect(installedDriver.version).toMatch(/^7\./);
+      expect(
+        await pathExists(path.join(projectDir, "node_modules/alchemy/node_modules/mongodb")),
+      ).toBe(false);
+
+      await runCommand(projectDir, ["npm", "run", "contract:emit"]);
+      await runCommand(projectDir, ["npm", "run", "build"]);
+      await runCommand(projectDir, ["npx", "tsc", "--noEmit"]);
+
+      const mongod = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+      try {
+        const body = await verifyBuiltServer(projectDir, 46_160, 200, {
+          DATABASE_URL: mongod.getUri("app"),
+        });
+        const { users } = JSON.parse(body) as { users: Array<{ name: string }> };
+        expect(users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
+      } finally {
+        await mongod.stop();
       }
     },
     TEST_TIMEOUT,
