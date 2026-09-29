@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   dependencyVersionMap,
+  effectPackages,
   getCreateTemplateDependencies,
   getDependencyVersion,
   PRISMA_DENO_CLI_PACKAGE,
@@ -235,10 +236,11 @@ export const writeCreateTemplateDependenciesEffect = Effect.fn("Dependencies.wri
     const effectVersion = getDependencyVersion("effect");
     if (!effectVersion)
       return yield* Effect.fail(new Error("Dependency effect is missing from the version map."));
+    const effectPins = Object.fromEntries(effectPackages.map((name) => [name, effectVersion]));
     if (opts.packageManager === "yarn") {
-      packageJson.resolutions = { ...packageJson.resolutions, effect: effectVersion };
+      packageJson.resolutions = { ...packageJson.resolutions, ...effectPins };
     } else if (opts.packageManager !== "pnpm") {
-      packageJson.overrides = { ...packageJson.overrides, effect: effectVersion };
+      packageJson.overrides = { ...packageJson.overrides, ...effectPins };
     }
     yield* writePackageJson(packageJsonPath, packageJson);
   },
