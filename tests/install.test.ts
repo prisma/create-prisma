@@ -5,7 +5,11 @@ import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { dependencyVersionMap, PRISMA_DENO_CLI_PACKAGE } from "../src/constants/dependencies";
+import {
+  dependencyVersionMap,
+  effectPackages,
+  PRISMA_DENO_CLI_PACKAGE,
+} from "../src/constants/dependencies";
 import { applicationRuntime } from "../src/runtime";
 import {
   CommandExecutionError,
@@ -32,6 +36,10 @@ import {
   getRunScriptCommand,
   verifyPackageManagerEffect,
 } from "../src/utils/package-manager";
+
+const effectPins = Object.fromEntries(
+  effectPackages.map((name) => [name, dependencyVersionMap.effect]),
+);
 
 type PackageJson = {
   name?: string;
@@ -576,7 +584,11 @@ describe("generated templates", () => {
                     "minimumReleaseAgeExclude:",
                     '  - "@prisma/*"',
                     "overrides:",
-                    `  effect: "${dependencyVersionMap.effect}"`,
+                    ...effectPackages.map((name) =>
+                      name === "effect"
+                        ? `  effect: "${dependencyVersionMap.effect}"`
+                        : `  "${name}": "${dependencyVersionMap.effect}"`,
+                    ),
                     ...(provider === "mongo"
                       ? ["peerDependencyRules:", "  allowedVersions:", '    "alchemy>mongodb": "7"']
                       : []),
@@ -584,10 +596,10 @@ describe("generated templates", () => {
                   ].join("\n"),
                 );
               } else if (packageManager === "yarn") {
-                expect(packageJson.resolutions?.effect).toBe(dependencyVersionMap.effect);
+                expect(packageJson.resolutions).toEqual(effectPins);
               } else {
                 expect(packageJson.overrides).toEqual({
-                  effect: dependencyVersionMap.effect,
+                  ...effectPins,
                   ...(provider === "mongo" && packageManager === "npm"
                     ? { alchemy: { mongodb: dependencyVersionMap.mongodb } }
                     : {}),

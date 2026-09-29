@@ -18,6 +18,12 @@ minimumReleaseAgeExclude:
   - "@prisma/*"
 overrides:
   effect: "4.0.0-rc.115"
+  "@effect/platform-bun": "4.0.0-rc.115"
+  "@effect/platform-node": "4.0.0-rc.115"
+  "@effect/platform-node-shared": "4.0.0-rc.115"
+  "@effect/sql-d1": "4.0.0-rc.115"
+  "@effect/sql-sqlite-do": "4.0.0-rc.115"
+  "@effect/vitest": "4.0.0-rc.115"
 {{#if (eq provider "mongo")}}
 peerDependencyRules:
   allowedVersions:

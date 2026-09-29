@@ -32,6 +32,19 @@ export const dependencyVersionMap = {
   typescript: "^5.9.3",
 } as const;
 
+// Pinned to the effect version as a set: @effect/* siblings depend on each other with
+// caret prerelease ranges, so a newer rc (e.g. platform-node-shared rc.118) floats in and
+// imports effect modules the pinned effect lacks.
+export const effectPackages = [
+  "effect",
+  "@effect/platform-bun",
+  "@effect/platform-node",
+  "@effect/platform-node-shared",
+  "@effect/sql-d1",
+  "@effect/sql-sqlite-do",
+  "@effect/vitest",
+] as const;
+
 export const PRISMA_PLATFORM_CLI_PACKAGE = `prisma@${dependencyVersionMap.prisma}`;
 // Deno runs the same consolidated CLI. The former `prisma-next` fallback is
 // frozen and cannot emit against the current ORM releases.
