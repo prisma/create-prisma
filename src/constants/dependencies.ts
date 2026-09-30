@@ -3,14 +3,14 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^10.0.2",
   "@elysiajs/node": "^1.4.5",
-  "@prisma/composer": "0.24.0",
-  "@prisma/composer-prisma-cloud": "0.24.0",
+  "@prisma/composer": "0.25.0",
+  "@prisma/composer-prisma-cloud": "0.25.0",
   "@prisma/dev": "0.25.2",
-  "@prisma/orm-mongo": "8.0.0-rc.12",
-  // Must match @prisma/composer-prisma-cloud's exact peerDependency.
-  // Stays on rc.12 while that peer does; do not bump with prisma's
-  // orm-toolchain alone or npm install fails with ERESOLVE.
-  "@prisma/orm-postgres": "8.0.0-rc.12",
+  "@prisma/orm-mongo": "8.0.0-rc.13",
+  // Must match @prisma/composer-prisma-cloud's exact peerDependency, even when
+  // prisma bundles a newer @prisma/orm-toolchain, or npm install fails with
+  // ERESOLVE.
+  "@prisma/orm-postgres": "8.0.0-rc.13",
   "@sveltejs/adapter-node": "^5.3.2",
   "@types/node": "^25.6.2",
   alchemy: "2.0.0-beta.78",
@@ -22,7 +22,7 @@ export const dependencyVersionMap = {
   nitro: "^3.0.260610-beta",
   // Must match the @prisma/composer-cli version this prisma release depends on.
   // `bun run check:pins` verifies that against the Composer pins above.
-  prisma: "8.0.0-rc.18",
+  prisma: "8.0.0-rc.19",
   // The ORM runtime's timestamp columns need a global Temporal, which no
   // stable Node or Bun ships yet.
   "temporal-polyfill": "^1.0.4",
