@@ -197,7 +197,12 @@ describe("deployNewProjectWithComposer", () => {
     const originalTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
     Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
     try {
-      for (const code of ["AUTH.LOGIN_DENIED", "CLI.PROMPT_CANCELLED", "AUTH.NETWORK_ERROR"]) {
+      for (const code of [
+        "AUTH.LOGIN_DENIED",
+        "CLI.PROMPT_CANCELLED",
+        "AUTH.NETWORK_ERROR",
+        null,
+      ]) {
         const output = new PassThrough();
         let text = "";
         output.on("data", (chunk) => {
@@ -230,6 +235,14 @@ describe("deployNewProjectWithComposer", () => {
                     expect(spec.args).toContain("--json");
                     expect(spec.args).not.toContain("--no-interactive");
                     expect(spec.stdio).toEqual(["inherit", "pipe", "inherit"]);
+                    if (code === null) {
+                      return {
+                        exitCode: 130,
+                        stdout: "",
+                        stderr: "",
+                        childProcessFailure: "interrupted" as const,
+                      };
+                    }
                     return {
                       exitCode: code === "CLI.PROMPT_CANCELLED" ? 130 : 2,
                       stdout: JSON.stringify({
