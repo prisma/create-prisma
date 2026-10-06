@@ -62,16 +62,20 @@ describe("non-empty target directory", () => {
       targetDirectoryKind: "existing_app",
     });
     expect(failure.message).toContain("`pnpm dlx prisma@latest orm init`");
-    expect(failure.message).toContain("add-to-existing-project/postgresql");
+    expect(failure.message).toContain("https://www.prisma.io/docs/cli/orm-init");
+    expect(failure.message).not.toContain("add-to-existing-project/postgresql");
     expect(failure.message).not.toContain("Use --force to continue");
   });
 
-  test("links the MongoDB guide when the provider is known", async () => {
+  test.each([
+    ["postgres", "postgresql"],
+    ["mongo", "mongodb"],
+  ] as const)("links the %s guide when the provider is known", async (provider, guide) => {
     await seedDirectory("shop", { "package.json": "{}" });
 
-    const failure = await rejectCreateContext({ name: "shop", provider: "mongo" });
+    const failure = await rejectCreateContext({ name: "shop", provider });
 
-    expect(failure.message).toContain("add-to-existing-project/mongodb");
+    expect(failure.message).toContain(`add-to-existing-project/${guide}`);
   });
 
   test("keeps --force as the way to resume an existing Prisma project", async () => {
@@ -111,6 +115,6 @@ describe("non-empty target directory", () => {
     expect(context.targetDirectory).toBe(path.join(rootDir, "fresh"));
     expect(text).toHaveBeenCalledTimes(2);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[0]).toContain("already contains a project");
+    expect(warn.mock.calls[0]?.[0]).toContain("already contains an app");
   });
 });

@@ -169,26 +169,32 @@ const inspectTargetDirectoryKind = Effect.fn("Create.inspectTargetDirectoryKind"
   return "other" satisfies CreateTargetDirectoryKind;
 });
 
-function describeNonEmptyTarget(options: {
-  displayPath: string;
-  kind: CreateTargetDirectoryKind;
-  initCommand: string;
-  docsUrl: string;
-}): string {
-  const { displayPath, kind, initCommand, docsUrl } = options;
+const describeNonEmptyTarget = Effect.fn("Create.describeNonEmptyTarget")(function* (
+  targetDirectory: string,
+  kind: CreateTargetDirectoryKind,
+  provider: DatabaseProvider | undefined,
+) {
+  const displayPath = formatPathForDisplay(targetDirectory);
   switch (kind) {
-    case "existing_app":
-      return `Target directory ${displayPath} already contains a project. To add Prisma to it, run \`${initCommand}\` in that directory (${docsUrl}). For a new project, choose a different name. --force scaffolds a starter over the existing files.`;
+    case "existing_app": {
+      const initCommand = getPackageExecutionCommand(
+        yield* detectPackageManagerEffect(targetDirectory),
+        ["prisma@latest", "orm", "init"],
+      );
+      const docsUrl = provider
+        ? EXISTING_PROJECT_DOCS_URL[provider]
+        : "https://www.prisma.io/docs/cli/orm-init";
+      return `Target directory ${displayPath} already contains an app. Run \`${initCommand}\` there to add Prisma (${docsUrl}), or choose a different name for a new app. --force overwrites starter and Prisma files.`;
+    }
     case "prisma_project":
-      return `Target directory ${displayPath} already contains a Prisma project. Keep working in it with the Prisma CLI, or choose a different name for a new project. To resume a create-prisma run that stopped partway, rerun with --force; it replaces the Prisma config, contract, and database-client files.`;
+      return `Target directory ${displayPath} already contains a Prisma project. Use the Prisma CLI, or choose a different name. To resume an interrupted scaffold, rerun with --force; it overwrites starter and Prisma files.`;
     case "other":
-      return `Target directory ${displayPath} is not empty. Choose a different project name, or use --force to scaffold into it anyway.`;
+      return `Target directory ${displayPath} is not empty. Choose a different project name. --force overwrites starter and Prisma files.`;
   }
-}
+});
 
 type CreateTarget = { targetDirectory: string; targetPathState: CreateTargetPathState };
 
-/** Resolves the project name to a usable target, or to the rejection that explains why not. */
 const resolveCreateTarget = Effect.fn("Create.resolveTarget")(function* (
   projectName: string,
   options: { force: boolean; provider: DatabaseProvider | undefined },
@@ -218,15 +224,7 @@ const resolveCreateTarget = Effect.fn("Create.resolveTarget")(function* (
     return new CreateFailure({
       stage: "collect_context",
       reason: "target_directory_not_empty",
-      message: describeNonEmptyTarget({
-        displayPath: formatPathForDisplay(targetDirectory),
-        kind,
-        initCommand: getPackageExecutionCommand(
-          yield* detectPackageManagerEffect(targetDirectory),
-          ["prisma@latest", "orm", "init"],
-        ),
-        docsUrl: EXISTING_PROJECT_DOCS_URL[options.provider ?? "postgres"],
-      }),
+      message: yield* describeNonEmptyTarget(targetDirectory, kind, options.provider),
       errorReported: true,
       targetDirectoryKind: kind,
     });
@@ -247,7 +245,6 @@ export const collectCreateContext = Effect.fn("Create.collectContext")(function*
     ).trim(),
     targetOptions,
   );
-  // A name typed at the prompt can be corrected in place, before any other question is asked.
   while (target instanceof CreateFailure && namePrompted) {
     const { message } = target;
     yield* Effect.sync(() => log.warn(message, { output }));
