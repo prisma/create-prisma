@@ -49,18 +49,20 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
   args: string[];
   env?: NodeJS.ProcessEnv;
   onStderrLine?: (line: string) => void;
+  interactive?: boolean;
 }) {
   const runner = yield* CommandRunner;
   const invocation = getLocalPackageBinaryArgs(options.packageManager, "prisma", [
     ...options.args,
     "--json",
-    "--no-interactive",
+    ...(options.interactive ? [] : ["--no-interactive"]),
   ]);
   const result = yield* runner.run({
     command: invocation.command,
     args: invocation.args,
     cwd: options.projectDir,
     env: options.env ?? process.env,
+    ...(options.interactive ? { stdio: ["inherit", "pipe", "inherit"] as const } : {}),
     ...(options.onStderrLine ? { onStderrLine: options.onStderrLine } : {}),
   });
 

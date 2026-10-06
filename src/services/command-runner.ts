@@ -14,7 +14,7 @@ export type CommandSpec = {
   args: readonly string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
-  stdio?: "pipe" | "inherit";
+  stdio?: "pipe" | "inherit" | ["inherit", "pipe", "inherit"];
   onStderrLine?: (line: string) => void;
 };
 
