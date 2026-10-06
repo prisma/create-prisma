@@ -110,6 +110,40 @@ test("rejects a missing package manager before writing project files", async () 
 });
 
 describe("Prisma setup commands", () => {
+  test("preserves an init failure carried by diagnostics in a partial-success envelope", async () => {
+    const run = () =>
+      Effect.succeed({
+        exitCode: 5,
+        stderr: "",
+        stdout: JSON.stringify({
+          kind: "result",
+          envelope: {
+            ok: true,
+            commandId: "orm.init",
+            result: { contractEmitted: false },
+            diagnostics: [
+              { severity: "warn", code: "CLI.WARNING", summary: "A warning" },
+              {
+                severity: "error",
+                code: "CLI.INIT_EMIT_FAILED",
+                summary: "Failed to emit contract",
+                why: "CONTRACT.VALIDATION_FAILED: storage.ref is missing",
+              },
+            ],
+          },
+        }),
+      });
+    const error = await applicationRuntime.runPromise(
+      runPrismaJsonCommandEffect({
+        packageManager: "bun",
+        projectDir: process.cwd(),
+        args: ["orm", "init"],
+      }).pipe(Effect.provideService(CommandRunner, { run, runChecked: run }), Effect.flip),
+    );
+    expect(error).toMatchObject({ code: "CLI.INIT_EMIT_FAILED", command: "orm.init", exitCode: 5 });
+    expect(error.message).toContain("CONTRACT.VALIDATION_FAILED: storage.ref is missing");
+  });
+
   test.each([
     { source: "stdout", stdout: "DATABASE_URL=postgres://user:secret@localhost/db", stderr: "" },
     { source: "stderr", stdout: "", stderr: "DATABASE_URL=postgres://user:secret@localhost/db" },

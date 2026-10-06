@@ -8,7 +8,7 @@ import type { PackageManager } from "../../types";
 import { getLocalPackageBinaryCommand, getRunScriptCommand } from "../../utils/package-manager";
 import {
   decodePrismaCommandResult,
-  PrismaCliCommandError,
+  isPrismaCliCancellation,
   runPrismaJsonCommandEffect,
 } from "../prisma-cli";
 import { getWorkspaceLabel } from "./workspace";
@@ -74,12 +74,7 @@ export const ensureAuthentication = Effect.fn("Deployment.ensureAuthentication")
       interactive: true,
     }).pipe(
       Effect.mapError((error) =>
-        (error instanceof PrismaCliCommandError &&
-          (error.code === "AUTH.LOGIN_DENIED" ||
-            error.code === "CLI.PROMPT_CANCELLED" ||
-            error.code === "CLI.ABORTED")) ||
-        error.childProcessFailure === "interrupted" ||
-        error.childProcessFailure === "cancelled"
+        isPrismaCliCancellation(error)
           ? new CreateCancellationError({ stage: "authenticate" })
           : error,
       ),

@@ -1,5 +1,5 @@
 import { Console, Effect, Option } from "effect";
-import { Argument, CliError, Command, Flag } from "effect/unstable/cli";
+import { Argument, CliError, Command, Flag } from "effect/cli";
 
 import { runCreateCommandEffect } from "./commands/create";
 import { createCommandFailureResult } from "./result";
@@ -19,19 +19,19 @@ import { getErrorMessage } from "./utils/errors";
 const CLI_VERSION = process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0";
 
 const optionalArgument = (name: string, description: string) =>
-  Argument.string(name).pipe(
+  Argument.String(name).pipe(
     Argument.withDescription(description),
     Argument.optional,
     Argument.map(Option.getOrUndefined),
   );
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(
+  Flag.Boolean(name).pipe(
     Flag.withDescription(description),
     Flag.optional,
     Flag.map(Option.getOrUndefined),
   );
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(
+  Flag.String(name).pipe(
     Flag.withDescription(description),
     Flag.optional,
     Flag.map(Option.getOrUndefined),
@@ -42,23 +42,23 @@ export const createPrismaCommand = Command.make(
   {
     projectName: optionalArgument("project-name", "Project name / directory"),
     name: optionalString("name", "Project name / directory"),
-    template: Flag.choice("template", createTemplates).pipe(
+    template: Flag.Literals("template", createTemplates).pipe(
       Flag.withDescription("Project template"),
       Flag.optional,
       Flag.map(Option.getOrUndefined),
     ),
-    provider: Flag.choice("provider", databaseProviderInputs).pipe(
+    provider: Flag.Literals("provider", databaseProviderInputs).pipe(
       Flag.withDescription("Database provider"),
       Flag.optional,
       Flag.map(Option.map(normalizeDatabaseProvider)),
       Flag.map(Option.getOrUndefined),
     ),
-    authoring: Flag.choice("authoring", authoringStyles).pipe(
+    authoring: Flag.Literals("authoring", authoringStyles).pipe(
       Flag.withDescription("Contract authoring style"),
       Flag.optional,
       Flag.map(Option.getOrUndefined),
     ),
-    packageManager: Flag.choice("package-manager", packageManagers).pipe(
+    packageManager: Flag.Literals("package-manager", packageManagers).pipe(
       Flag.withDescription("Package manager used for dependency installation"),
       Flag.optional,
       Flag.map(Option.getOrUndefined),
@@ -160,6 +160,7 @@ export type {
   CreateCommandFailureResult,
   CreateCommandResult,
   CreateCommandSuccessResult,
+  CreateCommandInitializedResult,
   CreateNextStep,
   CreateProjectResult,
 } from "./result";

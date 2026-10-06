@@ -1,5 +1,5 @@
-import { cancel, intro, log, spinner } from "@clack/prompts";
-import { Cause, Clock, Effect, Exit, Option, Ref } from "effect";
+import { cancel, intro, log, note, outro, spinner } from "@clack/prompts";
+import { Cause, Clock, Effect, Exit, Option, Ref, Schema } from "effect";
 
 import { CreateCancellationError, CreateFailure } from "../create-outcome";
 import {
@@ -17,6 +17,8 @@ import {
 import { scaffoldCreateFrameworkTemplateEffect } from "../templates/render-create-template";
 import { writeCreateTemplateDependenciesEffect } from "../tasks/install";
 import { executePrismaSetupContextEffect } from "../tasks/setup-prisma";
+import { runExistingPrismaInit } from "../tasks/prisma-setup/commands";
+import { decodePrismaCommandResult } from "../tasks/prisma-cli";
 import { decodeCreateCommandInput, type CreateCommandInput } from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
 import { resolveExecutionSettings } from "../ui/output";
@@ -29,7 +31,49 @@ import {
   createProjectResult,
   formatPathForDisplay,
   type CreatePromptContext,
+  type CreateContext,
+  type ExistingAppContext,
 } from "./create-context";
+
+const InitGuidanceSchema = Schema.Struct({
+  nextSteps: Schema.Array(Schema.String),
+  warnings: Schema.Array(Schema.String),
+});
+
+const initializeExistingApp = Effect.fn("Create.initExisting")(function* (
+  context: ExistingAppContext,
+  input: CreateCommandInput,
+) {
+  const { output } = resolveExecutionSettings(input);
+  yield* Effect.sync(() =>
+    log.step(`Initializing Prisma in ${formatPathForDisplay(context.targetDirectory)}...`, {
+      output,
+    }),
+  );
+  const initialization = yield* atCreateStage(
+    runExistingPrismaInit(context, input),
+    "initialize_prisma",
+    "prisma_init_failed",
+  );
+  const guidance = yield* atCreateStage(
+    decodePrismaCommandResult(InitGuidanceSchema, initialization),
+    "initialize_prisma",
+    "prisma_init_failed",
+  );
+  yield* Effect.sync(() => {
+    for (const warning of guidance.warnings) log.warn(warning, { output });
+    if (guidance.nextSteps.length > 0)
+      note(guidance.nextSteps.join("\n"), "Next steps", { output });
+    outro("Prisma initialized in your existing app.", { output });
+  });
+  return {
+    schemaVersion: CREATE_PRISMA_RESULT_SCHEMA_VERSION,
+    ok: true,
+    operation: "orm_init",
+    project: { name: context.projectPackageName, path: context.targetDirectory },
+    initialization,
+  } satisfies CreateCommandResult;
+});
 
 const executeCreateContext = Effect.fn("Create.execute")(function* (context: CreatePromptContext) {
   const output = context.prismaSetupContext.output;
@@ -114,7 +158,7 @@ const executeCreateContext = Effect.fn("Create.execute")(function* (context: Cre
 const createProjectEffect = Effect.fn("Create.project")(function* (
   rawInput: CreateCommandInput,
   inputRef: Ref.Ref<CreateCommandInput>,
-  contextRef: Ref.Ref<Option.Option<CreatePromptContext>>,
+  contextRef: Ref.Ref<Option.Option<CreateContext>>,
 ) {
   const input = yield* decodeCreateCommandInput(rawInput).pipe(
     Effect.mapError(
@@ -155,11 +199,20 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
   );
   yield* Ref.set(contextRef, Option.some(context));
   yield* atCreateStage(
-    verifyPackageManagerEffect(context.prismaSetupContext.packageManager),
+    context.operation === "orm_init"
+      ? verifyPackageManagerEffect(context.packageManager, context.targetDirectory)
+      : verifyPackageManagerEffect(context.prismaSetupContext.packageManager),
     "validate_input",
     "package_manager_check_failed",
   );
-  return { input, context, result: yield* executeCreateContext(context) };
+  return {
+    input,
+    context,
+    result:
+      context.operation === "orm_init"
+        ? yield* initializeExistingApp(context, input)
+        : yield* executeCreateContext(context),
+  };
 });
 
 export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
@@ -167,7 +220,7 @@ export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
 ) {
   const startedAt = yield* Clock.currentTimeMillis;
   const inputRef = yield* Ref.make<CreateCommandInput>(rawInput);
-  const contextRef = yield* Ref.make<Option.Option<CreatePromptContext>>(Option.none());
+  const contextRef = yield* Ref.make<Option.Option<CreateContext>>(Option.none());
   const exit = yield* Effect.exit(createProjectEffect(rawInput, inputRef, contextRef));
   const durationMs = (yield* Clock.currentTimeMillis) - startedAt;
 
@@ -193,7 +246,7 @@ export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
     return createCommandFailureResult(
       error.stage,
       error.message ?? "Operation cancelled.",
-      context ? createProjectResult(context) : undefined,
+      context && context.operation !== "orm_init" ? createProjectResult(context) : undefined,
     );
   }
 
@@ -222,7 +275,7 @@ export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
   return createCommandFailureResult(
     failure.stage,
     failure.message,
-    context ? createProjectResult(context) : undefined,
+    context && context.operation !== "orm_init" ? createProjectResult(context) : undefined,
   );
 });
 
@@ -230,4 +283,9 @@ export function runCreateCommand(rawInput: CreateCommandInput = {}): Promise<Cre
   return applicationRuntime.runPromise(runCreateCommandEffect(rawInput));
 }
 
-export type { CreatePromptContext, CreateTargetPathState } from "./create-context";
+export type {
+  CreateContext,
+  CreatePromptContext,
+  ExistingAppContext,
+  CreateTargetPathState,
+} from "./create-context";

@@ -51,27 +51,27 @@
     "release-notes": "bunx changelogithub"
   },
   "dependencies": {
-    "@clack/prompts": "^1.7.0",
-    "@effect/platform-node-shared": "4.0.0-rc.112",
-    "effect": "4.0.0-rc.112",
-    "execa": "^9.6.1",
-    "handlebars": "^4.7.8",
-    "posthog-node": "^5.28.2"
+    "@clack/prompts": "^1.8.1",
+    "@effect/platform-node-shared": "4.0.1",
+    "effect": "4.0.1",
+    "execa": "^10.0.1",
+    "handlebars": "^4.7.10",
+    "posthog-node": "^5.55.0"
   },
   "devDependencies": {
-    "@prisma/dev": "0.24.7",
-    "@types/bun": "^1.3.9",
-    "@types/node": "^25.3.0",
-    "changelogithub": "^14.0.0",
-    "mongodb-memory-server": "11.1.0",
-    "oxfmt": "^0.37.0",
-    "oxlint": "^1.52.0",
-    "tsdown": "^0.20.3",
-    "typescript": "^5.9.3"
+    "@prisma/dev": "0.25.2",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26.6.4",
+    "changelogithub": "^15.0.5",
+    "mongodb-memory-server": "11.3.0",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "tsdown": "^0.23.0",
+    "typescript": "^7.0.2"
   },
   "engines": {
     "bun": ">=1.3.0",
-    "node": ">=22.18.0"
+    "node": ">=22.22.0"
   },
   "packageManager": "bun@1.4.1"
 }

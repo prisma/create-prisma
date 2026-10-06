@@ -71,6 +71,15 @@ export const CreateCommandSuccessResultSchema = Schema.Struct({
 });
 export type CreateCommandSuccessResult = typeof CreateCommandSuccessResultSchema.Type;
 
+export const CreateCommandInitializedResultSchema = Schema.Struct({
+  schemaVersion: Schema.Literal(CREATE_PRISMA_RESULT_SCHEMA_VERSION),
+  ok: Schema.Literal(true),
+  operation: Schema.Literal("orm_init"),
+  project: Schema.Struct({ name: Schema.String, path: Schema.String }),
+  initialization: Schema.Unknown,
+});
+export type CreateCommandInitializedResult = typeof CreateCommandInitializedResultSchema.Type;
+
 export const CreateCommandFailureResultSchema = Schema.Struct({
   schemaVersion: Schema.Literal(CREATE_PRISMA_RESULT_SCHEMA_VERSION),
   ok: Schema.Literal(false),
@@ -84,6 +93,7 @@ export type CreateCommandFailureResult = typeof CreateCommandFailureResultSchema
 
 export const CreateCommandResultSchema = Schema.Union([
   CreateCommandSuccessResultSchema,
+  CreateCommandInitializedResultSchema,
   CreateCommandFailureResultSchema,
 ]);
 export type CreateCommandResult = typeof CreateCommandResultSchema.Type;

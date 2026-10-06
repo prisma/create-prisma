@@ -65,6 +65,7 @@ export type CreateTargetDirectoryKind = typeof CreateTargetDirectoryKindSchema.T
 
 export const CreateCancellationStageSchema = Schema.Literals([
   "project_name",
+  "directory_conflict",
   "template",
   "database_provider",
   "authoring_style",
@@ -73,6 +74,7 @@ export const CreateCancellationStageSchema = Schema.Literals([
   "deployment_intent",
   "authenticate",
   "select_workspace",
+  "initialize_prisma",
 ]);
 export type CreateCancellationStage = typeof CreateCancellationStageSchema.Type;
 

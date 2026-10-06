@@ -147,7 +147,9 @@ const probePackageManagerEffect = Effect.fn("PackageManager.probe")(function* (
 // directory carrying the generated project's value.
 export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(function* (
   packageManager: PackageManager,
+  projectDir?: string,
 ) {
+  if (projectDir) return yield* probePackageManagerEffect(packageManager, projectDir);
   const fs = yield* FileSystem.FileSystem;
   const probeDir = yield* fs.makeTempDirectoryScoped({ prefix: "create-prisma-" }).pipe(
     Effect.tap((directory) =>

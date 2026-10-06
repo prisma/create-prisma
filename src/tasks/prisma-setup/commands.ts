@@ -3,17 +3,48 @@ import { Effect, FileSystem } from "effect";
 import path from "node:path";
 
 import { getCreatePrismaSourceDir } from "../../templates/render-create-template";
-import type { AuthoringStyle, CreateTemplate, DatabaseProvider } from "../../types";
+import type {
+  AuthoringStyle,
+  CreateTemplate,
+  DatabaseProvider,
+  PrismaSetupCommandInput,
+} from "../../types";
+import { CreateCancellationError } from "../../create-outcome";
 import { getLocalPackageBinaryArgs } from "../../utils/package-manager";
 import { redactSecrets } from "../../utils/errors";
-import { runPrismaJsonCommandEffect } from "../prisma-cli";
+import { isPrismaCliCancellation, runPrismaJsonCommandEffect } from "../prisma-cli";
 import type { PrismaSetupContext } from "./types";
+import type { ExistingAppContext } from "../../commands/create-context";
 
 const getContractPath = (authoring: AuthoringStyle, template: CreateTemplate) =>
   `${getCreatePrismaSourceDir(template)}/contract${authoring === "typescript" ? ".ts" : ".prisma"}`;
 
 const getInitTarget = (provider: DatabaseProvider) =>
   provider === "mongo" ? ("mongodb" as const) : ("postgres" as const);
+
+export const runExistingPrismaInit = Effect.fn("PrismaSetup.initExisting")(function* (
+  context: ExistingAppContext,
+  input: PrismaSetupCommandInput,
+) {
+  return yield* runPrismaJsonCommandEffect({
+    packageManager: context.packageManager,
+    projectDir: context.targetDirectory,
+    cliPackage: "prisma@latest",
+    args: [
+      "orm",
+      "init",
+      ...(input.provider ? ["--target", getInitTarget(input.provider)] : []),
+      ...(input.authoring ? ["--authoring", input.authoring] : []),
+    ],
+    interactive: true,
+  }).pipe(
+    Effect.mapError((error) =>
+      isPrismaCliCancellation(error)
+        ? new CreateCancellationError({ stage: "initialize_prisma" })
+        : error,
+    ),
+  );
+});
 
 export const runPrismaCli = Effect.fn("PrismaSetup.runCli")(function* (
   context: PrismaSetupContext,

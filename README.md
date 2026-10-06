@@ -2,6 +2,8 @@
 
 Create a Prisma 8 app with Prisma Composer built in.
 
+Requires Node.js 22.22 or newer.
+
 ## Quick start
 
 Use your package manager:
@@ -81,9 +83,12 @@ older cached version. Prisma Compute does not support Deno deployments yet.
 - `--verbose`
 - `--json`
 
-Without `--force`, non-empty directories are left unchanged. To add Prisma to an existing app,
-use `prisma orm init`. The CLI asks for another name only when the name was entered at the
-project-name prompt. With a name argument, `--yes` or `--json`, a collision exits instead of prompting.
+Without `--force`, non-empty directories are left unchanged. Interactive runs offer to create
+an available name, choose another name, or cancel. An existing app without `prisma.config.ts`
+also offers to add Prisma through the official `prisma orm init` command. This runs ORM setup
+only, not starter generation or deployment; Prisma's own overwrite-consent prompts remain active.
+The default project name skips occupied paths. `--yes`, `--json` and non-TTY collisions still fail
+without modifying the existing directory.
 
 ### JSON output for agents and automation
 
