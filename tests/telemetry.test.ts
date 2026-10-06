@@ -161,6 +161,27 @@ describe("create telemetry", () => {
     }
   });
 
+  test("reports what a rejected non-empty directory held, and nothing more", async () => {
+    await trackCreateFailed({
+      input: createInput,
+      durationMs: 10,
+      stage: "collect_context",
+      reason: "target_directory_not_empty",
+      targetDirectoryKind: "existing_app",
+    });
+    await trackCreateFailed({
+      input: createInput,
+      durationMs: 10,
+      stage: "collect_context",
+      reason: "invalid_project_name",
+    });
+    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
+    expect(calls.map(([, properties]) => properties["target-directory-kind"])).toEqual([
+      "existing_app",
+      null,
+    ]);
+  });
+
   test("tracks stable Prisma CLI failure fields without raw output", async () => {
     await trackCreateFailed({
       input: createInput,

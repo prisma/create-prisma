@@ -77,7 +77,7 @@ older cached version. Prisma Compute does not support Deno deployments yet.
 - `--workspace <id-or-name>`
 - `--skills <agents>|none`: agents to install skill files for, comma-separated from `claude`, `cursor`, `agents`, `devin` (default: all). `--skills none` writes no `.claude/`, `.cursor/`, `.agents/`, or `.devin/` directories, no `postinstall` hook, and no `skills:sync` script, and records `skills: { agents: [] }` in `prisma.config.ts`. Interactive runs ask instead.
 - `--yes`
-- `--force`: overwrite generated starter and Prisma files in a non-empty directory. This replaces existing Prisma config, contract, and database-client files; back up edits first. A non-empty standard `migrations` path is protected: use a new directory for a fresh starter, or continue working in the existing project with the Prisma CLI. Custom migration paths are not detected.
+- `--force`: overwrite generated starter and Prisma files in a non-empty directory. Without it, `create-prisma` stops at a non-empty directory and names the next step for what it found: `prisma orm init` to add Prisma to an existing app, the Prisma CLI or `--force` for an existing Prisma project, or a different project name. Interactive runs ask for another name instead of exiting. This replaces existing Prisma config, contract, and database-client files; back up edits first. A non-empty standard `migrations` path is protected: use a new directory for a fresh starter, or continue working in the existing project with the Prisma CLI. Custom migration paths are not detected.
 - `--verbose`
 - `--json`
 
@@ -110,4 +110,4 @@ bun run build
 
 ## Telemetry
 
-Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Failure events carry only stable identifiers such as exit codes and tool error codes, never messages or command output. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.
+Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Failure events carry only stable identifiers such as exit codes and tool error codes, never messages or command output. A run rejected for a non-empty directory reports only whether that directory held an existing app, a Prisma project, or other files. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.

@@ -217,6 +217,7 @@ export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
     error: failure.cause ?? failure,
     stage: failure.stage,
     reason: failure.reason,
+    ...(failure.targetDirectoryKind ? { targetDirectoryKind: failure.targetDirectoryKind } : {}),
   });
   return createCommandFailureResult(
     failure.stage,

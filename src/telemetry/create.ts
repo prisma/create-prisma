@@ -7,6 +7,7 @@ import {
   type CreateCancellationStage,
   type CreateFailureReason,
   type CreateFailureStage,
+  type CreateTargetDirectoryKind,
 } from "../create-outcome";
 import type { CreateCommandInput } from "../types";
 import { applicationRuntime } from "../runtime";
@@ -149,6 +150,7 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
   error?: unknown;
   stage: CreateTelemetryFailureStage;
   reason: CreateFailureReason;
+  targetDirectoryKind?: CreateTargetDirectoryKind;
 }) {
   yield* trackCliTelemetryEffect(CREATE_PRISMA_NEXT_FAILED_EVENT, {
     ...getBaseCreateProperties(params.input, params.context),
@@ -156,6 +158,7 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
     "failure-class": getFailureClass(params.reason),
     "failure-stage": params.stage,
     "failure-reason": params.reason,
+    "target-directory-kind": params.targetDirectoryKind ?? null,
     "error-name": getErrorName(params.error),
     "error-code": getErrorCode(params.error),
     "child-process-failure": getChildProcessFailureProperty(params.error),
