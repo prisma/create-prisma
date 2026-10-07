@@ -228,11 +228,13 @@ describe("Composer package-manager commands", () => {
     }
   });
 
-  test("rejects a missing package manager, Yarn 1, and a probe it cannot prepare", async () => {
+  test("rejects a missing package manager, unsupported Yarn, and a probe it cannot prepare", async () => {
     const unwritable = { makeTempDirectoryScoped: () => Effect.succeed("unwritable") };
     for (const [stdout, fileSystem, reason] of [
       [undefined, undefined, "package_manager_not_found"],
       ["1.22.22\n", undefined, "unsupported_package_manager_version"],
+      ["2.4.3\n", undefined, "unsupported_package_manager_version"],
+      ["4.9.4\n", undefined, "unsupported_package_manager_version"],
       ["4.13.0\n", unwritable, "package_manager_check_failed"],
     ] as const) {
       await expect(verifyPackageManager("yarn", stdout, fileSystem).result).rejects.toMatchObject({
@@ -601,6 +603,9 @@ describe("generated templates", () => {
                 );
               } else if (packageManager === "yarn") {
                 expect(packageJson.resolutions).toEqual(effectPins);
+                expect(await readFile(path.join(projectDir, ".yarnrc.yml"), "utf8")).toBe(
+                  'nodeLinker: node-modules\nnpmPreapprovedPackages:\n  - "prisma"\n  - "@prisma/*"\n',
+                );
               } else {
                 expect(packageJson.overrides).toEqual({
                   ...effectPins,

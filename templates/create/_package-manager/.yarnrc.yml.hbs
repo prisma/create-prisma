@@ -1,4 +1,6 @@
 {{#if (eq packageManager "yarn")}}
 nodeLinker: node-modules
+npmPreapprovedPackages:
+  - "prisma"
+  - "@prisma/*"
 {{/if}}
-

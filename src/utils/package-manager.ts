@@ -62,8 +62,8 @@ const packageManagerChecks: Record<
     versionArgs: ["--version"],
     install: "Install it with Corepack (https://yarnpkg.com/corepack)",
     minimum: {
-      version: [2, 0, 0],
-      guidance: `Generated projects use ${packageManagerManifestValues.yarn}, which Yarn 1 refuses to install. Enable Corepack (https://yarnpkg.com/corepack) or install Yarn 4, then retry create-prisma, or choose another package manager with --package-manager.`,
+      version: [4, 10, 0],
+      guidance: `Generated projects use ${packageManagerManifestValues.yarn} and its release-age allowlist for Prisma packages. Enable Corepack (https://yarnpkg.com/corepack) or update Yarn, then retry create-prisma, or choose another package manager with --package-manager.`,
     },
   },
   bun: {
