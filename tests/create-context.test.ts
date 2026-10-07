@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { dependencyVersionMap } from "../src/constants/dependencies";
 import { CreateCancellationError, type CreateFailure } from "../src/create-outcome";
 import { CommandRunner } from "../src/services/command-runner";
 import { runCreateCommandEffect } from "../src/commands/create";
@@ -190,7 +191,7 @@ describe("non-empty target directory", () => {
             expect(spec.command).toBe("bunx");
             expect(spec.stdio).toEqual(["inherit", "pipe", "inherit"]);
             expect(spec.args).toEqual([
-              "prisma@latest",
+              `prisma@${dependencyVersionMap.prisma}`,
               "orm",
               "init",
               "--target",

@@ -9,6 +9,7 @@ import type {
   DatabaseProvider,
   PrismaSetupCommandInput,
 } from "../../types";
+import { PRISMA_PLATFORM_CLI_PACKAGE } from "../../constants/dependencies";
 import { CreateCancellationError } from "../../create-outcome";
 import { getLocalPackageBinaryArgs } from "../../utils/package-manager";
 import { redactSecrets } from "../../utils/errors";
@@ -26,10 +27,12 @@ export const runExistingPrismaInit = Effect.fn("PrismaSetup.initExisting")(funct
   context: ExistingAppContext,
   input: PrismaSetupCommandInput,
 ) {
+  // Run the same pinned CLI the starters use, so `bun run check:pins` and the
+  // release bump decide which Prisma version adds the ORM to an existing app.
   return yield* runPrismaJsonCommandEffect({
     packageManager: context.packageManager,
     projectDir: context.targetDirectory,
-    cliPackage: "prisma@latest",
+    cliPackage: PRISMA_PLATFORM_CLI_PACKAGE,
     args: [
       "orm",
       "init",
