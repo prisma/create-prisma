@@ -11,7 +11,7 @@ describe("Prisma 8 dependency versions", () => {
     expect(getDependencyVersion("prisma")).toBe("8.0.0-rc.21");
     expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.78");
     expect(getDependencyVersion("effect")).toBe("4.0.0-rc.115");
-    expect(getDependencyVersion("turbo")).toBe("2.10.12");
+    expect(getDependencyVersion("turbo")).toBe("2.11.7");
   });
 
   test("pins the Prisma CLI to an exact version, not a tag or a range", () => {

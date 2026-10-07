@@ -1,6 +1,9 @@
 {
   "name": "{{projectName}}",
   "type": "module",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
   "private": true,
   "version": "0.0.1",
   {{#if (packageManagerManifestValue packageManager)}}
@@ -15,15 +18,15 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
-    "nuxt": "^4.3.1",
-    "vue": "^3.5.29",
-    "vue-router": "^4.6.4"
+    "nuxt": "^4.6.0",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "tsx": "^4.7.1",
-    "typescript": "^5.9.3",
-    "vite": "^8.1.2",
-    "vue-tsc": "^3.3.9"
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.3",
+    "vue-tsc": "^3.3.12"
   }
 }

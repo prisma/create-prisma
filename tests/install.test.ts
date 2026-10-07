@@ -212,10 +212,10 @@ describe("Composer package-manager commands", () => {
 
   test("probes the selected package manager once in a generated project manifest", async () => {
     for (const [manager, args, stdout, packageManager] of [
-      ["npm", ["--version"], "11.6.0\n", "npm@11.6.0"],
-      ["pnpm", ["--version"], "11.0.0-rc.1\n", "pnpm@11.21.0"],
-      ["yarn", ["--version"], "4.13.0\n", "yarn@4.13.0"],
-      ["bun", ["--version"], "1.4.1\n", "bun@1.4.1"],
+      ["npm", ["--version"], "12.2.0\n", "npm@12.2.0"],
+      ["pnpm", ["--version"], "11.28.5\n", "pnpm@11.28.5"],
+      ["yarn", ["--version"], "4.18.1\n", "yarn@4.18.1"],
+      ["bun", ["--version"], "1.4.2\n", "bun@1.4.2"],
       ["deno", ["-V"], "deno 2.9.4\n", undefined],
     ] as const) {
       const { result, probes } = verifyPackageManager(manager, stdout);
@@ -355,7 +355,7 @@ describe("generated templates", () => {
               );
               expect(packageJson.dependencies?.["@prisma/dev"]).toBeUndefined();
               if (packageManager === "bun") {
-                expect(packageJson.packageManager).toBe("bun@1.4.1");
+                expect(packageJson.packageManager).toBe("bun@1.4.2");
               }
               const prismaSourceRelative =
                 template === "turborepo" ? "packages/database/src" : "src/prisma";
@@ -480,7 +480,7 @@ describe("generated templates", () => {
                 expect(await pathExists(path.join(projectDir, "src/prisma"))).toBe(false);
               }
               if (tsdownTemplates.has(template)) {
-                expect(packageJson.engines?.node).toBe("^22.18.0 || >=24.11.0");
+                expect(packageJson.engines?.node).toBe("^22.18.0 || ^24.11.0 || >=26.0.0");
                 expect(packageJson.scripts?.build).toBe("tsdown");
                 expect(packageJson.devDependencies).toHaveProperty("tsdown");
                 expect(packageJson.devDependencies).not.toHaveProperty("esbuild");

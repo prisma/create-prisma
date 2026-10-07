@@ -24,10 +24,10 @@ type RuntimeScriptOptions = {
 const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
 
 const packageManagerManifestValues = {
-  npm: "npm@11.6.0",
-  pnpm: "pnpm@11.21.0",
-  yarn: "yarn@4.13.0",
-  bun: "bun@1.4.1",
+  npm: "npm@12.2.0",
+  pnpm: "pnpm@11.28.5",
+  yarn: "yarn@4.18.1",
+  bun: "bun@1.4.2",
 } as const;
 
 type PackageManagerVersion = readonly [major: number, minor: number, patch: number];

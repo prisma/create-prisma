@@ -6,7 +6,7 @@
   {{/if}}
   "type": "module",
   "engines": {
-    "node": "^22.18.0 || >=24.11.0"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -14,11 +14,11 @@
     "start": "node dist/server.mjs"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.48",
-    "elysia": "^1.4.28",
+    "@sinclair/typebox": "^0.34.52",
+    "elysia": "^1.4.30",
     "openapi-types": "^12.1.3"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }
