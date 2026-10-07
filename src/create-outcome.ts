@@ -55,8 +55,17 @@ export const CreateFailureReasonSchema = Schema.Literals([
 ]);
 export type CreateFailureReason = typeof CreateFailureReasonSchema.Type;
 
+// What a non-empty target directory already holds, so the rejection can name the right next step.
+export const CreateTargetDirectoryKindSchema = Schema.Literals([
+  "existing_app",
+  "prisma_project",
+  "other",
+]);
+export type CreateTargetDirectoryKind = typeof CreateTargetDirectoryKindSchema.Type;
+
 export const CreateCancellationStageSchema = Schema.Literals([
   "project_name",
+  "directory_conflict",
   "template",
   "database_provider",
   "authoring_style",
@@ -65,6 +74,7 @@ export const CreateCancellationStageSchema = Schema.Literals([
   "deployment_intent",
   "authenticate",
   "select_workspace",
+  "initialize_prisma",
 ]);
 export type CreateCancellationStage = typeof CreateCancellationStageSchema.Type;
 
@@ -86,6 +96,7 @@ export class CreateFailure extends Schema.TaggedError<CreateFailure>()("CreateFa
   message: Schema.String,
   cause: Schema.optionalKey(Schema.Defect()),
   errorReported: Schema.optionalKey(Schema.Boolean),
+  targetDirectoryKind: Schema.optionalKey(CreateTargetDirectoryKindSchema),
 }) {}
 
 const STRUCTURED_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]*(\.[A-Z0-9_]+)+$/;

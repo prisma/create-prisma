@@ -1,24 +1,26 @@
 import { Effect, Schema } from "effect";
 
 import { PrismaCliCommandError } from "../create-outcome";
-import { CommandRunner } from "../services/command-runner";
+import { CommandExecutionError, CommandRunner } from "../services/command-runner";
 import type { PackageManager } from "../types";
 import { getErrorMessage, redactSecrets } from "../utils/errors";
-import { getLocalPackageBinaryArgs } from "../utils/package-manager";
+import { getLocalPackageBinaryArgs, getPackageExecutionArgs } from "../utils/package-manager";
+
+const PrismaCliDiagnosticSchema = Schema.Struct({
+  code: Schema.optionalKey(Schema.String),
+  summary: Schema.optionalKey(Schema.String),
+  message: Schema.optionalKey(Schema.String),
+  why: Schema.optionalKey(Schema.String),
+  severity: Schema.optionalKey(Schema.Literals(["error", "warn", "info"])),
+});
 
 const PrismaCliEnvelopeSchema = Schema.Struct({
   ok: Schema.Boolean,
   command: Schema.optionalKey(Schema.String),
   commandId: Schema.optionalKey(Schema.String),
   result: Schema.optionalKey(Schema.Unknown),
-  error: Schema.optionalKey(
-    Schema.Struct({
-      code: Schema.optionalKey(Schema.String),
-      summary: Schema.optionalKey(Schema.String),
-      message: Schema.optionalKey(Schema.String),
-      why: Schema.optionalKey(Schema.String),
-    }),
-  ),
+  error: Schema.optionalKey(PrismaCliDiagnosticSchema),
+  diagnostics: Schema.optionalKey(Schema.Array(PrismaCliDiagnosticSchema)),
 });
 type PrismaCliEnvelope = typeof PrismaCliEnvelopeSchema.Type;
 const decodePrismaCliEnvelope = Schema.decodeUnknownExit(PrismaCliEnvelopeSchema);
@@ -50,13 +52,13 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
   env?: NodeJS.ProcessEnv;
   onStderrLine?: (line: string) => void;
   interactive?: boolean;
+  cliPackage?: string;
 }) {
   const runner = yield* CommandRunner;
-  const invocation = getLocalPackageBinaryArgs(options.packageManager, "prisma", [
-    ...options.args,
-    "--json",
-    ...(options.interactive ? [] : ["--no-interactive"]),
-  ]);
+  const args = [...options.args, "--json", ...(options.interactive ? [] : ["--no-interactive"])];
+  const invocation = options.cliPackage
+    ? getPackageExecutionArgs(options.packageManager, [options.cliPackage, ...args])
+    : getLocalPackageBinaryArgs(options.packageManager, "prisma", args);
   const result = yield* runner.run({
     command: invocation.command,
     args: invocation.args,
@@ -80,17 +82,19 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
   }
 
   if (result.exitCode !== 0 || !envelope.ok || envelope.result === undefined) {
-    const summary = envelope.error?.summary ?? envelope.error?.message;
+    const failure =
+      envelope.error ?? envelope.diagnostics?.find((diagnostic) => diagnostic.severity === "error");
+    const summary = failure?.summary ?? failure?.message;
     return yield* new PrismaCliCommandError({
       message: redactSecrets(
-        [summary, envelope.error?.why].filter(Boolean).join(": ") ||
+        [summary, failure?.why].filter(Boolean).join(": ") ||
           result.stderr.trim() ||
           "Prisma CLI command failed.",
       ),
       ...(envelope.commandId || envelope.command
         ? { command: envelope.commandId ?? envelope.command }
         : {}),
-      ...(envelope.error?.code ? { code: envelope.error.code } : {}),
+      ...(failure?.code ? { code: failure.code } : {}),
       stderr: redactSecrets(result.stderr),
       exitCode: result.exitCode,
       childProcessFailure: result.childProcessFailure,
@@ -98,6 +102,22 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
   }
   return envelope.result;
 });
+
+export function isPrismaCliCancellation(error: unknown): boolean {
+  if (!(error instanceof PrismaCliCommandError || error instanceof CommandExecutionError))
+    return false;
+  return (
+    error.childProcessFailure === "interrupted" ||
+    error.childProcessFailure === "cancelled" ||
+    (error instanceof PrismaCliCommandError &&
+      [
+        "AUTH.LOGIN_DENIED",
+        "CLI.PROMPT_CANCELLED",
+        "CLI.ABORTED",
+        "CLI.INIT_USER_ABORTED",
+      ].includes(error.code ?? ""))
+  );
+}
 
 export const decodePrismaCommandResult = <A>(schema: Schema.Codec<A>, value: unknown) =>
   Schema.decodeUnknownEffect(schema)(value).pipe(

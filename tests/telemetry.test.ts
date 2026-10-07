@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { CreatePromptContext } from "../src/commands/create";
+import type { CreatePromptContext, ExistingAppContext } from "../src/commands/create";
 import type { CreateCommandInput } from "../src/types";
 import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
 import { runComposerDeployEffect } from "../src/tasks/composer/deploy-report";
@@ -28,6 +28,9 @@ const {
   CREATE_PRISMA_NEXT_CANCELLED_EVENT,
   CREATE_PRISMA_NEXT_COMPLETED_EVENT,
   CREATE_PRISMA_NEXT_FAILED_EVENT,
+  PRISMA_INIT_COMPLETED_EVENT,
+  PRISMA_INIT_FAILED_EVENT,
+  PRISMA_INIT_CANCELLED_EVENT,
   trackCreateCancelled,
   trackCreateCompleted,
   trackCreateFailed,
@@ -89,6 +92,41 @@ async function trackFailure(error: unknown, stage: "install_dependencies" | "com
 }
 
 describe("create telemetry", () => {
+  test("keeps ORM initialization outcomes separate from starter and deployment metrics", async () => {
+    const context: ExistingAppContext = {
+      operation: "orm_init",
+      targetDirectory: "/tmp/existing",
+      targetPathState: { exists: true, isDirectory: true, isEmptyDirectory: false },
+      projectPackageName: "existing",
+      packageManager: "bun",
+    };
+    const input = { ...createInput, template: "next" as const, deploy: true };
+    await trackCreateCompleted({ input, context, durationMs: 1 });
+    await trackCreateFailed({
+      input,
+      context,
+      durationMs: 1,
+      stage: "initialize_prisma",
+      reason: "prisma_init_failed",
+    });
+    await trackCreateCancelled({ input, context, durationMs: 1, stage: "initialize_prisma" });
+    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
+    expect(calls.map(([event]) => event)).toEqual([
+      PRISMA_INIT_COMPLETED_EVENT,
+      PRISMA_INIT_FAILED_EVENT,
+      PRISMA_INIT_CANCELLED_EVENT,
+    ]);
+    for (const [, properties] of calls) {
+      expect(properties).toMatchObject({
+        operation: "orm_init",
+        template: null,
+        "should-deploy": false,
+        "agent-skills": null,
+      });
+      expect(JSON.stringify(properties)).not.toContain("/tmp/existing");
+    }
+  });
+
   test("tracks Composer deployment intent on completion", async () => {
     await trackCreateCompleted({ input: createInput, context: createContext, durationMs: 123 });
     expect(trackCliTelemetry).toHaveBeenCalledWith(
@@ -159,6 +197,27 @@ describe("create telemetry", () => {
     for (const [, properties] of calls) {
       expect(properties["failure-class"]).toBe("expected_rejection");
     }
+  });
+
+  test("reports what a rejected non-empty directory held, and nothing more", async () => {
+    await trackCreateFailed({
+      input: createInput,
+      durationMs: 10,
+      stage: "collect_context",
+      reason: "target_directory_not_empty",
+      targetDirectoryKind: "existing_app",
+    });
+    await trackCreateFailed({
+      input: createInput,
+      durationMs: 10,
+      stage: "collect_context",
+      reason: "invalid_project_name",
+    });
+    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
+    expect(calls.map(([, properties]) => properties["target-directory-kind"])).toEqual([
+      "existing_app",
+      null,
+    ]);
   });
 
   test("tracks stable Prisma CLI failure fields without raw output", async () => {

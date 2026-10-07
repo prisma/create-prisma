@@ -2,6 +2,8 @@
 
 Create a Prisma 8 app with Prisma Composer built in.
 
+Requires Node.js 22.22 or newer.
+
 ## Quick start
 
 Use your package manager:
@@ -81,6 +83,13 @@ older cached version. Prisma Compute does not support Deno deployments yet.
 - `--verbose`
 - `--json`
 
+Without `--force`, non-empty directories are left unchanged. Interactive runs offer to create
+an available name, choose another name, or cancel. An existing app without `prisma.config.ts`
+also offers to add Prisma through the official `prisma orm init` command. This runs ORM setup
+only, not starter generation or deployment; Prisma's own overwrite-consent prompts remain active.
+The default project name skips occupied paths. `--yes`, `--json` and non-TTY collisions still fail
+without modifying the existing directory.
+
 ### JSON output for agents and automation
 
 Use `--json` when another program is driving `create-prisma`:
@@ -110,4 +119,4 @@ bun run build
 
 ## Telemetry
 
-Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Failure events carry only stable identifiers such as exit codes and tool error codes, never messages or command output. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.
+Published builds may send anonymous usage telemetry. It never includes project names, file paths, or database URLs. Failure events carry only stable identifiers such as exit codes and tool error codes, never messages or command output. A run rejected for a non-empty directory reports only whether that directory held an existing app, a Prisma project, or other files. Disable it with `DO_NOT_TRACK`, `CREATE_PRISMA_DISABLE_TELEMETRY`, or `CREATE_PRISMA_TELEMETRY_DISABLED`.
