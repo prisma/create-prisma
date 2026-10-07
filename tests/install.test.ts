@@ -553,7 +553,7 @@ describe("generated templates", () => {
                 }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');
-                expect(prismaConfig).toContain("connection: process.env.MONGODB_URL!");
+                expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {

@@ -10,7 +10,7 @@ export default definePrismaConfig({
     output: "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/generated",
 {{/if}}
     db: {
-      connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
+      connection: process.env.DATABASE_URL!,
     },
   }),
 });
@@ -34,7 +34,7 @@ export default definePrismaConfig({
     output: "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/generated",
 {{/if}}
     db: {
-      connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
+      connection: process.env.DATABASE_URL!,
     },
   }),
   composer: composer({
