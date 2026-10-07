@@ -569,6 +569,16 @@ describe("generated templates", () => {
               }
               expect(await pathExists(path.join(projectDir, "prisma-next.config.ts"))).toBe(false);
               expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(false);
+              if (template === "nuxt" || template === "svelte" || template === "tanstack-start") {
+                const pagePath =
+                  template === "nuxt"
+                    ? "app/pages/index.vue"
+                    : template === "svelte"
+                      ? "src/routes/+page.svelte"
+                      : "src/routes/index.tsx";
+                const pageSource = await readFile(path.join(projectDir, pagePath), "utf8");
+                expect(pageSource).toMatch(/timeZone: ["']UTC["']/);
+              }
               if (packageManager === "pnpm") {
                 expect(packageJson.pnpm).toBeUndefined();
                 const frameworkBuildAllowances =

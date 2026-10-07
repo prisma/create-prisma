@@ -19,6 +19,7 @@ type UsersPayload = {
 const formatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: "UTC",
 });
 
 const { data } = await useFetch<UsersPayload>("/api/users");
