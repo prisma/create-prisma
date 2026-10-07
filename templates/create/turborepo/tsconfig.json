@@ -11,12 +11,6 @@
     "strict": true,
     "types": ["node"]
   },
-  "include": [
-    "module.ts",
-    "service.ts",
-    "prisma.config.ts",
-    "prisma-composer.config.ts",
-    "packages/**/*.ts"
-  ],
+  "include": ["module.ts", "service.ts", "prisma.config.ts", "packages/**/*.ts"],
   "exclude": ["node_modules"]
 }

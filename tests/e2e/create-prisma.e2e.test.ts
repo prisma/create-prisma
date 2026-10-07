@@ -589,11 +589,12 @@ describe("create-prisma e2e", () => {
     async (_label, template) => {
       const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-next-typescript-e2e-"));
       tempRoots.push(rootDir);
+      const appName = `typescript-app-${path.basename(rootDir).slice(-6).toLowerCase()}`;
       const previousCwd = process.cwd();
       process.chdir(rootDir);
       try {
         await runCreateCommand({
-          name: "next-typescript-app",
+          name: appName,
           template,
           provider: "postgres",
           authoring: "typescript",
@@ -605,7 +606,7 @@ describe("create-prisma e2e", () => {
         process.chdir(previousCwd);
       }
 
-      const projectDir = path.join(rootDir, "next-typescript-app");
+      const projectDir = path.join(rootDir, appName);
       const prismaSourceDir = template === "turborepo" ? "packages/database/src" : "src/prisma";
       const composerSource = await readFile(
         path.join(projectDir, prismaSourceDir, "composer.ts"),

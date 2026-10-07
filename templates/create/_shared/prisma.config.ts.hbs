@@ -17,6 +17,12 @@ export default definePrismaConfig({
 {{else}}
 import { definePrismaConfig } from "prisma/config";
 import { defineConfig as ormConfig } from "@prisma/orm-{{#if (eq provider "postgres")}}postgres{{else}}mongo{{/if}}/config";
+import { defineConfig as composer } from "@prisma/composer/config";
+import { nodeBuild } from "@prisma/composer/node/control";
+{{#if (eq template "next")}}
+import { nextjsBuild } from "@prisma/composer/nextjs/control";
+{{/if}}
+import { prismaCloud, prismaState } from "@prisma/composer-prisma-cloud/control";
 
 export default definePrismaConfig({
   skills: {
@@ -31,8 +37,9 @@ export default definePrismaConfig({
       connection: process.env.{{#if (eq provider "postgres")}}DATABASE_URL{{else}}MONGODB_URL{{/if}}!,
     },
   }),
-  composer: {
-    configPath: "./prisma-composer.config.ts",
-  },
+  composer: composer({
+    extensions: [prismaCloud({ region: "us-east-1" }), nodeBuild(){{#if (eq template "next")}}, nextjsBuild(){{/if}}],
+    state: prismaState(),
+  }),
 });
 {{/if}}

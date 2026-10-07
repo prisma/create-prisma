@@ -406,10 +406,14 @@ describe("generated templates", () => {
               expect(prismaConfig).toContain("orm: ormConfig({");
               expect(prismaConfig).toContain('import { definePrismaConfig } from "prisma/config"');
               expect(prismaConfig).toContain('agents: ["claude", "cursor", "agents", "devin"]');
-              expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
-              expect(
-                await readFile(path.join(projectDir, "prisma-composer.config.ts"), "utf8"),
-              ).toContain('prismaCloud({ region: "us-east-1" })');
+              expect(prismaConfig).toContain("composer: composer({");
+              expect(prismaConfig).toContain('prismaCloud({ region: "us-east-1" })');
+              expect(prismaConfig).toContain("state: prismaState()");
+              expect(prismaConfig).not.toContain("configPath:");
+              expect(await pathExists(path.join(projectDir, "prisma-composer.config.ts"))).toBe(
+                false,
+              );
+              expect(prismaConfig.includes("nextjsBuild()")).toBe(template === "next");
               expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");

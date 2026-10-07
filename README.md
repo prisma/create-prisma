@@ -34,7 +34,7 @@ Deploy to Prisma now?
 
 Choose no to deploy later with the generated `deploy` script.
 
-New apps explicitly use `us-east-1` in `prisma-composer.config.ts`. Change the
+New apps explicitly use `us-east-1` in the Composer section of `prisma.config.ts`. Change the
 `prismaCloud({ region })` option before deploying if you need another region.
 Composer requires a region when creating a new project; leaving it unspecified
 only works when deploying into an existing project whose region can be inherited.
