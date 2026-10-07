@@ -23,8 +23,7 @@ export const dependencyVersionMap = {
   // Must match the @prisma/composer-cli version this prisma release depends on.
   // `bun run check:pins` verifies that against the Composer pins above.
   prisma: "8.0.0-rc.21",
-  // The ORM runtime's timestamp columns need a global Temporal, which no
-  // stable Node or Bun ships yet.
+  // Node 22 needs a global Temporal for the ORM runtime's timestamp columns.
   "temporal-polyfill": "^1.0.5",
   tsdown: "^0.23.0",
   turbo: "2.11.7",

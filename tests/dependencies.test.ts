@@ -12,6 +12,7 @@ describe("Prisma 8 dependency versions", () => {
     expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.78");
     expect(getDependencyVersion("effect")).toBe("4.0.0-rc.115");
     expect(getDependencyVersion("turbo")).toBe("2.11.7");
+    expect(getDependencyVersion("typescript")).toBe("^6.0.3");
   });
 
   test("pins the Prisma CLI to an exact version, not a tag or a range", () => {
