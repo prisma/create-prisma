@@ -41,7 +41,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.18.0"
+          node-version: "22.22.0"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -82,7 +82,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.18.0"
+          node-version: "22.22.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Compute preview metadata
@@ -106,7 +106,7 @@ jobs:
 
       - name: Ensure npm version for trusted publishing
         run: |
-          npm install -g npm@11.5.1
+          npm install -g npm@11.6.0
           echo "Node: $(node --version)"
           echo "npm: $(npm --version)"
 
@@ -147,6 +147,9 @@ jobs:
         env:
           CREATE_PRISMA_TELEMETRY_API_KEY: ${{ steps.preview.outputs.publish_next == 'true' && secrets.CREATE_PRISMA_TELEMETRY_API_KEY || '' }}
           CREATE_PRISMA_TELEMETRY_HOST: ${{ steps.preview.outputs.publish_next == 'true' && vars.CREATE_PRISMA_TELEMETRY_HOST || '' }}
+
+      - name: Test packed CLI on the minimum Node version
+        run: node scripts/smoke-node.mjs
 
       - name: Publish to npm
         run: npm publish --access public --tag "${{ steps.preview.outputs.dist_tag }}"
@@ -248,7 +251,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.18.0"
+          node-version: "22.22.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Extract version from commit message
@@ -288,7 +291,7 @@ jobs:
       - name: Ensure npm version for trusted publishing
         if: steps.check-version.outputs.exists == 'false'
         run: |
-          npm install -g npm@11.5.1
+          npm install -g npm@11.6.0
           echo "Node: $(node --version)"
           echo "npm: $(npm --version)"
 
@@ -321,6 +324,10 @@ jobs:
       - name: Build
         if: steps.check-version.outputs.exists == 'false'
         run: bun run build
+
+      - name: Test packed CLI on the minimum Node version
+        if: steps.check-version.outputs.exists == 'false'
+        run: node scripts/smoke-node.mjs
 
       - name: Publish to npm
         if: steps.check-version.outputs.exists == 'false'
