@@ -6,6 +6,10 @@
 	"packageManager": "{{packageManagerManifestValue packageManager}}",
 	{{/if}}
 	"type": "module",
+	"imports": {
+		"#lib": "./src/lib/index.ts",
+		"#lib/*": "./src/lib/*"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
@@ -15,13 +19,13 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"devDependencies": {
-		"@sveltejs/kit": "^2.50.2",
-		"@sveltejs/vite-plugin-svelte": "^7.3.0",
-		"@types/node": "^24.3.0",
-		"svelte": "^5.51.0",
-		"svelte-check": "^4.4.2",
-		"tsx": "^4.7.1",
-		"typescript": "^5.9.3",
-		"vite": "^8.1.2"
+		"@sveltejs/kit": "^3.0.1",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"@types/node": "^26.6.4",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.7.6",
+		"tsx": "^4.23.15",
+		"typescript": "^6.0.3",
+		"vite": "^8.3.3"
 	}
 }

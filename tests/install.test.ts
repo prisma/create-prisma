@@ -212,10 +212,10 @@ describe("Composer package-manager commands", () => {
 
   test("probes the selected package manager once in a generated project manifest", async () => {
     for (const [manager, args, stdout, packageManager] of [
-      ["npm", ["--version"], "11.6.0\n", "npm@11.6.0"],
-      ["pnpm", ["--version"], "11.0.0-rc.1\n", "pnpm@11.21.0"],
-      ["yarn", ["--version"], "4.13.0\n", "yarn@4.13.0"],
-      ["bun", ["--version"], "1.4.1\n", "bun@1.4.1"],
+      ["npm", ["--version"], "12.2.0\n", "npm@12.2.0"],
+      ["pnpm", ["--version"], "11.28.5\n", "pnpm@11.28.5"],
+      ["yarn", ["--version"], "4.18.1\n", "yarn@4.18.1"],
+      ["bun", ["--version"], "1.4.2\n", "bun@1.4.2"],
       ["deno", ["-V"], "deno 2.9.4\n", undefined],
     ] as const) {
       const { result, probes } = verifyPackageManager(manager, stdout);
@@ -228,11 +228,13 @@ describe("Composer package-manager commands", () => {
     }
   });
 
-  test("rejects a missing package manager, Yarn 1, and a probe it cannot prepare", async () => {
+  test("rejects a missing package manager, unsupported Yarn, and a probe it cannot prepare", async () => {
     const unwritable = { makeTempDirectoryScoped: () => Effect.succeed("unwritable") };
     for (const [stdout, fileSystem, reason] of [
       [undefined, undefined, "package_manager_not_found"],
       ["1.22.22\n", undefined, "unsupported_package_manager_version"],
+      ["2.4.3\n", undefined, "unsupported_package_manager_version"],
+      ["4.9.4\n", undefined, "unsupported_package_manager_version"],
       ["4.13.0\n", unwritable, "package_manager_check_failed"],
     ] as const) {
       await expect(verifyPackageManager("yarn", stdout, fileSystem).result).rejects.toMatchObject({
@@ -353,7 +355,7 @@ describe("generated templates", () => {
               );
               expect(packageJson.dependencies?.["@prisma/dev"]).toBeUndefined();
               if (packageManager === "bun") {
-                expect(packageJson.packageManager).toBe("bun@1.4.1");
+                expect(packageJson.packageManager).toBe("bun@1.4.2");
               }
               const prismaSourceRelative =
                 template === "turborepo" ? "packages/database/src" : "src/prisma";
@@ -406,10 +408,14 @@ describe("generated templates", () => {
               expect(prismaConfig).toContain("orm: ormConfig({");
               expect(prismaConfig).toContain('import { definePrismaConfig } from "prisma/config"');
               expect(prismaConfig).toContain('agents: ["claude", "cursor", "agents", "devin"]');
-              expect(prismaConfig).toContain('configPath: "./prisma-composer.config.ts"');
-              expect(
-                await readFile(path.join(projectDir, "prisma-composer.config.ts"), "utf8"),
-              ).toContain('prismaCloud({ region: "us-east-1" })');
+              expect(prismaConfig).toContain("composer: composer({");
+              expect(prismaConfig).toContain('prismaCloud({ region: "us-east-1" })');
+              expect(prismaConfig).toContain("state: prismaState()");
+              expect(prismaConfig).not.toContain("configPath:");
+              expect(await pathExists(path.join(projectDir, "prisma-composer.config.ts"))).toBe(
+                false,
+              );
+              expect(prismaConfig.includes("nextjsBuild()")).toBe(template === "next");
               expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
               expect(dbSource).toContain("export function connectDatabase()");
@@ -474,7 +480,7 @@ describe("generated templates", () => {
                 expect(await pathExists(path.join(projectDir, "src/prisma"))).toBe(false);
               }
               if (tsdownTemplates.has(template)) {
-                expect(packageJson.engines?.node).toBe("^22.18.0 || >=24.11.0");
+                expect(packageJson.engines?.node).toBe("^22.18.0 || ^24.11.0 || >=26.0.0");
                 expect(packageJson.scripts?.build).toBe("tsdown");
                 expect(packageJson.devDependencies).toHaveProperty("tsdown");
                 expect(packageJson.devDependencies).not.toHaveProperty("esbuild");
@@ -547,7 +553,7 @@ describe("generated templates", () => {
                 }
               } else {
                 expect(moduleSource).toContain('envSecret("MONGODB_URL")');
-                expect(prismaConfig).toContain("connection: process.env.MONGODB_URL!");
+                expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).not.toContain(".prisma-composer");
               }
               if (authoring === "typescript") {
@@ -563,6 +569,16 @@ describe("generated templates", () => {
               }
               expect(await pathExists(path.join(projectDir, "prisma-next.config.ts"))).toBe(false);
               expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(false);
+              if (template === "nuxt" || template === "svelte" || template === "tanstack-start") {
+                const pagePath =
+                  template === "nuxt"
+                    ? "app/pages/index.vue"
+                    : template === "svelte"
+                      ? "src/routes/+page.svelte"
+                      : "src/routes/index.tsx";
+                const pageSource = await readFile(path.join(projectDir, pagePath), "utf8");
+                expect(pageSource).toMatch(/timeZone: ["']UTC["']/);
+              }
               if (packageManager === "pnpm") {
                 expect(packageJson.pnpm).toBeUndefined();
                 const frameworkBuildAllowances =
@@ -597,6 +613,9 @@ describe("generated templates", () => {
                 );
               } else if (packageManager === "yarn") {
                 expect(packageJson.resolutions).toEqual(effectPins);
+                expect(await readFile(path.join(projectDir, ".yarnrc.yml"), "utf8")).toBe(
+                  'nodeLinker: node-modules\nnpmPreapprovedPackages:\n  - "prisma"\n  - "@prisma/*"\n',
+                );
               } else {
                 expect(packageJson.overrides).toEqual({
                   ...effectPins,

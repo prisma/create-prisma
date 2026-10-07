@@ -1,35 +1,34 @@
 import type { CreateTemplate, PackageManager } from "../types";
 
 export const dependencyVersionMap = {
-  "@astrojs/node": "^10.0.2",
-  "@elysiajs/node": "^1.4.5",
-  "@prisma/composer": "0.25.0",
-  "@prisma/composer-prisma-cloud": "0.25.0",
+  "@astrojs/node": "^11.1.7",
+  "@elysia/node": "^1.4.6",
+  "@prisma/composer": "0.28.0",
+  "@prisma/composer-prisma-cloud": "0.28.0",
   "@prisma/dev": "0.25.2",
-  "@prisma/orm-mongo": "8.0.0-rc.13",
+  "@prisma/orm-mongo": "8.0.0-rc.16",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency, even when
   // prisma bundles a newer @prisma/orm-toolchain, or npm install fails with
   // ERESOLVE.
-  "@prisma/orm-postgres": "8.0.0-rc.13",
-  "@sveltejs/adapter-node": "^5.3.2",
-  "@types/node": "^25.6.2",
+  "@prisma/orm-postgres": "8.0.0-rc.16",
+  "@sveltejs/adapter-node": "^6.0.0",
+  "@types/node": "^26.6.4",
   alchemy: "2.0.0-beta.78",
-  arktype: "^2.2.3",
-  dotenv: "^17.4.2",
+  arktype: "^2.2.7",
+  dotenv: "^18.0.6",
   effect: "4.0.0-rc.115",
-  mongodb: "^7.1.0",
-  "mongodb-memory-server": "^11.1.0",
-  nitro: "^3.0.260610-beta",
+  mongodb: "^7.7.0",
+  "mongodb-memory-server": "^11.3.0",
+  nitro: "^3.0.260903-beta",
   // Must match the @prisma/composer-cli version this prisma release depends on.
   // `bun run check:pins` verifies that against the Composer pins above.
-  prisma: "8.0.0-rc.19",
-  // The ORM runtime's timestamp columns need a global Temporal, which no
-  // stable Node or Bun ships yet.
-  "temporal-polyfill": "^1.0.4",
-  tsdown: "^0.22.14",
-  turbo: "2.10.12",
-  tsx: "^4.21.0",
-  typescript: "^5.9.3",
+  prisma: "8.0.0-rc.21",
+  // Node 22 needs a global Temporal for the ORM runtime's timestamp columns.
+  "temporal-polyfill": "^1.0.5",
+  tsdown: "^0.23.0",
+  turbo: "2.11.7",
+  tsx: "^4.23.15",
+  typescript: "^6.0.3",
 } as const;
 
 // Pinned to the effect version as a set: @effect/* siblings depend on each other with
@@ -84,7 +83,7 @@ export function getCreateTemplateDependencies(
     devDependencies.push("typescript");
   }
   if (template === "elysia") {
-    dependencies.push("@elysiajs/node");
+    dependencies.push("@elysia/node");
     devDependencies.push("@types/node");
   }
   if (template === "svelte") {
