@@ -55,8 +55,7 @@
     "@effect/platform-node-shared": "4.0.1",
     "effect": "4.0.1",
     "execa": "^10.0.1",
-    "handlebars": "^4.7.10",
-    "posthog-node": "^5.55.0"
+    "handlebars": "^4.7.10"
   },
   "devDependencies": {
     "@prisma/dev": "0.25.2",
