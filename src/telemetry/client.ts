@@ -2,7 +2,6 @@ import { Effect, FileSystem, Schema } from "effect";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { PostHog } from "posthog-node";
 
 import { applicationRuntime } from "../runtime";
 
@@ -85,55 +84,38 @@ const sanitizeProperties = (properties: TelemetryProperties) =>
     Object.entries(properties).filter(([, value]) => value !== undefined),
   ) as Record<string, Exclude<TelemetryValue, undefined>>;
 
-export const shutdownTelemetryClientEffect = (
-  client: Pick<PostHog, "shutdown">,
-  timeoutMs = TELEMETRY_TIMEOUT_MS,
-) =>
-  Effect.tryPromise({
-    try: () => Promise.resolve(client.shutdown(timeoutMs)),
-    catch: () => undefined,
-  }).pipe(
-    Effect.timeout(timeoutMs),
-    Effect.interruptible,
-    Effect.catch(() => Effect.void),
-  );
-
 export const trackCliTelemetryEffect = Effect.fn("Telemetry.track")(function* (
   event: string,
   properties: TelemetryProperties,
 ) {
   if (shouldDisableTelemetry()) return;
   const distinctId = yield* getAnonymousIdEffect();
-  const client = yield* Effect.acquireRelease(
-    Effect.sync(
-      () =>
-        new PostHog(TELEMETRY_API_KEY, {
-          host: TELEMETRY_HOST,
-          disableGeoip: true,
-          flushAt: 1,
-          flushInterval: 0,
+  yield* Effect.tryPromise(async (signal) => {
+    const response = await fetch(new URL("/i/v0/e/", TELEMETRY_HOST), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      redirect: "error",
+      body: JSON.stringify({
+        api_key: TELEMETRY_API_KEY,
+        distinct_id: distinctId,
+        event,
+        properties: sanitizeProperties({
+          ...getCommonProperties(),
+          ...properties,
+          $process_person_profile: false,
+          $geoip_disable: true,
         }),
-    ),
-    (posthog) => shutdownTelemetryClientEffect(posthog),
-  );
-  yield* Effect.tryPromise(() =>
-    client.captureImmediate({
-      distinctId,
-      event,
-      properties: sanitizeProperties({
-        ...getCommonProperties(),
-        ...properties,
-        $process_person_profile: false,
+        timestamp: new Date().toISOString(),
       }),
-      disableGeoip: true,
-    }),
-  );
+      signal,
+    });
+    await response.body?.cancel();
+  });
 });
 
 export function trackCliTelemetry(event: string, properties: TelemetryProperties): Promise<void> {
   return applicationRuntime.runPromise(
     trackCliTelemetryEffect(event, properties).pipe(
-      Effect.scoped,
       Effect.timeout(TELEMETRY_TIMEOUT_MS),
       Effect.catch(() => Effect.void),
     ),

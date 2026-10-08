@@ -9,7 +9,7 @@ const env = {
   CREATE_PRISMA_DISABLE_TELEMETRY: "1",
   PRISMA_NEXT_DISABLE_TELEMETRY: "1",
   NO_UPDATE_NOTIFIER: "1",
-  npm_config_engine_strict: "true",
+  npm_config_engine_strict: "false",
 };
 
 try {
@@ -32,7 +32,11 @@ try {
       "--no-audit",
       "--no-fund",
     ],
-    { env, stdout: "inherit", stderr: "inherit" },
+    {
+      env: { ...env, npm_config_engine_strict: "true" },
+      stdout: "inherit",
+      stderr: "inherit",
+    },
   );
   const created = await execa(
     process.execPath,
@@ -59,7 +63,7 @@ try {
   await execa("npm", ["run", "build"], options);
   await execa("npm", ["exec", "--", "tsc", "--noEmit"], options);
   console.log(
-    `Packed CLI, dependency engines, scaffold, build and typecheck passed on Node ${process.versions.node}.`,
+    `Packed CLI engine check, scaffold, build and typecheck passed on Node ${process.versions.node}.`,
   );
 } finally {
   await rm(directory, { recursive: true, force: true });

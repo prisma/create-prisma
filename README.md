@@ -2,7 +2,8 @@
 
 Create a Prisma 8 app with Prisma Composer built in.
 
-Requires Node.js 22.22 or newer.
+Requires Node.js 22.18 or newer, matching the Prisma CLI.
+Generated apps must also meet their selected framework's Node.js requirements.
 
 ## Quick start
 

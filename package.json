@@ -1,6 +1,6 @@
 {
   "name": "create-prisma",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "private": false,
   "description": "Create Prisma 8 projects with first-party templates and great DX.",
   "homepage": "https://github.com/prisma/create-prisma",
@@ -55,8 +55,7 @@
     "@effect/platform-node-shared": "4.0.1",
     "effect": "4.0.1",
     "execa": "^10.0.1",
-    "handlebars": "^4.7.10",
-    "posthog-node": "^5.55.0"
+    "handlebars": "^4.7.10"
   },
   "devDependencies": {
     "@prisma/dev": "0.25.2",
@@ -71,7 +70,7 @@
   },
   "engines": {
     "bun": ">=1.3.0",
-    "node": ">=22.22.0"
+    "node": ">=22.18.0"
   },
   "packageManager": "bun@1.4.1"
 }

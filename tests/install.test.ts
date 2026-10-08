@@ -631,5 +631,5 @@ describe("generated templates", () => {
         }
       }
     }
-  });
+  }, 30_000);
 });

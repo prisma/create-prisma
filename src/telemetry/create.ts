@@ -145,7 +145,6 @@ export const trackCreateCompletedEffect = Effect.fn("Telemetry.createCompleted")
         "duration-ms": params.durationMs,
       },
     ).pipe(
-      Effect.scoped,
       Effect.timeout(TELEMETRY_TIMEOUT_MS),
       Effect.catch(() => Effect.void),
     );
@@ -184,7 +183,6 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
           : null,
     },
   ).pipe(
-    Effect.scoped,
     Effect.timeout(TELEMETRY_TIMEOUT_MS),
     Effect.catch(() => Effect.void),
   );
@@ -207,7 +205,6 @@ export const trackCreateCancelledEffect = Effect.fn("Telemetry.createCancelled")
         "cancellation-stage": params.stage,
       },
     ).pipe(
-      Effect.scoped,
       Effect.timeout(TELEMETRY_TIMEOUT_MS),
       Effect.catch(() => Effect.void),
     );
