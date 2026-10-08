@@ -1,8 +1,26 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { execa } from "execa";
-import { fileURLToPath } from "node:url";
+import { mkdtemp, rm } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const clientPath = fileURLToPath(new URL("../src/telemetry/client.ts", import.meta.url));
+let bundleDir: string;
+let clientPath: string;
+beforeAll(async () => {
+  bundleDir = await mkdtemp(path.join(import.meta.dirname, ".telemetry-client-"));
+  clientPath = path.join(bundleDir, "client.mjs");
+  await execa(process.execPath, [
+    "build",
+    fileURLToPath(new URL("../src/telemetry/client.ts", import.meta.url)),
+    "--target=node",
+    "--packages=external",
+    "--outfile",
+    clientPath,
+  ]);
+});
+afterAll(async () => {
+  if (bundleDir) await rm(bundleDir, { recursive: true, force: true });
+});
 const anonymousId = "40f9096f-9b67-4de2-83ec-9d56d77f527b";
 const optOuts = [
   "DO_NOT_TRACK",
@@ -18,12 +36,13 @@ async function sendTelemetry(
   events = ["cli:create_prisma_next_command_completed"],
 ) {
   const result = await execa(
-    process.execPath,
+    "node",
     [
+      "--input-type=module",
       "--eval",
       `
         import { Effect, FileSystem } from "effect";
-        import { trackCliTelemetryEffect, TELEMETRY_TIMEOUT_MS } from ${JSON.stringify(clientPath)};
+        import { trackCliTelemetryEffect, TELEMETRY_TIMEOUT_MS } from ${JSON.stringify(pathToFileURL(clientPath).href)};
         const fs = FileSystem.makeNoop({
           readFileString: () => Effect.succeed(${JSON.stringify(JSON.stringify({ anonymousId }))}),
         });
