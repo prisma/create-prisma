@@ -1,4 +1,4 @@
-const MINIMUM_NODE_VERSION = [22, 22, 0] as const;
+const MINIMUM_NODE_VERSION = [22, 18, 0] as const;
 
 function parseVersion(version: string): [number, number, number] {
   const [major = "0", minor = "0", patch = "0"] = version.replace(/^v/, "").split(".");
@@ -17,7 +17,7 @@ export function supportsPrisma(nodeVersion = process.versions.node): boolean {
 export function getUnsupportedNodeMessage(nodeVersion = process.versions.node): string {
   return [
     `Node.js ${nodeVersion} is unsupported by create-prisma@latest.`,
-    "Required: Node.js 22.22 or newer.",
+    "Required: Node.js 22.18 or newer.",
     "Update Node.js and run the command again.",
   ].join("\n");
 }
