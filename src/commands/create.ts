@@ -23,8 +23,8 @@ import { decodeCreateCommandInput, type CreateCommandInput } from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
 import { resolveExecutionSettings } from "../ui/output";
 import { getErrorMessage } from "../utils/errors";
-import { getUnsupportedNodeMessage, supportsPrisma } from "../utils/node-version";
-import { verifyPackageManagerEffect } from "../utils/package-manager";
+import { getUnsupportedNodeMessage, runsOnNode, supportsPrisma } from "../utils/node-version";
+import { type PackageManagerVersion, verifyPackageManagerEffect } from "../utils/package-manager";
 import { atCreateStage } from "../workflow/failure";
 import {
   collectCreateContext,
@@ -75,7 +75,10 @@ const initializeExistingApp = Effect.fn("Create.initExisting")(function* (
   } satisfies CreateCommandResult;
 });
 
-const executeCreateContext = Effect.fn("Create.execute")(function* (context: CreatePromptContext) {
+const executeCreateContext = Effect.fn("Create.execute")(function* (
+  context: CreatePromptContext,
+  packageManagerVersion: PackageManagerVersion,
+) {
   const output = context.prismaSetupContext.output;
   const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner({ output });
   yield* Effect.sync(() => {
@@ -93,6 +96,7 @@ const executeCreateContext = Effect.fn("Create.execute")(function* (context: Cre
       provider: context.prismaSetupContext.databaseProvider,
       authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
+      packageManagerVersion,
       skillAgents: context.prismaSetupContext.skillAgents,
     }).pipe(
       Effect.andThen(
@@ -180,7 +184,7 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
       message: "--verbose cannot be used with --json because JSON mode is output-only.",
     });
   }
-  if (!supportsPrisma()) {
+  if (runsOnNode() && !supportsPrisma()) {
     const message = getUnsupportedNodeMessage();
     yield* Effect.sync(() => cancel(message, { output }));
     return yield* new CreateFailure({
@@ -198,7 +202,7 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
     "unexpected_error",
   );
   yield* Ref.set(contextRef, Option.some(context));
-  yield* atCreateStage(
+  const packageManagerVersion = yield* atCreateStage(
     context.operation === "orm_init"
       ? verifyPackageManagerEffect(context.packageManager, context.targetDirectory)
       : verifyPackageManagerEffect(context.prismaSetupContext.packageManager),
@@ -211,7 +215,7 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
     result:
       context.operation === "orm_init"
         ? yield* initializeExistingApp(context, input)
-        : yield* executeCreateContext(context),
+        : yield* executeCreateContext(context, packageManagerVersion),
   };
 });
 

@@ -1,8 +1,8 @@
 {
   "name": "{{projectName}}",
   "private": true,
-  {{#if (packageManagerManifestValue packageManager)}}
-  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{#if packageManagerManifest}}
+  "packageManager": "{{packageManagerManifest}}",
   {{/if}}
   "type": "module",
   "engines": {

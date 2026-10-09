@@ -75,6 +75,47 @@ test("writes pnpm build permissions before the first dependency installation", a
   });
 });
 
+test("declares the npm version it detected in the generated package.json", async () => {
+  await withTempProject(async (projectDir) => {
+    let installChecked = false;
+    const result = await applicationRuntime.runPromise(
+      runCreateCommandEffect({
+        name: path.relative(process.cwd(), path.join(projectDir, "app")),
+        template: "minimal",
+        packageManager: "npm",
+        json: true,
+        deploy: false,
+      }).pipe(
+        Effect.provideService(CommandRunner, {
+          run: () => Effect.die("Unexpected unchecked command"),
+          runChecked: (spec) =>
+            Effect.gen(function* () {
+              if (spec.args[0] === "--version") {
+                return { exitCode: 0, stdout: "11.6.2-pre.1\n", stderr: "" };
+              }
+              expect(spec.args).toEqual(["install"]);
+              const fs = yield* FileSystem.FileSystem;
+              const packageJson = yield* fs
+                .readFileString(path.join(spec.cwd, "package.json"))
+                .pipe(Effect.orDie);
+              expect(JSON.parse(packageJson).packageManager).toBe("npm@11.6.2-pre.1");
+              installChecked = true;
+              return yield* new CommandExecutionError({
+                command: spec.command,
+                args: [...spec.args],
+                exitCode: 1,
+                stdout: "",
+                stderr: "Stopped before installing test dependencies",
+              });
+            }),
+        }),
+      ),
+    );
+    expect(installChecked).toBe(true);
+    expect(result).toMatchObject({ ok: false, error: { stage: "install_dependencies" } });
+  });
+});
+
 test("rejects a missing package manager before writing project files", async () => {
   await withTempProject(async (projectDir) => {
     const targetDirectory = path.join(projectDir, "app");

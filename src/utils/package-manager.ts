@@ -23,14 +23,27 @@ type RuntimeScriptOptions = {
 // Scaffolding must be able to resolve the freshly published, explicitly pinned Prisma release.
 const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
 
+// Revisit with MINIMUM_NODE_VERSION in node-version.ts: the npm that Node.js release ships,
+// and the npm majors that run on it and on every later supported release.
+export const npmForMinimumNode = {
+  node: [22, 18, 0],
+  fallback: "10.9.3",
+  majors: new Set([10, 11]),
+} as const;
+
 const packageManagerManifestValues = {
-  npm: "npm@12.2.0",
+  npm: `npm@${npmForMinimumNode.fallback}`,
   pnpm: "pnpm@11.28.5",
   yarn: "yarn@4.18.1",
   bun: "bun@1.4.2",
 } as const;
 
-type PackageManagerVersion = readonly [major: number, minor: number, patch: number];
+type VersionParts = readonly [major: number, minor: number, patch: number];
+
+export type PackageManagerVersion = {
+  readonly version: string;
+  readonly parts: VersionParts;
+};
 
 const packageManagerChecks: Record<
   PackageManager,
@@ -38,19 +51,13 @@ const packageManagerChecks: Record<
     name: string;
     versionArgs: string[];
     install: string;
-    minimum?: { version: PackageManagerVersion; guidance: string };
+    minimum?: { version: VersionParts; guidance: string };
   }
 > = {
   npm: {
     name: "npm",
     versionArgs: ["--version"],
     install: "Install Node.js from https://nodejs.org to get npm",
-    // https://github.com/npm/cli/pull/8448 shipped in npm 11.6.0.
-    minimum: {
-      version: [11, 6, 0],
-      guidance:
-        "Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.",
-    },
   },
   pnpm: {
     name: "pnpm",
@@ -92,10 +99,10 @@ function parsePackageManagerVersion(
   );
   if (!match) return undefined;
   const parts = [Number(match[1]), Number(match[2]), Number(match[3])] as const;
-  return parts.every(Number.isSafeInteger) ? parts : undefined;
+  return parts.every(Number.isSafeInteger) ? { version: match[0], parts } : undefined;
 }
 
-function isOlderVersion(version: PackageManagerVersion, minimum: PackageManagerVersion): boolean {
+function isOlderVersion(version: VersionParts, minimum: VersionParts): boolean {
   for (const [index, part] of version.entries()) {
     if (part !== minimum[index]) return part < minimum[index]!;
   }
@@ -134,13 +141,14 @@ const probePackageManagerEffect = Effect.fn("PackageManager.probe")(function* (
       message: `Could not determine the installed ${name} version: ${output}`,
     });
   }
-  if (minimum && isOlderVersion(version, minimum.version)) {
+  if (minimum && isOlderVersion(version.parts, minimum.version)) {
     return yield* new CreateFailure({
       stage: "validate_input",
       reason: "unsupported_package_manager_version",
-      message: `${name} ${version.join(".")} is unsupported. Required: ${name} ${minimum.version.join(".")} or newer. ${minimum.guidance}`,
+      message: `${name} ${version.version} is unsupported. Required: ${name} ${minimum.version.join(".")} or newer. ${minimum.guidance}`,
     });
   }
+  return version;
 });
 
 // The reported version depends on the directory's "packageManager", so probe in a temporary
@@ -172,7 +180,7 @@ export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(fun
         }),
     ),
   );
-  yield* probePackageManagerEffect(packageManager, probeDir);
+  return yield* probePackageManagerEffect(packageManager, probeDir);
 }, Effect.scoped);
 
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
@@ -296,6 +304,7 @@ export function detectPackageManager(projectDir = process.cwd()): Promise<Packag
 
 export function getPackageManagerManifestValue(
   packageManager: PackageManager | undefined,
+  detectedVersion?: PackageManagerVersion,
 ): string | undefined {
   if (!packageManager) {
     return undefined;
@@ -303,6 +312,14 @@ export function getPackageManagerManifestValue(
 
   if (packageManager === "deno") {
     return undefined;
+  }
+
+  if (
+    packageManager === "npm" &&
+    detectedVersion &&
+    npmForMinimumNode.majors.has(detectedVersion.parts[0])
+  ) {
+    return `npm@${detectedVersion.version}`;
   }
 
   return packageManagerManifestValues[packageManager];

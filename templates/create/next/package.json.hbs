@@ -2,8 +2,8 @@
   "name": "{{projectName}}",
   "version": "0.1.0",
   "private": true,
-  {{#if (packageManagerManifestValue packageManager)}}
-  "packageManager": "{{packageManagerManifestValue packageManager}}",
+  {{#if packageManagerManifest}}
+  "packageManager": "{{packageManagerManifest}}",
   {{/if}}
   "type": "module",
   "scripts": {

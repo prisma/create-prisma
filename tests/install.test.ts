@@ -180,46 +180,40 @@ describe("writePrismaDependencies", () => {
 });
 
 describe("Composer package-manager commands", () => {
-  test("checks the selected npm binary against the supported resolver version", async () => {
-    const invalidVersions = ["", "11.6.", "11..0", "11.6.1e3", "11.0x6.0", "11.06.0"];
-    for (const version of [
-      "10.9.7",
-      "11.5.1",
-      "11.5.2",
-      "11.6.0",
-      "11.6.1",
-      "11.6.2",
-      "11.19.0",
-      "12.0.2",
-      ...invalidVersions,
-    ]) {
-      const { result } = verifyPackageManager("npm", `${version}\n`);
-      if (invalidVersions.includes(version)) {
-        await expect(result).rejects.toMatchObject({
-          reason: "package_manager_check_failed",
-          message: `Could not determine the installed npm version: ${version}`,
-        });
-      } else if (["10.9.7", "11.5.1", "11.5.2"].includes(version)) {
-        await expect(result).rejects.toMatchObject({
-          reason: "unsupported_package_manager_version",
-          message: expect.stringContaining("npm install --global npm@11"),
-        });
-      } else {
-        await expect(result).resolves.toBeUndefined();
-      }
+  test("accepts any npm version and returns it", async () => {
+    for (const [stdout, version] of [
+      ["10.9.3\n", [10, 9, 3]],
+      ["11.6.0\n", [11, 6, 0]],
+      ["12.2.0\n", [12, 2, 0]],
+      ["11.0.0-pre.1\n", [11, 0, 0]],
+      ["11.0.0-pre.1+build.7\n", [11, 0, 0]],
+    ] as const) {
+      await expect(verifyPackageManager("npm", stdout).result).resolves.toEqual({
+        version: stdout.trim(),
+        parts: version,
+      });
+    }
+  });
+
+  test("rejects npm output that is not a version", async () => {
+    for (const output of ["", "11.6.", "11..0", "11.6.1e3", "11.0x6.0", "11.06.0"]) {
+      await expect(verifyPackageManager("npm", `${output}\n`).result).rejects.toMatchObject({
+        reason: "package_manager_check_failed",
+        message: `Could not determine the installed npm version: ${output}`,
+      });
     }
   });
 
   test("probes the selected package manager once in a generated project manifest", async () => {
-    for (const [manager, args, stdout, packageManager] of [
-      ["npm", ["--version"], "12.2.0\n", "npm@12.2.0"],
-      ["pnpm", ["--version"], "11.28.5\n", "pnpm@11.28.5"],
-      ["yarn", ["--version"], "4.18.1\n", "yarn@4.18.1"],
-      ["bun", ["--version"], "1.4.2\n", "bun@1.4.2"],
-      ["deno", ["-V"], "deno 2.9.4\n", undefined],
+    for (const [manager, args, stdout, packageManager, version] of [
+      ["npm", ["--version"], "11.6.0\n", "npm@10.9.3", [11, 6, 0]],
+      ["pnpm", ["--version"], "11.28.5\n", "pnpm@11.28.5", [11, 28, 5]],
+      ["yarn", ["--version"], "4.18.1\n", "yarn@4.18.1", [4, 18, 1]],
+      ["bun", ["--version"], "1.4.2\n", "bun@1.4.2", [1, 4, 2]],
+      ["deno", ["-V"], "deno 2.9.4\n", undefined, [2, 9, 4]],
     ] as const) {
       const { result, probes } = verifyPackageManager(manager, stdout);
-      await expect(result).resolves.toBeUndefined();
+      await expect(result).resolves.toEqual({ version: version.join("."), parts: version });
       expect(probes).toHaveLength(1);
       expect(probes[0]!.spec).toMatchObject({ command: manager, args: [...args] });
       expect(probes[0]!.spec.cwd).not.toBe(process.cwd());
@@ -323,6 +317,34 @@ describe("generated templates", () => {
     }
   });
 
+  test("declares the detected npm when it runs on every supported Node.js release, else npm 10.9.3", async () => {
+    for (const [packageManagerVersion, expected] of [
+      [{ version: "10.9.7", parts: [10, 9, 7] }, "npm@10.9.7"],
+      [{ version: "11.6.0", parts: [11, 6, 0] }, "npm@11.6.0"],
+      [{ version: "11.0.0-pre.1", parts: [11, 0, 0] }, "npm@11.0.0-pre.1"],
+      [{ version: "11.0.0-pre.1+build.7", parts: [11, 0, 0] }, "npm@11.0.0-pre.1+build.7"],
+      [{ version: "12.2.0", parts: [12, 2, 0] }, "npm@10.9.3"],
+      [{ version: "9.9.4", parts: [9, 9, 4] }, "npm@10.9.3"],
+      [undefined, "npm@10.9.3"],
+    ] as const) {
+      const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-npm-manifest-"));
+      try {
+        await scaffoldCreateTemplate({
+          projectDir,
+          projectName: "npm-app",
+          template: "turborepo",
+          provider: "postgres",
+          authoring: "psl",
+          packageManager: "npm",
+          packageManagerVersion,
+        });
+        expect((await readPackageJson(projectDir)).packageManager).toBe(expected);
+      } finally {
+        await rm(projectDir, { recursive: true, force: true });
+      }
+    }
+  });
+
   test("renders Composer into every supported combination", async () => {
     for (const template of createTemplates) {
       for (const provider of databaseProviders) {
@@ -356,6 +378,9 @@ describe("generated templates", () => {
               expect(packageJson.dependencies?.["@prisma/dev"]).toBeUndefined();
               if (packageManager === "bun") {
                 expect(packageJson.packageManager).toBe("bun@1.4.2");
+              }
+              if (packageManager === "npm") {
+                expect(packageJson.packageManager).toBe("npm@10.9.3");
               }
               const prismaSourceRelative =
                 template === "turborepo" ? "packages/database/src" : "src/prisma";
