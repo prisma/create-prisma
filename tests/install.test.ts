@@ -200,15 +200,15 @@ describe("Composer package-manager commands", () => {
   });
 
   test("probes the selected package manager once in a generated project manifest", async () => {
-    for (const [manager, args, stdout, packageManager] of [
-      ["npm", ["--version"], "11.6.0\n", "npm@10.9.3"],
-      ["pnpm", ["--version"], "11.28.5\n", "pnpm@11.28.5"],
-      ["yarn", ["--version"], "4.18.1\n", "yarn@4.18.1"],
-      ["bun", ["--version"], "1.4.2\n", "bun@1.4.2"],
-      ["deno", ["-V"], "deno 2.9.4\n", undefined],
+    for (const [manager, args, stdout, packageManager, version] of [
+      ["npm", ["--version"], "11.6.0\n", "npm@10.9.3", [11, 6, 0]],
+      ["pnpm", ["--version"], "11.28.5\n", "pnpm@11.28.5", [11, 28, 5]],
+      ["yarn", ["--version"], "4.18.1\n", "yarn@4.18.1", [4, 18, 1]],
+      ["bun", ["--version"], "1.4.2\n", "bun@1.4.2", [1, 4, 2]],
+      ["deno", ["-V"], "deno 2.9.4\n", undefined, [2, 9, 4]],
     ] as const) {
       const { result, probes } = verifyPackageManager(manager, stdout);
-      await expect(result).resolves.toBeDefined();
+      await expect(result).resolves.toEqual(version);
       expect(probes).toHaveLength(1);
       expect(probes[0]!.spec).toMatchObject({ command: manager, args: [...args] });
       expect(probes[0]!.spec.cwd).not.toBe(process.cwd());

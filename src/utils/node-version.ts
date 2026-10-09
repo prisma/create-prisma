@@ -1,4 +1,4 @@
-const MINIMUM_NODE_VERSION = [22, 18, 0] as const;
+export const MINIMUM_NODE_VERSION = [22, 18, 0] as const;
 
 function parseVersion(version: string): [number, number, number] {
   const [major = "0", minor = "0", patch = "0"] = version.replace(/^v/, "").split(".");

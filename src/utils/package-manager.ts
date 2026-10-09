@@ -23,12 +23,16 @@ type RuntimeScriptOptions = {
 // Scaffolding must be able to resolve the freshly published, explicitly pinned Prisma release.
 const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
 
-// Node.js 22.18.0 ships npm 10.9.3, so it runs on every Node.js release generated projects support.
-const NPM_FOR_EVERY_SUPPORTED_NODE = "10.9.3";
-const npmMajorsForEverySupportedNode: ReadonlySet<number> = new Set([10, 11]);
+// Revisit with MINIMUM_NODE_VERSION in node-version.ts: the npm that Node.js release ships,
+// and the npm majors that run on it and on every later supported release.
+export const npmForMinimumNode = {
+  node: [22, 18, 0],
+  fallback: "10.9.3",
+  majors: new Set([10, 11]),
+} as const;
 
 const packageManagerManifestValues = {
-  npm: `npm@${NPM_FOR_EVERY_SUPPORTED_NODE}`,
+  npm: `npm@${npmForMinimumNode.fallback}`,
   pnpm: "pnpm@11.28.5",
   yarn: "yarn@4.18.1",
   bun: "bun@1.4.2",
@@ -308,7 +312,7 @@ export function getPackageManagerManifestValue(
   if (
     packageManager === "npm" &&
     detectedVersion &&
-    npmMajorsForEverySupportedNode.has(detectedVersion[0])
+    npmForMinimumNode.majors.has(detectedVersion[0])
   ) {
     return `npm@${detectedVersion.join(".")}`;
   }

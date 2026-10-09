@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -59,10 +59,17 @@ try {
     { cwd: directory, env },
   );
   if (!JSON.parse(created.stdout).ok) throw new Error("Packed CLI did not scaffold successfully");
-  const options = { cwd: path.join(directory, "app"), env, stdout: "inherit", stderr: "inherit" };
+  const appDirectory = path.join(directory, "app");
+  const { stdout: npmVersion } = await execa("npm", ["--version"], { cwd: appDirectory });
+  const { packageManager } = JSON.parse(
+    await readFile(path.join(appDirectory, "package.json"), "utf8"),
+  );
+  if (packageManager !== `npm@${npmVersion}`) {
+    throw new Error(`Generated packageManager is ${packageManager}, expected npm@${npmVersion}`);
+  }
+  const options = { cwd: appDirectory, env, stdout: "inherit", stderr: "inherit" };
   await execa("npm", ["run", "build"], options);
   await execa("npm", ["exec", "--", "tsc", "--noEmit"], options);
-  const { stdout: npmVersion } = await execa("npm", ["--version"]);
   console.log(
     `Packed CLI engine check, scaffold, npm install, build and typecheck passed on Node ${process.versions.node} with npm ${npmVersion}.`,
   );
