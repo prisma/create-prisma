@@ -45,12 +45,6 @@ const packageManagerChecks: Record<
     name: "npm",
     versionArgs: ["--version"],
     install: "Install Node.js from https://nodejs.org to get npm",
-    // https://github.com/npm/cli/pull/8448 shipped in npm 11.6.0.
-    minimum: {
-      version: [11, 6, 0],
-      guidance:
-        "Older npm releases can crash while resolving Prisma dependencies. Run npm install --global npm@11, then retry create-prisma.",
-    },
   },
   pnpm: {
     name: "pnpm",

@@ -180,29 +180,14 @@ describe("writePrismaDependencies", () => {
 });
 
 describe("Composer package-manager commands", () => {
-  test("checks the selected npm binary against the supported resolver version", async () => {
+  test("accepts every npm release that reports a version, including npm 10 on Node.js 22", async () => {
     const invalidVersions = ["", "11.6.", "11..0", "11.6.1e3", "11.0x6.0", "11.06.0"];
-    for (const version of [
-      "10.9.7",
-      "11.5.1",
-      "11.5.2",
-      "11.6.0",
-      "11.6.1",
-      "11.6.2",
-      "11.19.0",
-      "12.0.2",
-      ...invalidVersions,
-    ]) {
+    for (const version of ["10.9.3", "10.9.7", "11.5.1", "11.6.0", "12.0.2", ...invalidVersions]) {
       const { result } = verifyPackageManager("npm", `${version}\n`);
       if (invalidVersions.includes(version)) {
         await expect(result).rejects.toMatchObject({
           reason: "package_manager_check_failed",
           message: `Could not determine the installed npm version: ${version}`,
-        });
-      } else if (["10.9.7", "11.5.1", "11.5.2"].includes(version)) {
-        await expect(result).rejects.toMatchObject({
-          reason: "unsupported_package_manager_version",
-          message: expect.stringContaining("npm install --global npm@11"),
         });
       } else {
         await expect(result).resolves.toBeUndefined();

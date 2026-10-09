@@ -22,10 +22,7 @@ PostgreSQL apps with Composer include `@prisma/dev` as a project devDependency f
 local Postgres. In a monorepo it belongs at the root, where Composer runs. Prisma 8
 does not include this runtime itself. MongoDB and Deno-only apps do not need it.
 
-For npm, use 11.6.0 or newer, which includes the [upstream resolver fix](https://github.com/npm/cli/pull/8448).
-Older npm releases can crash resolving the dependency tree (`Cannot read properties of null (reading 'edgesOut')`). Run
-`npm install --global npm@11` to update. create-prisma checks the selected package manager
-before writing project files and never upgrades your package manager automatically. Yarn 1 is not supported.
+The npm that ships with a supported Node.js release works, including npm 10 on Node.js 22. create-prisma checks the selected package manager before writing project files and never upgrades your package manager automatically. Yarn 1 is not supported.
 
 The deployment prompt is:
 
