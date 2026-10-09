@@ -24,7 +24,7 @@ import { getCreatePrismaIntro } from "../ui/branding";
 import { resolveExecutionSettings } from "../ui/output";
 import { getErrorMessage } from "../utils/errors";
 import { getUnsupportedNodeMessage, supportsPrisma } from "../utils/node-version";
-import { verifyPackageManagerEffect } from "../utils/package-manager";
+import { type PackageManagerVersion, verifyPackageManagerEffect } from "../utils/package-manager";
 import { atCreateStage } from "../workflow/failure";
 import {
   collectCreateContext,
@@ -75,7 +75,10 @@ const initializeExistingApp = Effect.fn("Create.initExisting")(function* (
   } satisfies CreateCommandResult;
 });
 
-const executeCreateContext = Effect.fn("Create.execute")(function* (context: CreatePromptContext) {
+const executeCreateContext = Effect.fn("Create.execute")(function* (
+  context: CreatePromptContext,
+  packageManagerVersion: PackageManagerVersion,
+) {
   const output = context.prismaSetupContext.output;
   const createSpinner = context.prismaSetupContext.verbose ? undefined : spinner({ output });
   yield* Effect.sync(() => {
@@ -93,6 +96,7 @@ const executeCreateContext = Effect.fn("Create.execute")(function* (context: Cre
       provider: context.prismaSetupContext.databaseProvider,
       authoring: context.prismaSetupContext.authoring,
       packageManager: context.prismaSetupContext.packageManager,
+      packageManagerVersion,
       skillAgents: context.prismaSetupContext.skillAgents,
     }).pipe(
       Effect.andThen(
@@ -198,7 +202,7 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
     "unexpected_error",
   );
   yield* Ref.set(contextRef, Option.some(context));
-  yield* atCreateStage(
+  const packageManagerVersion = yield* atCreateStage(
     context.operation === "orm_init"
       ? verifyPackageManagerEffect(context.packageManager, context.targetDirectory)
       : verifyPackageManagerEffect(context.prismaSetupContext.packageManager),
@@ -211,7 +215,7 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
     result:
       context.operation === "orm_init"
         ? yield* initializeExistingApp(context, input)
-        : yield* executeCreateContext(context),
+        : yield* executeCreateContext(context, packageManagerVersion),
   };
 });
 

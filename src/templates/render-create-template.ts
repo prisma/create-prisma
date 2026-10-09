@@ -10,6 +10,10 @@ import {
   type DatabaseProvider,
   type PackageManager,
 } from "../types";
+import {
+  getPackageManagerManifestValue,
+  type PackageManagerVersion,
+} from "../utils/package-manager";
 import { renderTemplateTreeEffect, resolveTemplatesDirEffect } from "./shared";
 
 const DEFAULT_PRISMA_SOURCE_DIR = "src/prisma";
@@ -25,6 +29,7 @@ type CreateTemplateContext = {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  packageManagerManifest: string | null;
   skillAgents: readonly AgentSkillTarget[];
   tsdownEntry: string | null;
 };
@@ -36,6 +41,8 @@ export type ScaffoldCreateTemplateOptions = {
   provider: DatabaseProvider;
   authoring: AuthoringStyle;
   packageManager?: PackageManager;
+  /** The version create-prisma detected; decides the npm written to `packageManager`. */
+  packageManagerVersion?: PackageManagerVersion;
   /** Agents whose skill files the project gets; defaults to all of them. */
   skillAgents?: readonly AgentSkillTarget[];
 };
@@ -55,6 +62,8 @@ function createTemplateContext(options: ScaffoldCreateTemplateOptions): CreateTe
     provider: options.provider,
     authoring: options.authoring,
     packageManager: options.packageManager,
+    packageManagerManifest:
+      getPackageManagerManifestValue(options.packageManager, options.packageManagerVersion) ?? null,
     skillAgents: options.skillAgents ?? agentSkillTargets,
     tsdownEntry: tsdownEntries[options.template] ?? null,
   };

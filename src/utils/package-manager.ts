@@ -23,14 +23,18 @@ type RuntimeScriptOptions = {
 // Scaffolding must be able to resolve the freshly published, explicitly pinned Prisma release.
 const DENO_ALLOW_FRESH_DEPENDENCIES = "--minimum-dependency-age=0";
 
+// Node.js 22.18.0 ships npm 10.9.3, so it runs on every Node.js release generated projects support.
+const NPM_FOR_EVERY_SUPPORTED_NODE = "10.9.3";
+const npmMajorsForEverySupportedNode: ReadonlySet<number> = new Set([10, 11]);
+
 const packageManagerManifestValues = {
-  npm: "npm@12.2.0",
+  npm: `npm@${NPM_FOR_EVERY_SUPPORTED_NODE}`,
   pnpm: "pnpm@11.28.5",
   yarn: "yarn@4.18.1",
   bun: "bun@1.4.2",
 } as const;
 
-type PackageManagerVersion = readonly [major: number, minor: number, patch: number];
+export type PackageManagerVersion = readonly [major: number, minor: number, patch: number];
 
 const packageManagerChecks: Record<
   PackageManager,
@@ -135,6 +139,7 @@ const probePackageManagerEffect = Effect.fn("PackageManager.probe")(function* (
       message: `${name} ${version.join(".")} is unsupported. Required: ${name} ${minimum.version.join(".")} or newer. ${minimum.guidance}`,
     });
   }
+  return version;
 });
 
 // The reported version depends on the directory's "packageManager", so probe in a temporary
@@ -166,7 +171,7 @@ export const verifyPackageManagerEffect = Effect.fn("PackageManager.verify")(fun
         }),
     ),
   );
-  yield* probePackageManagerEffect(packageManager, probeDir);
+  return yield* probePackageManagerEffect(packageManager, probeDir);
 }, Effect.scoped);
 
 function parseUserAgent(userAgent: string | undefined): PackageManager | null {
@@ -290,6 +295,7 @@ export function detectPackageManager(projectDir = process.cwd()): Promise<Packag
 
 export function getPackageManagerManifestValue(
   packageManager: PackageManager | undefined,
+  detectedVersion?: PackageManagerVersion,
 ): string | undefined {
   if (!packageManager) {
     return undefined;
@@ -297,6 +303,14 @@ export function getPackageManagerManifestValue(
 
   if (packageManager === "deno") {
     return undefined;
+  }
+
+  if (
+    packageManager === "npm" &&
+    detectedVersion &&
+    npmMajorsForEverySupportedNode.has(detectedVersion[0])
+  ) {
+    return `npm@${detectedVersion.join(".")}`;
   }
 
   return packageManagerManifestValues[packageManager];

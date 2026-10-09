@@ -5,22 +5,13 @@ import { fileURLToPath } from "node:url";
 
 import { applicationRuntime } from "../runtime";
 import type { PackageManager } from "../types";
-import {
-  getPackageManagerManifestValue,
-  getRuntimeScriptCommand,
-  getRunScriptCommand,
-} from "../utils/package-manager";
+import { getRuntimeScriptCommand, getRunScriptCommand } from "../utils/package-manager";
 
 Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
 Handlebars.registerHelper(
   "runScriptCommand",
   (packageManager: PackageManager | undefined, scriptName: string) =>
     packageManager ? getRunScriptCommand(packageManager, scriptName) : "",
-);
-Handlebars.registerHelper(
-  "packageManagerManifestValue",
-  (packageManager: PackageManager | undefined) =>
-    getPackageManagerManifestValue(packageManager) ?? "",
 );
 Handlebars.registerHelper(
   "runtimeScript",
