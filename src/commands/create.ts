@@ -23,7 +23,7 @@ import { decodeCreateCommandInput, type CreateCommandInput } from "../types";
 import { getCreatePrismaIntro } from "../ui/branding";
 import { resolveExecutionSettings } from "../ui/output";
 import { getErrorMessage } from "../utils/errors";
-import { getUnsupportedNodeMessage, supportsPrisma } from "../utils/node-version";
+import { getUnsupportedNodeMessage, runsOnNode, supportsPrisma } from "../utils/node-version";
 import { type PackageManagerVersion, verifyPackageManagerEffect } from "../utils/package-manager";
 import { atCreateStage } from "../workflow/failure";
 import {
@@ -184,7 +184,7 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
       message: "--verbose cannot be used with --json because JSON mode is output-only.",
     });
   }
-  if (!supportsPrisma()) {
+  if (runsOnNode() && !supportsPrisma()) {
     const message = getUnsupportedNodeMessage();
     yield* Effect.sync(() => cancel(message, { output }));
     return yield* new CreateFailure({

@@ -2,8 +2,13 @@
 
 Create a Prisma 8 app with Prisma Composer built in.
 
-Requires Node.js 22.18 or newer, matching the Prisma CLI.
-Generated apps must also meet their selected framework's Node.js requirements.
+## Supported versions
+
+create-prisma supports exactly what Prisma ORM supports: Node.js 22.18 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 and newer (`^22.18.0 || ^24.11.0 || >=26.0.0`). Node.js 23 and 24.0 to 24.10 are not supported. create-prisma refuses unsupported Node.js versions before it writes any files, and the generated minimal, hono, elysia, nest and turborepo projects declare the same range in `engines.node`.
+
+Each supported Node.js release works with the npm it ships, including npm 10 on Node.js 22. pnpm, Yarn 4.10 or newer, Bun and Deno are also supported. Yarn 1 is not supported. When create-prisma runs on Bun or Deno instead of Node.js, it skips the Node.js check.
+
+The one exception is the `nuxt` template. Nuxt itself requires Node.js `^22.22.3 || ^24.15.0 || >=26.0.0`, so Nuxt projects declare that narrower range.
 
 ## Quick start
 
@@ -22,7 +27,7 @@ PostgreSQL apps with Composer include `@prisma/dev` as a project devDependency f
 local Postgres. In a monorepo it belongs at the root, where Composer runs. Prisma 8
 does not include this runtime itself. MongoDB and Deno-only apps do not need it.
 
-The npm that ships with a supported Node.js release works, including npm 10 on Node.js 22. create-prisma checks the selected package manager before writing project files and never upgrades your package manager automatically. Yarn 1 is not supported.
+create-prisma checks the selected package manager before writing project files and never upgrades your package manager automatically.
 
 The deployment prompt is:
 
