@@ -185,8 +185,13 @@ describe("Composer package-manager commands", () => {
       ["10.9.3\n", [10, 9, 3]],
       ["11.6.0\n", [11, 6, 0]],
       ["12.2.0\n", [12, 2, 0]],
+      ["11.0.0-pre.1\n", [11, 0, 0]],
+      ["11.0.0-pre.1+build.7\n", [11, 0, 0]],
     ] as const) {
-      await expect(verifyPackageManager("npm", stdout).result).resolves.toEqual(version);
+      await expect(verifyPackageManager("npm", stdout).result).resolves.toEqual({
+        version: stdout.trim(),
+        parts: version,
+      });
     }
   });
 
@@ -208,7 +213,7 @@ describe("Composer package-manager commands", () => {
       ["deno", ["-V"], "deno 2.9.4\n", undefined, [2, 9, 4]],
     ] as const) {
       const { result, probes } = verifyPackageManager(manager, stdout);
-      await expect(result).resolves.toEqual(version);
+      await expect(result).resolves.toEqual({ version: version.join("."), parts: version });
       expect(probes).toHaveLength(1);
       expect(probes[0]!.spec).toMatchObject({ command: manager, args: [...args] });
       expect(probes[0]!.spec.cwd).not.toBe(process.cwd());
@@ -314,10 +319,12 @@ describe("generated templates", () => {
 
   test("declares the detected npm when it runs on every supported Node.js release, else npm 10.9.3", async () => {
     for (const [packageManagerVersion, expected] of [
-      [[10, 9, 7], "npm@10.9.7"],
-      [[11, 6, 0], "npm@11.6.0"],
-      [[12, 2, 0], "npm@10.9.3"],
-      [[9, 9, 4], "npm@10.9.3"],
+      [{ version: "10.9.7", parts: [10, 9, 7] }, "npm@10.9.7"],
+      [{ version: "11.6.0", parts: [11, 6, 0] }, "npm@11.6.0"],
+      [{ version: "11.0.0-pre.1", parts: [11, 0, 0] }, "npm@11.0.0-pre.1"],
+      [{ version: "11.0.0-pre.1+build.7", parts: [11, 0, 0] }, "npm@11.0.0-pre.1+build.7"],
+      [{ version: "12.2.0", parts: [12, 2, 0] }, "npm@10.9.3"],
+      [{ version: "9.9.4", parts: [9, 9, 4] }, "npm@10.9.3"],
       [undefined, "npm@10.9.3"],
     ] as const) {
       const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-npm-manifest-"));

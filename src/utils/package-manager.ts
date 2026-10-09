@@ -38,7 +38,12 @@ const packageManagerManifestValues = {
   bun: "bun@1.4.2",
 } as const;
 
-export type PackageManagerVersion = readonly [major: number, minor: number, patch: number];
+type VersionParts = readonly [major: number, minor: number, patch: number];
+
+export type PackageManagerVersion = {
+  readonly version: string;
+  readonly parts: VersionParts;
+};
 
 const packageManagerChecks: Record<
   PackageManager,
@@ -46,7 +51,7 @@ const packageManagerChecks: Record<
     name: string;
     versionArgs: string[];
     install: string;
-    minimum?: { version: PackageManagerVersion; guidance: string };
+    minimum?: { version: VersionParts; guidance: string };
   }
 > = {
   npm: {
@@ -94,10 +99,10 @@ function parsePackageManagerVersion(
   );
   if (!match) return undefined;
   const parts = [Number(match[1]), Number(match[2]), Number(match[3])] as const;
-  return parts.every(Number.isSafeInteger) ? parts : undefined;
+  return parts.every(Number.isSafeInteger) ? { version: match[0], parts } : undefined;
 }
 
-function isOlderVersion(version: PackageManagerVersion, minimum: PackageManagerVersion): boolean {
+function isOlderVersion(version: VersionParts, minimum: VersionParts): boolean {
   for (const [index, part] of version.entries()) {
     if (part !== minimum[index]) return part < minimum[index]!;
   }
@@ -136,11 +141,11 @@ const probePackageManagerEffect = Effect.fn("PackageManager.probe")(function* (
       message: `Could not determine the installed ${name} version: ${output}`,
     });
   }
-  if (minimum && isOlderVersion(version, minimum.version)) {
+  if (minimum && isOlderVersion(version.parts, minimum.version)) {
     return yield* new CreateFailure({
       stage: "validate_input",
       reason: "unsupported_package_manager_version",
-      message: `${name} ${version.join(".")} is unsupported. Required: ${name} ${minimum.version.join(".")} or newer. ${minimum.guidance}`,
+      message: `${name} ${version.version} is unsupported. Required: ${name} ${minimum.version.join(".")} or newer. ${minimum.guidance}`,
     });
   }
   return version;
@@ -312,9 +317,9 @@ export function getPackageManagerManifestValue(
   if (
     packageManager === "npm" &&
     detectedVersion &&
-    npmForMinimumNode.majors.has(detectedVersion[0])
+    npmForMinimumNode.majors.has(detectedVersion.parts[0])
   ) {
-    return `npm@${detectedVersion.join(".")}`;
+    return `npm@${detectedVersion.version}`;
   }
 
   return packageManagerManifestValues[packageManager];

@@ -91,14 +91,14 @@ test("declares the npm version it detected in the generated package.json", async
           runChecked: (spec) =>
             Effect.gen(function* () {
               if (spec.args[0] === "--version") {
-                return { exitCode: 0, stdout: "11.6.2\n", stderr: "" };
+                return { exitCode: 0, stdout: "11.6.2-pre.1\n", stderr: "" };
               }
               expect(spec.args).toEqual(["install"]);
               const fs = yield* FileSystem.FileSystem;
               const packageJson = yield* fs
                 .readFileString(path.join(spec.cwd, "package.json"))
                 .pipe(Effect.orDie);
-              expect(JSON.parse(packageJson).packageManager).toBe("npm@11.6.2");
+              expect(JSON.parse(packageJson).packageManager).toBe("npm@11.6.2-pre.1");
               installChecked = true;
               return yield* new CommandExecutionError({
                 command: spec.command,
