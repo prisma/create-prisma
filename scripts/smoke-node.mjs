@@ -62,8 +62,9 @@ try {
   const options = { cwd: path.join(directory, "app"), env, stdout: "inherit", stderr: "inherit" };
   await execa("npm", ["run", "build"], options);
   await execa("npm", ["exec", "--", "tsc", "--noEmit"], options);
+  const { stdout: npmVersion } = await execa("npm", ["--version"]);
   console.log(
-    `Packed CLI engine check, scaffold, build and typecheck passed on Node ${process.versions.node}.`,
+    `Packed CLI engine check, scaffold, npm install, build and typecheck passed on Node ${process.versions.node} with npm ${npmVersion}.`,
   );
 } finally {
   await rm(directory, { recursive: true, force: true });
