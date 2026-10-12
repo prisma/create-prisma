@@ -1,18 +1,27 @@
 type Version = readonly [major: number, minor: number, patch: number];
 
-export const SUPPORTED_NODE_RANGE = "^22.18.0 || ^24.11.0 || >=26.0.0";
-
-const minimumByMajor: ReadonlyMap<number, Version> = new Map([
-  [22, [22, 18, 0]],
-  [24, [24, 11, 0]],
-]);
+const supportedNodeLines = [
+  { major: 22, minimum: [22, 18, 0] },
+  { major: 24, minimum: [24, 11, 0] },
+] as const satisfies readonly { major: number; minimum: Version }[];
 const FIRST_MAJOR_WITH_EVERY_RELEASE_SUPPORTED = 26;
 
-export const MINIMUM_NODE_VERSION = minimumByMajor.get(22)!;
+export const SUPPORTED_NODE_RANGE = [
+  ...supportedNodeLines.map(({ minimum }) => `^${minimum.join(".")}`),
+  `>=${FIRST_MAJOR_WITH_EVERY_RELEASE_SUPPORTED}.0.0`,
+].join(" || ");
 
-function parseVersion(version: string): Version {
-  const [major = "0", minor = "0", patch = "0"] = version.replace(/^v/, "").split(".");
-  return [Number(major), Number(minor), Number.parseInt(patch, 10)];
+export const MINIMUM_NODE_VERSION: Version = supportedNodeLines[0].minimum;
+
+const SUPPORTED_NODE_DESCRIPTION = `${supportedNodeLines
+  .map(({ major, minimum }) => `${minimum[0]}.${minimum[1]} or newer on the ${major} line`)
+  .join(", ")}, or ${FIRST_MAJOR_WITH_EVERY_RELEASE_SUPPORTED} and newer`;
+
+const RELEASE_VERSION_PATTERN = /^v?(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$/;
+
+function parseReleaseVersion(version: string): Version | undefined {
+  const match = RELEASE_VERSION_PATTERN.exec(version);
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : undefined;
 }
 
 function isAtLeast(current: Version, minimum: Version): boolean {
@@ -29,16 +38,17 @@ export function runsOnNode(
 }
 
 export function supportsPrisma(nodeVersion = process.versions.node): boolean {
-  const current = parseVersion(nodeVersion);
+  const current = parseReleaseVersion(nodeVersion);
+  if (!current) return false;
   if (current[0] >= FIRST_MAJOR_WITH_EVERY_RELEASE_SUPPORTED) return true;
-  const minimum = minimumByMajor.get(current[0]);
-  return minimum !== undefined && isAtLeast(current, minimum);
+  const line = supportedNodeLines.find(({ major }) => major === current[0]);
+  return line !== undefined && isAtLeast(current, line.minimum);
 }
 
 export function getUnsupportedNodeMessage(nodeVersion = process.versions.node): string {
   return [
     `Node.js ${nodeVersion} is unsupported by create-prisma@latest.`,
-    "Required: Node.js 22.18 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 and newer.",
+    `Required: Node.js ${SUPPORTED_NODE_DESCRIPTION}.`,
     "Update Node.js and run the command again.",
   ].join("\n");
 }

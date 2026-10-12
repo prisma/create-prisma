@@ -14,23 +14,43 @@ import { npmForMinimumNode } from "../src/utils/package-manager";
 const repositoryRoot = path.join(import.meta.dir, "..");
 
 describe("Prisma 8 Node compatibility", () => {
-  test("accepts exactly the Node.js versions Prisma ORM supports", () => {
+  test("accepts exactly the versions in the supported range, as semver decides", () => {
+    for (const version of [
+      "20.19.0",
+      "22.17.9",
+      "22.18.0",
+      "22.22.3",
+      "23.0.0",
+      "23.11.0",
+      "24.0.0",
+      "24.10.9",
+      "24.11.0",
+      "24.15.0",
+      "25.9.0",
+      "26.0.0",
+      "27.1.0",
+      "22.18.0-rc.1",
+      "24.11.0-rc.1",
+      "26.0.0-nightly20261001abcdef",
+      "27.0.0-pre",
+    ]) {
+      expect([version, supportsPrisma(version)]).toEqual([
+        version,
+        Bun.semver.satisfies(version, SUPPORTED_NODE_RANGE),
+      ]);
+    }
+  });
+
+  test("checks the boundaries of the supported range", () => {
     for (const [version, supported] of [
-      ["20.19.0", false],
       ["22.17.9", false],
-      ["v22.17.9", false],
-      ["22.18.0", true],
       ["v22.18.0", true],
-      ["22.22.3", true],
       ["23.0.0", false],
-      ["23.11.0", false],
-      ["24.0.0", false],
       ["24.10.9", false],
       ["24.11.0", true],
-      ["24.15.0", true],
-      ["25.9.0", false],
+      ["24.11.0-rc.1", false],
       ["26.0.0", true],
-      ["27.1.0", true],
+      ["26.0.0-nightly20261001abcdef", false],
     ] as const) {
       expect([version, supportsPrisma(version)]).toEqual([version, supported]);
     }
