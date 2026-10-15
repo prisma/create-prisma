@@ -14,14 +14,34 @@ import { applicationRuntime } from "../runtime";
 import { CommandExecutionError } from "../services/command-runner";
 import { getPackageManagerErrorCode } from "../utils/package-manager-error-code";
 
-import { TELEMETRY_TIMEOUT_MS, trackCliTelemetryEffect } from "./client";
+import { TELEMETRY_TIMEOUT_MS, trackCliTelemetryEffect, type TelemetryProperties } from "./client";
 
-export const CREATE_PRISMA_NEXT_COMPLETED_EVENT = "cli:create_prisma_next_command_completed";
-export const CREATE_PRISMA_NEXT_FAILED_EVENT = "cli:create_prisma_next_command_failed";
-export const CREATE_PRISMA_NEXT_CANCELLED_EVENT = "cli:create_prisma_next_command_cancelled";
-export const PRISMA_INIT_COMPLETED_EVENT = "cli:create_prisma_orm_init_command_completed";
-export const PRISMA_INIT_FAILED_EVENT = "cli:create_prisma_orm_init_command_failed";
-export const PRISMA_INIT_CANCELLED_EVENT = "cli:create_prisma_orm_init_command_cancelled";
+// Every run reports under one command; `operation` and `outcome` tell runs apart.
+export const CREATE_PRISMA_TELEMETRY_COMMAND = "create-prisma";
+
+// A failed or cancelled run exits 1 (src/index.ts).
+const exitCodes = { completed: 0, failed: 1, cancelled: 1 } as const;
+
+// Positional and `--name` values never leave the machine, so `name` reports no flag.
+const flagNames = {
+  template: "template",
+  provider: "provider",
+  authoring: "authoring",
+  packageManager: "package-manager",
+  deploy: "deploy",
+  workspace: "workspace",
+  skills: "skills",
+  force: "force",
+  yes: "yes",
+  verbose: "verbose",
+  json: "json",
+} as const satisfies Partial<Record<keyof CreateCommandInput, string>>;
+
+function getCreateFlags(input: CreateCommandInput): string[] {
+  return Object.entries(flagNames).flatMap(([key, flag]) =>
+    input[key as keyof typeof flagNames] === undefined ? [] : [flag],
+  );
+}
 
 export type CreateTelemetryFailureStage = CreateFailureStage;
 
@@ -57,22 +77,25 @@ function getTargetDirectoryState(context: CreateContext): string {
   return "non_empty_directory";
 }
 
+function getDatabaseTarget(input: CreateCommandInput, context?: CreateContext): string | null {
+  const setup = context?.operation === "orm_init" ? undefined : context?.prismaSetupContext;
+  return setup?.databaseProvider ?? input.provider ?? null;
+}
+
 function getBaseCreateProperties(
   input: CreateCommandInput,
   context?: CreateContext,
-): Record<string, boolean | number | string | string[] | null> {
+): TelemetryProperties {
   const setup = context?.operation === "orm_init" ? undefined : context?.prismaSetupContext;
   const initializing = context?.operation === "orm_init";
   return {
-    "telemetry-schema-version": 2,
-    command: "create",
+    "telemetry-schema-version": 3,
     operation: initializing ? "orm_init" : "create",
     "uses-defaults": input.yes === true || input.json === true,
     json: input.json === true,
     verbose: input.verbose === true,
     force: input.force === true,
     template: initializing ? null : (context?.template ?? input.template ?? null),
-    "database-provider": setup?.databaseProvider ?? input.provider ?? null,
     "authoring-style": setup?.authoring ?? input.authoring ?? null,
     "package-manager": initializing
       ? context.packageManager
@@ -111,10 +134,15 @@ function getChildProcessFailureProperty(error: unknown): string | null {
     : null;
 }
 
-function getPackageManagerErrorCodeProperty(error: unknown): string | null {
-  return error instanceof CommandExecutionError
-    ? (getPackageManagerErrorCode(error.command, error) ?? null)
-    : null;
+// Our own install, or the one `prisma orm init` runs inside an existing app.
+function getPackageManagerErrorCodeProperty(
+  error: unknown,
+  stage: CreateTelemetryFailureStage,
+): string | null {
+  if (stage === "install_dependencies" && error instanceof CommandExecutionError) {
+    return getPackageManagerErrorCode(error.command, error) ?? null;
+  }
+  return error instanceof PrismaCliCommandError ? (error.packageManagerErrorCode ?? null) : null;
 }
 
 function getPrismaCliFailureProperty(
@@ -134,20 +162,28 @@ function getPrismaCliCauseCodeProperty(error: unknown): string | null {
   return isStructuredErrorCode(causeCode) ? causeCode : null;
 }
 
+const trackCreateOutcomeEffect = (
+  outcome: keyof typeof exitCodes,
+  input: CreateCommandInput,
+  context: CreateContext | undefined,
+  properties: TelemetryProperties,
+) =>
+  trackCliTelemetryEffect({
+    command: CREATE_PRISMA_TELEMETRY_COMMAND,
+    flags: getCreateFlags(input),
+    databaseTarget: getDatabaseTarget(input, context),
+    exitCode: exitCodes[outcome],
+    properties: { ...getBaseCreateProperties(input, context), outcome, ...properties },
+  }).pipe(
+    Effect.timeout(TELEMETRY_TIMEOUT_MS),
+    Effect.catch(() => Effect.void),
+  );
+
 export const trackCreateCompletedEffect = Effect.fn("Telemetry.createCompleted")(
   function* (params: { input: CreateCommandInput; context: CreateContext; durationMs: number }) {
-    yield* trackCliTelemetryEffect(
-      params.context.operation === "orm_init"
-        ? PRISMA_INIT_COMPLETED_EVENT
-        : CREATE_PRISMA_NEXT_COMPLETED_EVENT,
-      {
-        ...getBaseCreateProperties(params.input, params.context),
-        "duration-ms": params.durationMs,
-      },
-    ).pipe(
-      Effect.timeout(TELEMETRY_TIMEOUT_MS),
-      Effect.catch(() => Effect.void),
-    );
+    yield* trackCreateOutcomeEffect("completed", params.input, params.context, {
+      "duration-ms": params.durationMs,
+    });
   },
 );
 
@@ -160,32 +196,20 @@ export const trackCreateFailedEffect = Effect.fn("Telemetry.createFailed")(funct
   reason: CreateFailureReason;
   targetDirectoryKind?: CreateTargetDirectoryKind;
 }) {
-  yield* trackCliTelemetryEffect(
-    params.context?.operation === "orm_init"
-      ? PRISMA_INIT_FAILED_EVENT
-      : CREATE_PRISMA_NEXT_FAILED_EVENT,
-    {
-      ...getBaseCreateProperties(params.input, params.context),
-      "duration-ms": params.durationMs,
-      "failure-class": getFailureClass(params.reason),
-      "failure-stage": params.stage,
-      "failure-reason": params.reason,
-      "target-directory-kind": params.targetDirectoryKind ?? null,
-      "error-name": getErrorName(params.error),
-      "error-code": getErrorCode(params.error),
-      "child-process-failure": getChildProcessFailureProperty(params.error),
-      "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
-      "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
-      "prisma-cli-cause-code": getPrismaCliCauseCodeProperty(params.error),
-      "package-manager-error-code":
-        params.stage === "install_dependencies"
-          ? getPackageManagerErrorCodeProperty(params.error)
-          : null,
-    },
-  ).pipe(
-    Effect.timeout(TELEMETRY_TIMEOUT_MS),
-    Effect.catch(() => Effect.void),
-  );
+  yield* trackCreateOutcomeEffect("failed", params.input, params.context, {
+    "duration-ms": params.durationMs,
+    "failure-class": getFailureClass(params.reason),
+    "failure-stage": params.stage,
+    "failure-reason": params.reason,
+    "target-directory-kind": params.targetDirectoryKind ?? null,
+    "error-name": getErrorName(params.error),
+    "error-code": getErrorCode(params.error),
+    "child-process-failure": getChildProcessFailureProperty(params.error),
+    "prisma-cli-command": getPrismaCliFailureProperty(params.error, "prismaCliCommand"),
+    "prisma-cli-error-code": getPrismaCliFailureProperty(params.error, "prismaCliErrorCode"),
+    "prisma-cli-cause-code": getPrismaCliCauseCodeProperty(params.error),
+    "package-manager-error-code": getPackageManagerErrorCodeProperty(params.error, params.stage),
+  });
 });
 
 export const trackCreateCancelledEffect = Effect.fn("Telemetry.createCancelled")(
@@ -195,19 +219,10 @@ export const trackCreateCancelledEffect = Effect.fn("Telemetry.createCancelled")
     durationMs: number;
     stage: CreateCancellationStage;
   }) {
-    yield* trackCliTelemetryEffect(
-      params.context?.operation === "orm_init"
-        ? PRISMA_INIT_CANCELLED_EVENT
-        : CREATE_PRISMA_NEXT_CANCELLED_EVENT,
-      {
-        ...getBaseCreateProperties(params.input, params.context),
-        "duration-ms": params.durationMs,
-        "cancellation-stage": params.stage,
-      },
-    ).pipe(
-      Effect.timeout(TELEMETRY_TIMEOUT_MS),
-      Effect.catch(() => Effect.void),
-    );
+    yield* trackCreateOutcomeEffect("cancelled", params.input, params.context, {
+      "duration-ms": params.durationMs,
+      "cancellation-stage": params.stage,
+    });
   },
 );
 

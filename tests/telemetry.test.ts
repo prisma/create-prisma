@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { CreatePromptContext, ExistingAppContext } from "../src/commands/create";
+import type { TelemetryEvent } from "../src/telemetry/client";
 import type { CreateCommandInput } from "../src/types";
 import { CommandExecutionError, CommandRunner } from "../src/services/command-runner";
 import { runComposerDeployEffect } from "../src/tasks/composer/deploy-report";
@@ -16,25 +17,19 @@ import {
   getSpawnedCommandFailure,
 } from "../src/utils/child-process-failure";
 
-const trackCliTelemetry = mock(async () => {});
+// Records each event with its properties alongside, so tests can read either.
+const trackCliTelemetry = mock(
+  async (_event: TelemetryEvent, _properties: TelemetryEvent["properties"]) => {},
+);
 
 mock.module("../src/telemetry/client", () => ({
   TELEMETRY_TIMEOUT_MS: 2_000,
-  trackCliTelemetryEffect: (event: string, properties: Record<string, unknown>) =>
-    Effect.promise(() => trackCliTelemetry(event, properties)),
+  trackCliTelemetryEffect: (event: TelemetryEvent) =>
+    Effect.promise(() => trackCliTelemetry(event, event.properties)),
 }));
 
-const {
-  CREATE_PRISMA_NEXT_CANCELLED_EVENT,
-  CREATE_PRISMA_NEXT_COMPLETED_EVENT,
-  CREATE_PRISMA_NEXT_FAILED_EVENT,
-  PRISMA_INIT_COMPLETED_EVENT,
-  PRISMA_INIT_FAILED_EVENT,
-  PRISMA_INIT_CANCELLED_EVENT,
-  trackCreateCancelled,
-  trackCreateCompleted,
-  trackCreateFailed,
-} = await import("../src/telemetry/create");
+const { trackCreateCancelled, trackCreateCompleted, trackCreateFailed } =
+  await import("../src/telemetry/create");
 
 const createInput = { yes: true, name: "app" } satisfies CreateCommandInput;
 const createContext: CreatePromptContext = {
@@ -88,7 +83,7 @@ async function trackFailure(error: unknown, stage: "install_dependencies" | "com
     stage,
     reason: stage === "composer_deploy" ? "composer_deploy_failed" : "dependency_install_failed",
   });
-  return (trackCliTelemetry.mock.calls.at(-1) as unknown as [string, Record<string, unknown>])[1];
+  return trackCliTelemetry.mock.calls.at(-1)![1];
 }
 
 describe("create telemetry", () => {
@@ -110,11 +105,13 @@ describe("create telemetry", () => {
       reason: "prisma_init_failed",
     });
     await trackCreateCancelled({ input, context, durationMs: 1, stage: "initialize_prisma" });
-    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
-    expect(calls.map(([event]) => event)).toEqual([
-      PRISMA_INIT_COMPLETED_EVENT,
-      PRISMA_INIT_FAILED_EVENT,
-      PRISMA_INIT_CANCELLED_EVENT,
+    const calls = trackCliTelemetry.mock.calls;
+    expect(
+      calls.map(([event]) => [event.command, event.properties.outcome, event.exitCode]),
+    ).toEqual([
+      ["create-prisma", "completed", 0],
+      ["create-prisma", "failed", 1],
+      ["create-prisma", "cancelled", 1],
     ]);
     for (const [, properties] of calls) {
       expect(properties).toMatchObject({
@@ -129,17 +126,22 @@ describe("create telemetry", () => {
 
   test("tracks Composer deployment intent on completion", async () => {
     await trackCreateCompleted({ input: createInput, context: createContext, durationMs: 123 });
-    expect(trackCliTelemetry).toHaveBeenCalledWith(
-      CREATE_PRISMA_NEXT_COMPLETED_EVENT,
-      expect.objectContaining({
-        command: "create",
-        "telemetry-schema-version": 2,
+    const [event] = trackCliTelemetry.mock.calls[0]!;
+    expect(event).toMatchObject({
+      command: "create-prisma",
+      flags: ["yes"],
+      databaseTarget: "postgres",
+      exitCode: 0,
+      properties: {
+        "telemetry-schema-version": 3,
+        operation: "create",
+        outcome: "completed",
         template: "hono",
-        "database-provider": "postgres",
         "should-deploy": true,
         "duration-ms": 123,
-      }),
-    );
+      },
+    });
+    expect(event.properties).not.toHaveProperty("database-provider");
   });
 
   test("tracks a normalized setup failure without its raw message", async () => {
@@ -151,11 +153,9 @@ describe("create telemetry", () => {
       stage: "plan_migration",
       reason: "migration_plan_failed",
     });
-    const [event, properties] = trackCliTelemetry.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
-    expect(event).toBe(CREATE_PRISMA_NEXT_FAILED_EVENT);
+    const [event, properties] = trackCliTelemetry.mock.calls[0]!;
+    expect(event).toMatchObject({ command: "create-prisma", exitCode: 1 });
+    expect(properties.outcome).toBe("failed");
     expect(properties).toEqual(
       expect.objectContaining({
         "duration-ms": 456,
@@ -185,7 +185,7 @@ describe("create telemetry", () => {
         reason,
       });
     }
-    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
+    const calls = trackCliTelemetry.mock.calls;
     expect(calls).toHaveLength(5);
     expect(calls.map(([, properties]) => properties["failure-reason"])).toEqual([
       "target_directory_not_empty",
@@ -213,7 +213,7 @@ describe("create telemetry", () => {
       stage: "collect_context",
       reason: "invalid_project_name",
     });
-    const calls = trackCliTelemetry.mock.calls as Array<[string, Record<string, unknown>]>;
+    const calls = trackCliTelemetry.mock.calls;
     expect(calls.map(([, properties]) => properties["target-directory-kind"])).toEqual([
       "existing_app",
       null,
@@ -232,7 +232,7 @@ describe("create telemetry", () => {
       stage: "composer_deploy",
       reason: "composer_deploy_failed",
     });
-    const [, properties] = trackCliTelemetry.mock.calls[0] as [string, Record<string, unknown>];
+    const [, properties] = trackCliTelemetry.mock.calls[0]!;
     expect(properties).toEqual(
       expect.objectContaining({
         "prisma-cli-command": "app.deploy",
@@ -276,10 +276,7 @@ describe("create telemetry", () => {
         reason: "dependency_install_failed",
       });
 
-      const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
-        string,
-        Record<string, unknown>,
-      ];
+      const [, properties] = trackCliTelemetry.mock.calls.at(-1)!;
       expect(properties["child-process-failure"]).toBe(expectedFailure);
       expect(JSON.stringify(properties)).not.toContain("secret");
     }
@@ -347,10 +344,7 @@ describe("create telemetry", () => {
           stage: json ? "initialize_prisma" : "install_dependencies",
           reason: json ? "prisma_init_failed" : "dependency_install_failed",
         });
-        const [, properties] = trackCliTelemetry.mock.calls.at(-1) as [
-          string,
-          Record<string, unknown>,
-        ];
+        const [, properties] = trackCliTelemetry.mock.calls.at(-1)!;
         expect(properties["child-process-failure"]).toBe(spec.failure);
         expect(properties["error-name"]).toBe(
           json ? "PrismaCliCommandError" : "CommandExecutionError",
@@ -374,6 +368,57 @@ describe("create telemetry", () => {
     );
     expect(properties["package-manager-error-code"]).toBe("E404");
     expect(JSON.stringify(properties)).not.toContain("registry");
+  });
+
+  test("tracks the error code of the install prisma orm init runs inside an existing app", async () => {
+    const error = await Effect.runPromise(
+      runPrismaJsonCommandEffect({
+        packageManager: "npm",
+        projectDir: process.cwd(),
+        args: ["orm", "init"],
+      }).pipe(
+        Effect.provideService(CommandRunner, {
+          run: () =>
+            Effect.succeed({
+              exitCode: 4,
+              stdout: JSON.stringify({
+                ok: true,
+                result: { packagesInstalled: { status: "failed" } },
+                diagnostics: [
+                  {
+                    code: "CLI.INIT_INSTALL_FAILED",
+                    severity: "error",
+                    summary: "Failed to install dependencies",
+                    why: "npm exited with code 1.",
+                    meta: {
+                      install: {
+                        manager: "npm",
+                        exitCode: 1,
+                        stderrTail:
+                          "npm error code EPERM\nnpm error path C:\\Users\\jane\\app\\node_modules",
+                      },
+                    },
+                  },
+                ],
+              }),
+              stderr: "",
+            }),
+          runChecked: () => Effect.die("unused"),
+        }),
+        Effect.flip,
+      ),
+    );
+    await trackCreateFailed({
+      input: createInput,
+      durationMs: 10,
+      error,
+      stage: "initialize_prisma",
+      reason: "prisma_init_failed",
+    });
+    const [, properties] = trackCliTelemetry.mock.calls.at(-1)!;
+    expect(properties["prisma-cli-error-code"]).toBe("CLI.INIT_INSTALL_FAILED");
+    expect(properties["package-manager-error-code"]).toBe("EPERM");
+    expect(JSON.stringify(properties)).not.toContain("jane");
   });
 
   test("tracks Composer's failure code from the deploy report", async () => {
@@ -408,14 +453,16 @@ describe("create telemetry", () => {
         durationMs: 789,
         stage,
       });
-      expect(trackCliTelemetry).toHaveBeenCalledWith(
-        CREATE_PRISMA_NEXT_CANCELLED_EVENT,
-        expect.objectContaining({
+      expect(trackCliTelemetry.mock.calls.at(-1)![0]).toMatchObject({
+        command: "create-prisma",
+        exitCode: 1,
+        properties: {
+          outcome: "cancelled",
           "duration-ms": 789,
           "cancellation-stage": stage,
           "should-deploy": true,
-        }),
-      );
+        },
+      });
     },
   );
 });
