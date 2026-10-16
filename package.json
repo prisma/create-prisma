@@ -53,6 +53,8 @@
   "dependencies": {
     "@clack/prompts": "^1.8.1",
     "@effect/platform-node-shared": "4.0.1",
+    "@vercel/detect-agent": "^1.2.7",
+    "ci-info": "^4.4.0",
     "effect": "4.0.1",
     "execa": "^10.0.1",
     "handlebars": "^4.7.10"
