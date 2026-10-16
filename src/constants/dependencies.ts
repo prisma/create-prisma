@@ -13,6 +13,7 @@ export const dependencyVersionMap = {
   "@prisma/orm-postgres": "8.0.0-rc.16",
   "@sveltejs/adapter-node": "^6.0.0",
   "@types/node": "^26.6.4",
+  "@vitejs/devtools": "0.7.6",
   alchemy: "2.0.0-beta.78",
   arktype: "^2.2.7",
   dotenv: "^18.0.6",
