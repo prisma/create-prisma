@@ -242,6 +242,12 @@ export const writeCreateTemplateDependenciesEffect = Effect.fn("Dependencies.wri
     } else if (opts.packageManager !== "pnpm") {
       packageJson.overrides = { ...packageJson.overrides, ...effectPins };
     }
+    if (opts.packageManager === "npm") {
+      packageJson.overrides = {
+        ...packageJson.overrides,
+        "@vitejs/devtools": dependencyVersionMap["@vitejs/devtools"],
+      };
+    }
     yield* writePackageJson(packageJsonPath, packageJson);
   },
 );

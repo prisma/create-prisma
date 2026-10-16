@@ -644,6 +644,9 @@ describe("generated templates", () => {
               } else {
                 expect(packageJson.overrides).toEqual({
                   ...effectPins,
+                  ...(packageManager === "npm"
+                    ? { "@vitejs/devtools": dependencyVersionMap["@vitejs/devtools"] }
+                    : {}),
                   ...(provider === "mongo" && packageManager === "npm"
                     ? { alchemy: { mongodb: dependencyVersionMap.mongodb } }
                     : {}),
