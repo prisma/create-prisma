@@ -52,3 +52,10 @@ export function getUnsupportedNodeMessage(nodeVersion = process.versions.node): 
     "Update Node.js and run the command again.",
   ].join("\n");
 }
+
+export function shouldRelaunchOnBun(
+  env: NodeJS.ProcessEnv = process.env,
+  versions: Partial<Record<"node" | "bun" | "deno", string>> = process.versions,
+): boolean {
+  return runsOnNode(versions) && env.npm_config_user_agent?.startsWith("bun/") === true;
+}

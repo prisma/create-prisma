@@ -6,6 +6,7 @@ import {
   getUnsupportedNodeMessage,
   MINIMUM_NODE_VERSION,
   runsOnNode,
+  shouldRelaunchOnBun,
   SUPPORTED_NODE_RANGE,
   supportsPrisma,
 } from "../src/utils/node-version";
@@ -60,6 +61,15 @@ describe("Prisma 8 Node compatibility", () => {
     expect(runsOnNode({ node: "22.18.0" })).toBe(true);
     expect(runsOnNode({ node: "24.3.0", bun: "1.3.13" })).toBe(false);
     expect(runsOnNode({ node: "24.2.0", deno: "2.9.4" })).toBe(false);
+  });
+
+  test("relaunches on Bun only when bun started it on Node.js", () => {
+    const bunx = { npm_config_user_agent: "bun/1.4.0 npm/? node/v24.3.0 darwin arm64" };
+    const npx = { npm_config_user_agent: "npm/10.9.2 node/v24.3.0 darwin arm64" };
+    expect(shouldRelaunchOnBun(bunx, { node: "24.3.0" })).toBe(true);
+    expect(shouldRelaunchOnBun(bunx, { node: "24.3.0", bun: "1.4.0" })).toBe(false);
+    expect(shouldRelaunchOnBun(npx, { node: "24.3.0" })).toBe(false);
+    expect(shouldRelaunchOnBun({}, { node: "24.3.0" })).toBe(false);
   });
 
   test("names the supported range in the refusal message", () => {

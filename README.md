@@ -6,7 +6,7 @@ Create a Prisma 8 app with Prisma Composer built in.
 
 create-prisma supports exactly what Prisma ORM supports: Node.js 22.18 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 and newer (`^22.18.0 || ^24.11.0 || >=26.0.0`). create-prisma refuses unsupported Node.js versions before it writes any files, and the generated minimal, hono, elysia, nest and turborepo projects declare the same range in `engines.node`. The next, svelte, astro and tanstack-start templates declare no `engines` field.
 
-Each supported Node.js release works with the npm it ships, including npm 10 on Node.js 22. pnpm, Yarn 4.10 or newer, Bun and Deno (local minimal PostgreSQL apps only, see below) are also supported. Yarn 1 is not supported. When create-prisma runs on Bun or Deno instead of Node.js, it skips the Node.js check.
+Each supported Node.js release works with the npm it ships, including npm 10 on Node.js 22. pnpm, Yarn 4.10 or newer, Bun and Deno (local minimal PostgreSQL apps only, see below) are also supported. Yarn 1 is not supported. When create-prisma runs on Bun or Deno instead of Node.js, it skips the Node.js check. `bunx create-prisma` runs it on Bun, even though `bunx` would otherwise start it with the installed Node.js.
 
 The one exception is the `nuxt` template. Nuxt itself requires Node.js `^22.22.3 || ^24.15.0 || >=26.0.0`, so Nuxt projects declare that narrower range.
 
