@@ -9,15 +9,15 @@ import { shouldRelaunchOnBun } from "./utils/node-version";
 function relaunchOnBun(): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn("bun", process.argv.slice(1), { stdio: "inherit" });
-    const ignoreSignal = () => {};
+    const forward = (signal: NodeJS.Signals) => child.kill(signal);
     child.once("error", () => resolve(false));
     child.once("spawn", () => {
-      process.on("SIGINT", ignoreSignal);
-      process.on("SIGTERM", ignoreSignal);
+      process.on("SIGINT", forward);
+      process.on("SIGTERM", forward);
     });
     child.once("exit", (code, signal) => {
-      process.off("SIGINT", ignoreSignal);
-      process.off("SIGTERM", ignoreSignal);
+      process.off("SIGINT", forward);
+      process.off("SIGTERM", forward);
       if (signal) process.kill(process.pid, signal);
       else process.exit(code ?? 1);
     });
