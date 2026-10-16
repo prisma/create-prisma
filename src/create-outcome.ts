@@ -116,8 +116,6 @@ export class PrismaCliCommandError extends Schema.TaggedError<PrismaCliCommandEr
     stderr: Schema.optionalKey(Schema.String),
     exitCode: Schema.optionalKey(Schema.Number),
     childProcessFailure: Schema.optional(ChildProcessFailureSchema),
-    // The error code of a package install the Prisma CLI ran, such as `prisma orm init`'s.
-    packageManagerErrorCode: Schema.optionalKey(Schema.String),
   },
 ) {
   readonly prismaCliCommand = this.command;
