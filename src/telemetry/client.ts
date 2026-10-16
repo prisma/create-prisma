@@ -10,15 +10,11 @@ const TELEMETRY_BACKEND_URL = "https://cmpbfbsdp09hr3jf7pojjs5qs.ewr.prisma.buil
 const TELEMETRY_DOCS_URL = "https://www.prisma.io/docs/cli";
 export const TELEMETRY_TIMEOUT_MS = 2_000;
 
-type TelemetryValue = boolean | number | string | string[] | null | undefined;
-export type TelemetryProperties = Record<string, TelemetryValue>;
-
 export type TelemetryEvent = {
   command: string;
   flags: string[];
   databaseTarget: string | null;
   exitCode: number;
-  properties: TelemetryProperties;
 };
 
 type PrismaUserConfig = Record<string, unknown> & {
@@ -143,11 +139,6 @@ function getTelemetryEndpoint(override = process.env.PRISMA_TELEMETRY_ENDPOINT):
   }
 }
 
-const sanitizeProperties = (properties: TelemetryProperties) =>
-  Object.fromEntries(
-    Object.entries(properties).filter(([, value]) => value !== undefined),
-  ) as Record<string, Exclude<TelemetryValue, undefined>>;
-
 export const trackCliTelemetryEffect = Effect.fn("Telemetry.track")(function* (
   event: TelemetryEvent,
 ) {
@@ -181,7 +172,6 @@ export const trackCliTelemetryEffect = Effect.fn("Telemetry.track")(function* (
         agent,
         extensions: [],
         exitCode: event.exitCode,
-        properties: sanitizeProperties(event.properties),
       }),
       signal,
     });

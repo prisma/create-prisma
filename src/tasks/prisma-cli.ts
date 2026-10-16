@@ -5,7 +5,6 @@ import { CommandExecutionError, CommandRunner } from "../services/command-runner
 import type { PackageManager } from "../types";
 import { getErrorMessage, redactSecrets } from "../utils/errors";
 import { getLocalPackageBinaryArgs, getPackageExecutionArgs } from "../utils/package-manager";
-import { getPackageManagerErrorCode } from "../utils/package-manager-error-code";
 
 const PrismaCliDiagnosticSchema = Schema.Struct({
   code: Schema.optionalKey(Schema.String),
@@ -13,9 +12,7 @@ const PrismaCliDiagnosticSchema = Schema.Struct({
   message: Schema.optionalKey(Schema.String),
   why: Schema.optionalKey(Schema.String),
   severity: Schema.optionalKey(Schema.Literals(["error", "warn", "info"])),
-  meta: Schema.optionalKey(Schema.Unknown),
 });
-type PrismaCliDiagnostic = typeof PrismaCliDiagnosticSchema.Type;
 
 const PrismaCliEnvelopeSchema = Schema.Struct({
   ok: Schema.Boolean,
@@ -46,20 +43,6 @@ export function parsePrismaCliEnvelope(output: string): PrismaCliEnvelope {
     }
   }
   throw new Error("Prisma CLI returned output that is not a valid result envelope.");
-}
-
-// A failed install reports the package manager and its stderr tail under `meta.install`.
-function getInstallErrorCode(failure: PrismaCliDiagnostic | undefined): string | undefined {
-  const install: unknown =
-    failure?.meta && typeof failure.meta === "object"
-      ? Reflect.get(failure.meta, "install")
-      : undefined;
-  if (!install || typeof install !== "object") return undefined;
-  const manager: unknown = Reflect.get(install, "manager");
-  const stderrTail: unknown = Reflect.get(install, "stderrTail");
-  return typeof manager === "string" && typeof stderrTail === "string"
-    ? getPackageManagerErrorCode(manager, { stdout: "", stderr: stderrTail })
-    : undefined;
 }
 
 export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(function* (options: {
@@ -102,7 +85,6 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
     const failure =
       envelope.error ?? envelope.diagnostics?.find((diagnostic) => diagnostic.severity === "error");
     const summary = failure?.summary ?? failure?.message;
-    const packageManagerErrorCode = getInstallErrorCode(failure);
     return yield* new PrismaCliCommandError({
       message: redactSecrets(
         [summary, failure?.why].filter(Boolean).join(": ") ||
@@ -113,7 +95,6 @@ export const runPrismaJsonCommandEffect = Effect.fn("PrismaCli.runJson")(functio
         ? { command: envelope.commandId ?? envelope.command }
         : {}),
       ...(failure?.code ? { code: failure.code } : {}),
-      ...(packageManagerErrorCode ? { packageManagerErrorCode } : {}),
       stderr: redactSecrets(result.stderr),
       exitCode: result.exitCode,
       childProcessFailure: result.childProcessFailure,

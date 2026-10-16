@@ -43,12 +43,6 @@ const event = {
   flags: ["template", "yes"],
   databaseTarget: "postgres",
   exitCode: 1,
-  properties: {
-    outcome: "failed",
-    "failure-stage": "composer_deploy",
-    "error-code": "ASSEMBLE.BUILD_FAILED",
-    optional: undefined,
-  },
 };
 
 // A clean environment: the host's CI and coding-agent variables would otherwise decide
@@ -97,7 +91,7 @@ function startServer(onRequest: (request: Request) => Promise<Response> | Respon
 }
 
 describe("telemetry POST", () => {
-  test("sends the Prisma CLI's event shape with create-prisma's outcome under its installation id", async () => {
+  test("sends the Prisma CLI's event shape under its installation id", async () => {
     await writeConfig({ installationId, otherSetting: true });
     const requests: Array<{ method: string; path: string; contentType: string | null; body: any }> =
       [];
@@ -132,11 +126,6 @@ describe("telemetry POST", () => {
           agent: null,
           extensions: [],
           exitCode: 1,
-          properties: {
-            outcome: "failed",
-            "failure-stage": "composer_deploy",
-            "error-code": "ASSEMBLE.BUILD_FAILED",
-          },
         },
       });
     } finally {
