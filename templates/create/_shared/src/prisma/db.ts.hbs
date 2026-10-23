@@ -1,22 +1,27 @@
 {{#if (eq provider "postgres")}}
 import postgres from "@prisma/orm-postgres/runtime";
+import { contractFromJson } from "@prisma/orm-postgres/static";
 
 {{#if (eq packageManager "deno")}}
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
+
+export const contract = contractFromJson<Contract>(contractJson);
 
 const databaseUrl = Deno.env.get("DATABASE_URL");
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is not set. Add it to .env before starting the app.");
 }
 
-export const db = postgres<Contract>({ contractJson, url: databaseUrl });
+export const db = postgres({ contract, url: databaseUrl });
 {{else}}
 import "temporal-polyfill/global";
 
 import service from "{{#if (eq template "turborepo")}}../../../service.ts{{else}}../../service.ts{{/if}}";
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
+
+export const contract = contractFromJson<Contract>(contractJson);
 
 function loadComposerDatabase() {
   try {
@@ -29,15 +34,18 @@ function loadComposerDatabase() {
 export const db =
   loadComposerDatabase() ??
   (process.env.DATABASE_URL
-    ? postgres<Contract>({ contractJson, url: process.env.DATABASE_URL })
-    : postgres<Contract>({ contractJson }));
+    ? postgres({ contract, url: process.env.DATABASE_URL })
+    : postgres({ contract }));
 {{/if}}
 {{else}}
 import mongo from "@prisma/orm-mongo/runtime";
+import { contractFromJson } from "@prisma/orm-mongo/static";
 
 import service from "{{#if (eq template "turborepo")}}../../../service.ts{{else}}../../service.ts{{/if}}";
 import type { Contract } from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.d.ts";
 import contractJson from "./{{#if (eq authoring "typescript")}}generated/{{/if}}contract.json" with { type: "json" };
+
+export const contract = contractFromJson<Contract>(contractJson);
 
 function getDatabaseUrl(): string | undefined {
   try {
@@ -49,9 +57,7 @@ function getDatabaseUrl(): string | undefined {
 
 const databaseUrl = getDatabaseUrl();
 
-export const db = databaseUrl
-  ? mongo<Contract>({ contractJson, url: databaseUrl })
-  : mongo<Contract>({ contractJson });
+export const db = databaseUrl ? mongo({ contract, url: databaseUrl }) : mongo({ contract });
 {{/if}}
 
 let connection: Promise<void> | undefined;
