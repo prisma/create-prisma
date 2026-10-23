@@ -590,8 +590,12 @@ describe("generated templates", () => {
               } else {
                 expect(prismaConfig).not.toContain("output:");
                 expect(dbSource).toContain('import type { Contract } from "./contract.d.ts";');
-                expect(dbSource).toContain("contractJson,");
               }
+              expect(dbSource).toContain(
+                "export const contract = contractFromJson<Contract>(contractJson);",
+              );
+              expect(dbSource).toMatch(/(?:postgres|mongo)\(\{ contract[,\s}]/);
+              expect(dbSource).not.toContain("contractJson,");
               expect(await pathExists(path.join(projectDir, "prisma-next.config.ts"))).toBe(false);
               expect(await pathExists(path.join(projectDir, "deno.json"))).toBe(false);
               if (template === "nuxt" || template === "svelte" || template === "tanstack-start") {

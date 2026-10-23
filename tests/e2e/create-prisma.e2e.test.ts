@@ -172,7 +172,8 @@ async function verifyBuiltServer(
 
 async function verifyComposerDev(projectDir: string, usersPath = "") {
   const process = Bun.spawn({
-    cmd: ["bun", "run", "dev:composer"],
+    // A piped prisma command prints plain text; --json asks for the endpoint frames read below.
+    cmd: ["bun", "run", "dev:composer", "--", "--json"],
     cwd: projectDir,
     env: { ...Bun.env, CI: "1" },
     stdout: "pipe",
@@ -527,7 +528,7 @@ describe("create-prisma e2e", () => {
       expect(packageJson.devDependencies.prisma).toBe(dependencyVersionMap.prisma);
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
-      expect(packageJson.overrides.effect).toBe("4.0.0-rc.115");
+      expect(packageJson.overrides.effect).toBe("4.0.3");
       expect(moduleSource).toContain("postgres({");
       expect(dbSource).toContain("service.load().database.client");
 

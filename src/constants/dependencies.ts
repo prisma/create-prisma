@@ -1,33 +1,33 @@
 import type { CreateTemplate, PackageManager } from "../types";
 
 export const dependencyVersionMap = {
-  "@astrojs/node": "^11.1.7",
+  "@astrojs/node": "^11.1.9",
   "@elysia/node": "^1.4.6",
-  "@prisma/composer": "0.28.0",
-  "@prisma/composer-prisma-cloud": "0.28.0",
+  "@prisma/composer": "0.34.0",
+  "@prisma/composer-prisma-cloud": "0.34.0",
   "@prisma/dev": "0.25.2",
-  "@prisma/orm-mongo": "8.0.0-rc.16",
+  "@prisma/orm-mongo": "8.0.0-rc.20",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency, even when
   // prisma bundles a newer @prisma/orm-toolchain, or npm install fails with
   // ERESOLVE.
-  "@prisma/orm-postgres": "8.0.0-rc.16",
+  "@prisma/orm-postgres": "8.0.0-rc.20",
   "@sveltejs/adapter-node": "^6.0.0",
-  "@types/node": "^26.6.4",
+  "@types/node": "^26.6.5",
   "@vitejs/devtools": "0.7.6",
-  alchemy: "2.0.0-beta.78",
-  arktype: "^2.2.7",
-  dotenv: "^18.0.6",
-  effect: "4.0.0-rc.115",
+  alchemy: "2.0.0-beta.83",
+  arktype: "^2.2.9",
+  dotenv: "^18.0.9",
+  effect: "4.0.3",
   mongodb: "^7.7.0",
   "mongodb-memory-server": "^11.3.0",
   nitro: "^3.0.260903-beta",
   // Must match the @prisma/composer-cli version this prisma release depends on.
   // `bun run check:pins` verifies that against the Composer pins above.
-  prisma: "8.0.0-rc.21",
+  prisma: "8.0.0-rc.27",
   // Node 22 needs a global Temporal for the ORM runtime's timestamp columns.
-  "temporal-polyfill": "^1.0.5",
-  tsdown: "^0.23.0",
-  turbo: "2.11.7",
+  "temporal-polyfill": "^1.0.6",
+  tsdown: "^0.23.1",
+  turbo: "2.11.10",
   tsx: "^4.23.15",
   typescript: "^6.0.3",
 } as const;
