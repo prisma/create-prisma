@@ -10,7 +10,10 @@ export const load: PageServerLoad = async () => {
         createdAt: user.createdAt ?? null,
       }))
     )
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      console.error("Failed to query users:", error);
+      return undefined;
+    });
 
   return { users };
 };

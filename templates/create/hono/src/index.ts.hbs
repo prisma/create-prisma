@@ -12,13 +12,13 @@ app.get("/", (c) => {
 });
 
 app.get("/users", async (c) => {
-  const users = await listUsers(10).catch((error) => {
+  const users = await listUsers(10).catch((error: unknown) => {
     console.error("Failed to query users:", error);
     return undefined;
   });
 
   if (!users) {
-    return c.json({ error: "Could not query users yet. Run contract:emit and apply your schema first." }, 500);
+    return c.json({ error: "Could not query users. Check the server log for the error." }, 500);
   }
 
   return c.json(users);

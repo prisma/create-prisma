@@ -8,14 +8,14 @@ export default defineEventHandler(async () => {
         createdAt: user.createdAt ?? null,
       }))
     )
-    .catch((error) => {
+    .catch((error: unknown) => {
       console.error("Failed to query users:", error);
       return undefined;
     });
 
   if (!users) {
     return {
-      error: "Could not query users yet.",
+      error: "Could not query users. Check the server log for the error.",
       users: [],
     };
   }

@@ -1,0 +1,11 @@
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  output: "standalone",
+{{#if (eq provider "mongo")}}
+  // Turbopack's ESM interop breaks mongodb-connection-string-url, which the Mongo runtime imports.
+  serverExternalPackages: ["@prisma/orm-mongo"],
+{{/if}}
+};
+
+export default nextConfig;

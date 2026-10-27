@@ -4,7 +4,4 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [sveltekit({ adapter: adapter() })],
-  ssr: {
-    noExternal: true,
-  },
 });
