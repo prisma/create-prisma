@@ -7,7 +7,10 @@ export default async function Home() {
     dateStyle: "medium",
     timeStyle: "short",
   });
-  const users = await listUsers(10).catch(() => undefined);
+  const users = await listUsers(10).catch((error: unknown) => {
+    console.error("Failed to query users:", error);
+    return undefined;
+  });
 
   return (
     <main className="shell">

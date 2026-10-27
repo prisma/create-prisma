@@ -11,7 +11,10 @@ const listUsers = createServerFn({ method: "GET" }).handler(async () => {
         createdAt: user.createdAt ?? null,
       }))
     )
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      console.error("Failed to query users:", error);
+      return undefined;
+    });
 });
 
 export const Route = createFileRoute("/")({

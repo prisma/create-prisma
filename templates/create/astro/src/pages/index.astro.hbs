@@ -7,7 +7,10 @@ const formatter = new Intl.DateTimeFormat("en", {
   timeStyle: "short",
 });
 
-const users = await listUsers(10).catch(() => undefined);
+const users = await listUsers(10).catch((error: unknown) => {
+  console.error("Failed to query users:", error);
+  return undefined;
+});
 
 ---
 

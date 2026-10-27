@@ -14,11 +14,11 @@ app.get("/", (c) => {
 app.get("/users", async (c) => {
   const users = await listUsers(10).catch((error: unknown) => {
     console.error("Failed to query users:", error);
-    return error instanceof Error ? error : new Error(String(error));
+    return undefined;
   });
 
-  if (users instanceof Error) {
-    return c.json({ error: `Could not query users: ${users.message}` }, 500);
+  if (!users) {
+    return c.json({ error: "Could not query users. Check the server log for the error." }, 500);
   }
 
   return c.json(users);
