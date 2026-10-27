@@ -550,6 +550,9 @@ describe("generated templates", () => {
                 expect(viteConfig).not.toContain("noExternal");
                 expect(serviceSource).toContain('dependencies: "external"');
               }
+              if (template === "astro") {
+                expect(serviceSource).toContain('dependencies: "external"');
+              }
               if (template === "nuxt") {
                 expect(packageJson.scripts?.postinstall).toBe(
                   `nuxt prepare && ${getRunScriptCommand(packageManager, "skills:sync")}`,
