@@ -49,7 +49,8 @@ function formatCreatedAt(value: string): string {
       </div>
 
       <p v-if="data?.error" class="empty">
-        \{{ data.error }} Run <code>contract:emit</code> and apply your schema, then refresh.
+        \{{ data.error }} If the schema isn't applied yet, run <code>contract:emit</code> and apply
+        it, then refresh.
       </p>
       <p v-else-if="!data?.users?.length" class="empty">
         No users found.

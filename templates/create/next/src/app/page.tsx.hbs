@@ -29,8 +29,8 @@ export default async function Home() {
 
         {!users ? (
           <p className="empty">
-            Could not query users yet. Run <code>contract:emit</code> and apply your schema,
-            then refresh.
+            Could not query users. Check the server log for the error. If the schema isn't
+            applied yet, run <code>contract:emit</code> and apply it, then refresh.
           </p>
         ) : users.length === 0 ? (
           <p className="empty">No users found.</p>

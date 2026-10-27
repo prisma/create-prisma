@@ -415,7 +415,7 @@ describe("generated templates", () => {
                 expect(packageJson.scripts?.deploy).toBeUndefined();
                 expect(dbSource).toContain('Deno.env.get("DATABASE_URL")');
                 expect(dbSource).not.toContain('import service from "../../service.ts"');
-                expect(seedSource).toContain("await connectDatabase()");
+                expect(seedSource).not.toContain("connect()");
                 expect(usersSource).toContain("await seed()");
                 continue;
               }
@@ -443,8 +443,8 @@ describe("generated templates", () => {
               expect(prismaConfig.includes("nextjsBuild()")).toBe(template === "next");
               expect(tsconfig).toContain('"node"');
               expect(serviceSource).toContain("compute({");
-              expect(dbSource).toContain("export function connectDatabase()");
-              expect(seedSource).toContain("await connectDatabase()");
+              expect(dbSource).not.toContain(".connect(");
+              expect(seedSource).not.toContain("connect");
               expect(seedSource).toContain("export function seed()");
               expect(usersSource).toContain("await seed()");
               expect(
@@ -547,7 +547,8 @@ describe("generated templates", () => {
               }
               if (template === "svelte") {
                 const viteConfig = await readFile(path.join(projectDir, "vite.config.ts"), "utf8");
-                expect(viteConfig).toContain("noExternal: true");
+                expect(viteConfig).not.toContain("noExternal");
+                expect(serviceSource).toContain('dependencies: "external"');
               }
               if (template === "nuxt") {
                 expect(packageJson.scripts?.postinstall).toBe(

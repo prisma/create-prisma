@@ -40,8 +40,8 @@ const users = await listUsers(10).catch(() => undefined);
 
         {!users ? (
           <p class="empty">
-            Could not query users yet. Run <code>contract:emit</code> and apply your schema,
-            then refresh.
+            Could not query users. Check the server log for the error. If the schema isn't
+            applied yet, run <code>contract:emit</code> and apply it, then refresh.
           </p>
         ) : users.length === 0 ? (
           <p class="empty">No users found.</p>

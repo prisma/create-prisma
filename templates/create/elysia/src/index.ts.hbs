@@ -16,14 +16,14 @@ const app = new Elysia({ adapter: "Bun" in globalThis ? undefined : node() })
   })
 
   .get("/users", async ({ set }) => {
-    const users = await listUsers(10).catch((error) => {
+    const users = await listUsers(10).catch((error: unknown) => {
       console.error("Failed to query users:", error);
-      return undefined;
+      return error instanceof Error ? error : new Error(String(error));
     });
 
-    if (!users) {
+    if (users instanceof Error) {
       set.status = 500;
-      return { error: "Could not query users yet. Run contract:emit and apply your schema first." };
+      return { error: `Could not query users: ${users.message}` };
     }
 
     return users;

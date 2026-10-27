@@ -1,4 +1,4 @@
-import { connectDatabase, db } from "./db.ts";
+import { db } from "./db.ts";
 
 const users = [
   { email: "alice@prisma.io", username: "alice", name: "Alice" },
@@ -9,8 +9,6 @@ const users = [
 let pendingSeed: Promise<void> | undefined;
 
 async function runSeed(): Promise<void> {
-  await connectDatabase();
-
 {{#if (eq provider "mongo")}}
   for (const user of users) {
     const existingUser = await db.orm.users.where({ email: user.email }).first();
