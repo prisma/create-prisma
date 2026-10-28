@@ -56,7 +56,7 @@ export const runComposerDeployEffect = Effect.fn("Deployment.runComposerDeploy")
     return yield* runPrismaJsonCommandEffect({
       packageManager: options.packageManager,
       projectDir: options.projectDir,
-      args: ["deploy", "module.ts", ...(reportPath ? ["--report", reportPath] : [])],
+      args: ["deploy", ...(reportPath ? ["--report", reportPath] : [])],
       ...(options.onStderrLine ? { onStderrLine: options.onStderrLine } : {}),
     }).pipe(
       Effect.catchTag("PrismaCliCommandError", (error) =>

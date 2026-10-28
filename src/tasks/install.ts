@@ -64,8 +64,7 @@ function getPrismaScriptMap(
 
 export function getComposerScriptMap(packageManager: PackageManager): Record<string, string> {
   if (packageManager === "deno") return {};
-  const composerCommand = (subcommand: "dev" | "deploy") =>
-    ["prisma", subcommand, "module.ts"].join(" ");
+  const composerCommand = (subcommand: "dev" | "deploy") => ["prisma", subcommand].join(" ");
   return {
     "composer:dev": composerCommand("dev"),
     "composer:deploy": composerCommand("deploy"),

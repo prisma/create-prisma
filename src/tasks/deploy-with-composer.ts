@@ -140,7 +140,6 @@ export const deployNewProjectWithComposerEffect = Effect.fn("Deployment.deploy")
 
     const deployCommand = getLocalPackageBinaryCommand(options.packageManager, "prisma", [
       "deploy",
-      "module.ts",
     ]);
     yield* Effect.sync(() => {
       clearProgress();

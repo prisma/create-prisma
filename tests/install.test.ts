@@ -240,10 +240,8 @@ describe("Composer package-manager commands", () => {
 
   test("uses each selected package manager for Prisma CLI execution", () => {
     for (const packageManager of ["npm", "pnpm", "yarn", "bun"] as const) {
-      expect(getComposerScriptMap(packageManager)["composer:deploy"]).toBe(
-        "prisma deploy module.ts",
-      );
-      expect(getComposerScriptMap(packageManager)["composer:dev"]).toBe("prisma dev module.ts");
+      expect(getComposerScriptMap(packageManager)["composer:deploy"]).toBe("prisma deploy");
+      expect(getComposerScriptMap(packageManager)["composer:dev"]).toBe("prisma dev");
     }
     expect(getComposerScriptMap("bun")["composer:destroy"]).toBeUndefined();
     expect(getComposerScriptMap("deno")).toEqual({});
@@ -434,6 +432,7 @@ describe("generated templates", () => {
               expect(prismaConfig).toContain('import { definePrismaConfig } from "prisma/config"');
               expect(prismaConfig).toContain('agents: ["claude", "cursor", "agents", "devin"]');
               expect(prismaConfig).toContain("composer: composer({");
+              expect(prismaConfig).toContain('entry: "./module.ts"');
               expect(prismaConfig).toContain('prismaCloud({ region: "us-east-1" })');
               expect(prismaConfig).toContain("state: prismaState()");
               expect(prismaConfig).not.toContain("configPath:");
