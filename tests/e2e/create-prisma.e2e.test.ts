@@ -98,7 +98,12 @@ function findAppEndpoint(output: string): string | undefined {
   for (const line of output.split(/\r?\n/)) {
     try {
       const frame = JSON.parse(line) as { kind?: unknown; name?: unknown; url?: unknown };
-      if (frame.kind === "endpoint" && frame.name === "app" && typeof frame.url === "string") {
+      if (
+        frame.kind === "endpoint" &&
+        typeof frame.name === "string" &&
+        frame.name.endsWith(".app") &&
+        typeof frame.url === "string"
+      ) {
         return frame.url;
       }
     } catch {

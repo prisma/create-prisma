@@ -3,8 +3,8 @@ import type { CreateTemplate, PackageManager } from "../types";
 export const dependencyVersionMap = {
   "@astrojs/node": "^11.1.9",
   "@elysia/node": "^1.4.6",
-  "@prisma/composer": "0.34.0",
-  "@prisma/composer-prisma-cloud": "0.34.0",
+  "@prisma/composer": "0.35.0",
+  "@prisma/composer-prisma-cloud": "0.35.0",
   "@prisma/dev": "0.25.2",
   "@prisma/orm-mongo": "8.0.0-rc.20",
   // Must match @prisma/composer-prisma-cloud's exact peerDependency, even when
@@ -23,7 +23,7 @@ export const dependencyVersionMap = {
   nitro: "^3.0.260903-beta",
   // Must match the @prisma/composer-cli version this prisma release depends on.
   // `bun run check:pins` verifies that against the Composer pins above.
-  prisma: "8.0.0-rc.27",
+  prisma: "8.0.0-rc.28",
   // Node 22 needs a global Temporal for the ORM runtime's timestamp columns.
   "temporal-polyfill": "^1.0.6",
   tsdown: "^0.23.1",
