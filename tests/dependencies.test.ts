@@ -4,13 +4,13 @@ import { dependencyVersionMap, getDependencyVersion } from "../src/constants/dep
 
 describe("Prisma 8 dependency versions", () => {
   test("uses the selected Prisma 8 and Composer releases", () => {
-    expect(getDependencyVersion("@prisma/orm-postgres")).toBe("8.0.0-rc.20");
-    expect(getDependencyVersion("@prisma/orm-mongo")).toBe("8.0.0-rc.20");
-    expect(getDependencyVersion("@prisma/composer")).toBe("0.35.0");
-    expect(getDependencyVersion("@prisma/composer-prisma-cloud")).toBe("0.35.0");
-    expect(getDependencyVersion("prisma")).toBe("8.0.0-rc.28");
-    expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.83");
-    expect(getDependencyVersion("effect")).toBe("4.0.3");
+    expect(getDependencyVersion("@prisma/orm-postgres")).toBe("8.0.0-rc.23");
+    expect(getDependencyVersion("@prisma/orm-mongo")).toBe("8.0.0-rc.23");
+    expect(getDependencyVersion("@prisma/composer")).toBe("0.38.0");
+    expect(getDependencyVersion("@prisma/composer-prisma-cloud")).toBe("0.38.0");
+    expect(getDependencyVersion("prisma")).toBe("8.0.0-rc.33");
+    expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.84");
+    expect(getDependencyVersion("effect")).toBe("4.0.5");
     expect(getDependencyVersion("turbo")).toBe("2.11.10");
     expect(getDependencyVersion("typescript")).toBe("^6.0.3");
   });
