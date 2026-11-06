@@ -533,7 +533,7 @@ describe("create-prisma e2e", () => {
       expect(packageJson.devDependencies.prisma).toBe(dependencyVersionMap.prisma);
       expect(packageJson.scripts.postinstall).toBe("prisma skills sync || exit 0");
       expect(packageJson.scripts.deploy).toContain("bun run composer:deploy");
-      expect(packageJson.overrides.effect).toBe("4.0.3");
+      expect(packageJson.overrides.effect).toBe(dependencyVersionMap.effect);
       expect(moduleSource).toContain("postgres({");
       expect(dbSource).toContain("service.load().database.client");
 

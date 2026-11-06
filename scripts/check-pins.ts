@@ -47,6 +47,11 @@ if (!composerCliVersion) {
   process.exit(1);
 }
 
+if (!toolchainVersion) {
+  console.error(`prisma@${cliVersion} does not depend on @prisma/orm-toolchain.`);
+  process.exit(1);
+}
+
 if (composerCliVersion !== composerVersion) {
   console.error(
     `Version mismatch: prisma@${cliVersion} depends on @prisma/composer-cli@${composerCliVersion}, ` +
@@ -54,6 +59,21 @@ if (composerCliVersion !== composerVersion) {
       `Bump the Composer pins to ${composerCliVersion}, or pin prisma to the release that depends on ${composerVersion}.`,
   );
   process.exit(1);
+}
+
+const composerDependencies = (await npmViewJson(
+  `@prisma/composer@${composerVersion}`,
+  "dependencies",
+)) as Record<string, string>;
+
+for (const name of ["alchemy", "effect"] as const) {
+  if (composerDependencies[name] !== dependencyVersionMap[name]) {
+    console.error(
+      `Version mismatch: @prisma/composer@${composerVersion} depends on ${name}@${composerDependencies[name]}, ` +
+        `but scaffolds pin it to ${dependencyVersionMap[name]}.`,
+    );
+    process.exit(1);
+  }
 }
 
 const cloudPeerDependencies = (await npmViewJson(
@@ -78,16 +98,18 @@ if (cloudOrmPeer !== ormVersion) {
   process.exit(1);
 }
 
-if (toolchainVersion && toolchainVersion !== ormVersion) {
-  console.warn(
-    `Note: prisma@${cliVersion} bundles @prisma/orm-toolchain@${toolchainVersion}, ` +
-      `which differs from the pinned ORM ${ormVersion}. ` +
-      `The ORM pin follows @prisma/composer-prisma-cloud's peerDependency so npm install stays resolvable.`,
+if (toolchainVersion !== ormVersion) {
+  console.error(
+    `Version mismatch: prisma@${cliVersion} bundles @prisma/orm-toolchain@${toolchainVersion}, ` +
+      `but scaffolds pin the ORM to ${ormVersion}. \`prisma contract emit\` rejects ORM packages ` +
+      `from another release, so wait for a Composer and prisma release on the same ORM version.`,
   );
+  process.exit(1);
 }
 
 console.log(
   `prisma@${cliVersion} depends on @prisma/composer-cli@${composerCliVersion}, ` +
     `matching the pinned Composer ${composerVersion}; ` +
-    `@prisma/composer-prisma-cloud peers @prisma/orm-postgres@${cloudOrmPeer}, matching the ORM pins.`,
+    `@prisma/composer-prisma-cloud peers @prisma/orm-postgres@${cloudOrmPeer} and prisma bundles ` +
+    `@prisma/orm-toolchain@${toolchainVersion}, both matching the ORM pins.`,
 );

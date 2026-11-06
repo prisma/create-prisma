@@ -27,7 +27,7 @@ export async function listUsers(limit = 10) {
     email: user.email,
     username: user.username ?? null,
     name: user.name ?? null,
-    createdAt: user.createdAt,
+    createdAt: user.createdAt.toISOString(),
   }));
 {{/if}}
 }
