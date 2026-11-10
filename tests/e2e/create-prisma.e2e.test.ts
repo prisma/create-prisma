@@ -67,7 +67,7 @@ async function runCreatePrismaJson(rootDir: string, args: string[]) {
   const child = Bun.spawn({
     cmd: [process.execPath, path.join(import.meta.dir, "../../src/cli.ts"), ...args],
     cwd: rootDir,
-    env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
+    env: { ...appEnv, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -147,7 +147,7 @@ async function verifyBuiltServer(
   const process = Bun.spawn({
     cmd: ["node", "dist/server.mjs"],
     cwd: projectDir,
-    env: { ...Bun.env, ...env, PORT: String(port) },
+    env: { ...appEnv, ...env, PORT: String(port) },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -352,7 +352,7 @@ describe("create-prisma e2e", () => {
       ],
       cwd: rootDir,
       env: {
-        ...Bun.env,
+        ...appEnv,
         PATH: emptyBinDir,
         CI: "1",
         CREATE_PRISMA_DISABLE_TELEMETRY: "1",
@@ -402,7 +402,7 @@ describe("create-prisma e2e", () => {
         "--json",
       ],
       cwd: rootDir,
-      env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
+      env: { ...appEnv, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
       stdout: "pipe",
       stderr: "pipe",
     });

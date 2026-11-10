@@ -36,6 +36,13 @@ export function formatProjectSummary(options: {
   return lines.join("\n");
 }
 
+export function showsComposerDevStep(
+  context: PrismaSetupContext,
+  options: PrismaSetupRunOptions,
+): boolean {
+  return options.includeDevNextStep === true && context.packageManager !== "deno";
+}
+
 export function buildNextSteps(
   context: PrismaSetupContext,
   options: PrismaSetupRunOptions,
@@ -47,16 +54,15 @@ export function buildNextSteps(
       description: "Composer uses this secret when deploying the MongoDB template.",
     });
   }
-  if (options.includeDevNextStep) {
+  if (showsComposerDevStep(context, options)) {
     nextSteps.push({
-      command: getRunScriptCommand(
-        context.packageManager,
-        context.packageManager === "deno" ? "dev" : "dev:composer",
-      ),
-      description:
-        context.packageManager === "deno"
-          ? "Start the Deno app after setting DATABASE_URL in .env."
-          : "Build and start the app with Prisma Composer locally.",
+      command: getRunScriptCommand(context.packageManager, "dev:composer"),
+      description: "Build and start the app with Prisma Composer locally.",
+    });
+  } else if (options.includeDevNextStep) {
+    nextSteps.push({
+      command: getRunScriptCommand(context.packageManager, "dev"),
+      description: "Start the Deno app after setting DATABASE_URL in .env.",
     });
   }
   if (context.packageManager !== "deno") {

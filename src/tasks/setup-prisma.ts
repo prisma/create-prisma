@@ -12,18 +12,23 @@ import type { CreateTemplate, PrismaSetupCommandInput } from "../types";
 import { getErrorMessage } from "../utils/errors";
 import { getInstallCommand } from "../utils/package-manager";
 import { atCreateStage } from "../workflow/failure";
+import { getComposerDevBunWarningEffect } from "./composer/dev-bun";
 import { deployNewProjectWithComposerEffect } from "./deploy-with-composer";
 import { initializeGitRepositoryEffect, type GitInitializationResult } from "./initialize-git";
 import { installProjectDependenciesEffect, writePrismaDependenciesEffect } from "./install";
 import { initializeAgentSkills, runPrismaCli, runPrismaInit } from "./prisma-setup/commands";
 import { collectPrismaSetupContextEffect } from "./prisma-setup/context";
-import { checkLocalBunEffect } from "./prisma-setup/local-bun";
 import {
   ensureComposerTypeScriptOptions,
   ensureGitignoreEntry,
   ensureMongoEnvironment,
 } from "./prisma-setup/project-files";
-import { buildNextSteps, formatNextSteps, formatProjectSummary } from "./prisma-setup/presentation";
+import {
+  buildNextSteps,
+  formatNextSteps,
+  formatProjectSummary,
+  showsComposerDevStep,
+} from "./prisma-setup/presentation";
 import type {
   PrismaSetupContext,
   PrismaSetupRunOptions,
@@ -203,8 +208,8 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
     gitInitialization?.status === "skipped"
       ? [`Could not initialize Git repository: ${gitInitialization.reason}`]
       : [];
-  if (options.includeDevNextStep && context.packageManager !== "deno") {
-    const bunWarning = yield* checkLocalBunEffect(projectDir);
+  if (showsComposerDevStep(context, options)) {
+    const bunWarning = yield* getComposerDevBunWarningEffect(projectDir, context.packageManager);
     if (bunWarning) {
       warnings.push(bunWarning);
       yield* Effect.sync(() => log.warn(bunWarning, { output: context.output }));
