@@ -21,6 +21,9 @@ import type { CreateCommandResult } from "../../src/result";
 import { scaffoldCreateTemplate } from "../../src/templates/render-create-template";
 import { writeCreateTemplateDependencies, writePrismaDependencies } from "../../src/tasks/install";
 
+// `bun test` sets NODE_ENV=test; a Vite build under it emits development JSX
+// that React's production runtime cannot run.
+const { NODE_ENV: _testNodeEnv, ...appEnv } = Bun.env;
 const TEST_TIMEOUT = Number(process.env.CREATE_PRISMA_E2E_TIMEOUT_MS ?? 300_000);
 const tempRoots: string[] = [];
 const TEST_PSL_CONTRACT = `// use prisma-8
@@ -45,7 +48,7 @@ async function runCommand(projectDir: string, args: string[]) {
   const process = Bun.spawn({
     cmd: args,
     cwd: projectDir,
-    env: { ...Bun.env, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
+    env: { ...appEnv, CI: "1", CREATE_PRISMA_DISABLE_TELEMETRY: "1" },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -175,12 +178,21 @@ async function verifyBuiltServer(
   return body;
 }
 
-async function verifyComposerDev(projectDir: string, usersPath = "") {
+async function expectSeededUsersJson(response: Response) {
+  const body = (await response.json()) as { users: Array<{ name: string }> };
+  expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
+}
+
+async function verifyComposerDev(
+  projectDir: string,
+  usersPath = "",
+  expectUsers: (response: Response) => Promise<void> = expectSeededUsersJson,
+) {
   const process = Bun.spawn({
     // A piped prisma command prints plain text; --json asks for the endpoint frames read below.
     cmd: ["bun", "run", "dev:composer", "--", "--json"],
     cwd: projectDir,
-    env: { ...Bun.env, CI: "1" },
+    env: { ...appEnv, CI: "1" },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -219,8 +231,7 @@ async function verifyComposerDev(projectDir: string, usersPath = "") {
       // retry connection refusals until the deadline.
       const response = await fetchUntilReady(`${appUrl}${usersPath}`, deadline);
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { users: Array<{ name: string }> };
-      expect(body.users.map((user) => user.name)).toEqual(["Alice", "Bob", "Carol"]);
+      await expectUsers(response);
       return;
     }
   } finally {
@@ -540,6 +551,38 @@ describe("create-prisma e2e", () => {
       await runCommand(projectDir, ["bun", "run", "build"]);
       await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
       await verifyComposerDev(projectDir);
+    },
+    TEST_TIMEOUT,
+  );
+
+  test(
+    "serves a TanStack Start app's seeded users under Composer dev",
+    async () => {
+      const rootDir = await mkdtemp(path.join(tmpdir(), "create-prisma-tanstack-e2e-"));
+      tempRoots.push(rootDir);
+      const { result, exitCode } = await runCreatePrismaJson(rootDir, [
+        "tanstack-app",
+        "--template",
+        "tanstack-start",
+        "--provider",
+        "postgres",
+        "--package-manager",
+        "bun",
+        "--skills",
+        "none",
+        "--no-deploy",
+        "--json",
+      ]);
+      expect(result).toMatchObject({ ok: true });
+      expect(exitCode).toBe(0);
+
+      const projectDir = path.join(rootDir, "tanstack-app");
+      await runCommand(projectDir, ["bun", "run", "build"]);
+      await runCommand(projectDir, ["bunx", "tsc", "--noEmit"]);
+      await verifyComposerDev(projectDir, "/", async (response) => {
+        const html = await response.text();
+        for (const name of ["Alice", "Bob", "Carol"]) expect(html).toContain(name);
+      });
     },
     TEST_TIMEOUT,
   );

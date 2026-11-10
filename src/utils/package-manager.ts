@@ -89,7 +89,7 @@ const packageManagerChecks: Record<
 const PACKAGE_MANAGER_VERSION_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
-function parsePackageManagerVersion(
+export function parsePackageManagerVersion(
   packageManager: PackageManager,
   version: string,
 ): PackageManagerVersion | undefined {
@@ -102,7 +102,7 @@ function parsePackageManagerVersion(
   return parts.every(Number.isSafeInteger) ? { version: match[0], parts } : undefined;
 }
 
-function isOlderVersion(version: VersionParts, minimum: VersionParts): boolean {
+export function isOlderVersion(version: VersionParts, minimum: VersionParts): boolean {
   for (const [index, part] of version.entries()) {
     if (part !== minimum[index]) return part < minimum[index]!;
   }

@@ -10,6 +10,8 @@ Each supported Node.js release works with the npm it ships, including npm 10 on 
 
 The one exception is the `nuxt` template. Nuxt itself requires Node.js `^22.22.3 || ^24.15.0 || >=26.0.0`, so Nuxt projects declare that narrower range.
 
+Running the app locally with `dev:composer` needs Bun 1.3.14 or newer on your PATH, because Prisma Composer runs the app with that Bun, as Prisma Compute does. Older Bun fails on React 19.3 server rendering, so every page of the `tanstack-start` template returns HTTP 500. create-prisma warns when it finds an older Bun.
+
 ## Quick start
 
 Use your package manager:

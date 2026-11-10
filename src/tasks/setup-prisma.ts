@@ -17,6 +17,7 @@ import { initializeGitRepositoryEffect, type GitInitializationResult } from "./i
 import { installProjectDependenciesEffect, writePrismaDependenciesEffect } from "./install";
 import { initializeAgentSkills, runPrismaCli, runPrismaInit } from "./prisma-setup/commands";
 import { collectPrismaSetupContextEffect } from "./prisma-setup/context";
+import { checkLocalBunEffect } from "./prisma-setup/local-bun";
 import {
   ensureComposerTypeScriptOptions,
   ensureGitignoreEntry,
@@ -202,6 +203,13 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
     gitInitialization?.status === "skipped"
       ? [`Could not initialize Git repository: ${gitInitialization.reason}`]
       : [];
+  if (options.includeDevNextStep && context.packageManager !== "deno") {
+    const bunWarning = yield* checkLocalBunEffect(projectDir);
+    if (bunWarning) {
+      warnings.push(bunWarning);
+      yield* Effect.sync(() => log.warn(bunWarning, { output: context.output }));
+    }
+  }
   const projectSummary = formatProjectSummary({
     createdProjectPath: options.createdProjectPath,
     ...(deployment ? { deployment } : {}),
