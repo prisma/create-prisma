@@ -7,7 +7,7 @@ const directory = await mkdtemp(path.join(tmpdir(), "create-prisma-node-smoke-")
 const env = {
   DO_NOT_TRACK: "1",
   CREATE_PRISMA_DISABLE_TELEMETRY: "1",
-  PRISMA_NEXT_DISABLE_TELEMETRY: "1",
+  PRISMA_DISABLE_TELEMETRY: "1",
   NO_UPDATE_NOTIFIER: "1",
   npm_config_engine_strict: "false",
 };

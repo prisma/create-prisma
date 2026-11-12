@@ -1,5 +1,5 @@
 import { cancel, intro, log, note, outro, spinner } from "@clack/prompts";
-import { Cause, Clock, Effect, Exit, Option, Ref, Schema } from "effect";
+import { Cause, Effect, Exit, Option, Ref, Schema } from "effect";
 
 import { CreateCancellationError, CreateFailure } from "../create-outcome";
 import {
@@ -9,11 +9,7 @@ import {
   type CreateNextStep,
 } from "../result";
 import { applicationRuntime } from "../runtime";
-import {
-  trackCreateCancelledEffect,
-  trackCreateCompletedEffect,
-  trackCreateFailedEffect,
-} from "../telemetry/create";
+import { trackCreateEffect } from "../telemetry/create";
 import { scaffoldCreateFrameworkTemplateEffect } from "../templates/render-create-template";
 import { writeCreateTemplateDependenciesEffect } from "../tasks/install";
 import { executePrismaSetupContextEffect } from "../tasks/setup-prisma";
@@ -222,18 +218,12 @@ const createProjectEffect = Effect.fn("Create.project")(function* (
 export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
   rawInput: CreateCommandInput = {},
 ) {
-  const startedAt = yield* Clock.currentTimeMillis;
   const inputRef = yield* Ref.make<CreateCommandInput>(rawInput);
   const contextRef = yield* Ref.make<Option.Option<CreateContext>>(Option.none());
   const exit = yield* Effect.exit(createProjectEffect(rawInput, inputRef, contextRef));
-  const durationMs = (yield* Clock.currentTimeMillis) - startedAt;
 
   if (Exit.isSuccess(exit)) {
-    yield* trackCreateCompletedEffect({
-      input: exit.value.input,
-      context: exit.value.context,
-      durationMs,
-    });
+    yield* trackCreateEffect({ input: exit.value.input, context: exit.value.context, exitCode: 0 });
     return exit.value.result;
   }
 
@@ -241,12 +231,7 @@ export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
   const input = yield* Ref.get(inputRef);
   const context = Option.getOrUndefined(yield* Ref.get(contextRef));
   if (error instanceof CreateCancellationError) {
-    yield* trackCreateCancelledEffect({
-      input,
-      ...(context ? { context } : {}),
-      durationMs,
-      stage: error.stage,
-    });
+    yield* trackCreateEffect({ input, ...(context ? { context } : {}), exitCode: 1 });
     return createCommandFailureResult(
       error.stage,
       error.message ?? "Operation cancelled.",
@@ -267,15 +252,7 @@ export const runCreateCommandEffect = Effect.fn("Create.run")(function* (
   if (!failure.errorReported) {
     yield* Effect.sync(() => cancel(`Create command failed: ${failure.message}`, { output }));
   }
-  yield* trackCreateFailedEffect({
-    input,
-    ...(context ? { context } : {}),
-    durationMs,
-    error: failure.cause ?? failure,
-    stage: failure.stage,
-    reason: failure.reason,
-    ...(failure.targetDirectoryKind ? { targetDirectoryKind: failure.targetDirectoryKind } : {}),
-  });
+  yield* trackCreateEffect({ input, ...(context ? { context } : {}), exitCode: 1 });
   return createCommandFailureResult(
     failure.stage,
     failure.message,

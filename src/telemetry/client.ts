@@ -1,123 +1,180 @@
-import { Effect, FileSystem, Schema } from "effect";
+import { determineAgent } from "@vercel/detect-agent";
+import ci from "ci-info";
+import { Effect, FileSystem } from "effect";
 import { randomUUID } from "node:crypto";
-import os from "node:os";
 import path from "node:path";
 
-import { applicationRuntime } from "../runtime";
-
-const TELEMETRY_API_KEY = process.env.CREATE_PRISMA_TELEMETRY_API_KEY ?? "";
-const TELEMETRY_HOST = process.env.CREATE_PRISMA_TELEMETRY_HOST || "https://us.i.posthog.com";
-const TELEMETRY_CONFIG_FILE = "telemetry.json";
+// The Prisma CLI's anonymous usage backend (`prisma/orm` apps/telemetry-backend).
+// create-prisma rows share its table and are told apart by their `command`.
+const TELEMETRY_BACKEND_URL = "https://cmpbfbsdp09hr3jf7pojjs5qs.ewr.prisma.build";
+const TELEMETRY_DOCS_URL = "https://www.prisma.io/docs/cli";
 export const TELEMETRY_TIMEOUT_MS = 2_000;
-const AnonymousId = Schema.String.check(Schema.isUUID(4));
-const decodeAnonymousId = Schema.decodeUnknownExit(AnonymousId);
 
-type TelemetryValue = boolean | number | string | string[] | null | undefined;
-type TelemetryProperties = Record<string, TelemetryValue>;
+export type TelemetryEvent = {
+  command: string;
+  flags: string[];
+  databaseTarget: string | null;
+  exitCode: number;
+};
 
-const isTruthyEnvValue = (value: string | undefined) =>
-  ["1", "true", "yes", "on"].includes(
-    String(value ?? "")
-      .trim()
-      .toLowerCase(),
-  );
+type PrismaUserConfig = Record<string, unknown> & {
+  enableTelemetry?: unknown;
+  installationId?: unknown;
+};
 
-function shouldDisableTelemetry(): boolean {
+const getCliVersion = () => process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0";
+
+// The Prisma CLI's spelling: set-but-falsy values ('', '0', 'false') do not opt out.
+const isTruthyOptOut = (value: string | undefined) =>
+  value !== undefined && !["", "0", "false"].includes(value.trim().toLowerCase());
+
+function isTelemetryDisabledByEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
   return (
-    TELEMETRY_API_KEY.length === 0 ||
-    isTruthyEnvValue(process.env.CI) ||
-    isTruthyEnvValue(process.env.GITHUB_ACTIONS) ||
-    process.env.CREATE_PRISMA_DISABLE_TELEMETRY !== undefined ||
-    process.env.CREATE_PRISMA_TELEMETRY_DISABLED !== undefined ||
-    process.env.DO_NOT_TRACK !== undefined
+    // Unbuilt source runs (tests, `bun run dev`) carry no release to attribute.
+    getCliVersion() === "0.0.0" ||
+    ci.isCI ||
+    isTruthyOptOut(env.PRISMA_DISABLE_TELEMETRY) ||
+    isTruthyOptOut(env.DO_NOT_TRACK) ||
+    // create-prisma's own opt-outs from before it shared the Prisma CLI's consent.
+    env.CREATE_PRISMA_DISABLE_TELEMETRY !== undefined ||
+    env.CREATE_PRISMA_TELEMETRY_DISABLED !== undefined
   );
 }
 
-function getTelemetryConfigDir(): string {
-  if (process.platform === "darwin") {
-    return path.join(os.homedir(), "Library", "Application Support", "create-prisma");
-  }
+// The Prisma CLI's preference store, so `prisma telemetry disable` covers create-prisma
+// and both report under one installation id.
+function getPrismaUserConfigPath(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const set = (value: string | undefined) => (value ? value : undefined);
   if (process.platform === "win32") {
-    return path.join(
-      process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"),
-      "create-prisma",
-    );
+    const appData = set(env.APPDATA);
+    if (appData) return path.join(appData, "prisma", "config.json");
+    const userProfile = set(env.USERPROFILE);
+    return userProfile
+      ? path.join(userProfile, "AppData", "Roaming", "prisma", "config.json")
+      : undefined;
   }
-  return path.join(
-    process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
-    "create-prisma",
-  );
+  const xdg = set(env.XDG_CONFIG_HOME);
+  if (xdg) return path.join(xdg, "prisma", "config.json");
+  const home = set(env.HOME);
+  return home ? path.join(home, ".config", "prisma", "config.json") : undefined;
 }
 
-const getAnonymousIdEffect = Effect.fn("Telemetry.getAnonymousId")(function* () {
+const firstRunNotice = [
+  "Prisma collects anonymous CLI usage data, enabled by default.",
+  `What's collected and why: ${TELEMETRY_DOCS_URL}.`,
+  'Opt out: run "prisma telemetry disable", set DO_NOT_TRACK=1 or',
+  "PRISMA_DISABLE_TELEMETRY=1.",
+].join(" ");
+
+const readPrismaUserConfigEffect = Effect.fn("Telemetry.readUserConfig")(function* (
+  configPath: string,
+) {
   const fs = yield* FileSystem.FileSystem;
-  const configPath = path.join(getTelemetryConfigDir(), TELEMETRY_CONFIG_FILE);
-  const persisted = yield* fs.readFileString(configPath).pipe(
+  return yield* fs.readFileString(configPath).pipe(
     Effect.flatMap((source) =>
       Effect.try({
-        try: () => JSON.parse(source) as { anonymousId?: unknown },
-        catch: () => ({ anonymousId: undefined }),
+        try: () => JSON.parse(source) as unknown,
+        catch: () => undefined,
       }),
     ),
-    Effect.catch(() => Effect.succeed({ anonymousId: undefined })),
+    Effect.map((parsed): PrismaUserConfig =>
+      parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as PrismaUserConfig)
+        : {},
+    ),
+    Effect.catch(() => Effect.succeed<PrismaUserConfig>({})),
   );
-  const decoded = decodeAnonymousId(persisted.anonymousId);
-  if (decoded._tag === "Success") return decoded.value;
+});
 
-  const anonymousId = randomUUID();
-  yield* Effect.gen(function* () {
+// Discloses once, then stores the id beside the existing preferences (temp file + rename,
+// as the Prisma CLI writes it). A failed write sends nothing and discloses again next run.
+const discloseAndMintEffect = Effect.fn("Telemetry.discloseAndMint")(function* (
+  configPath: string,
+  config: PrismaUserConfig,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  yield* Effect.sync(() => process.stderr.write(`${firstRunNotice}\n`));
+  const installationId = randomUUID();
+  const tmpPath = `${configPath}.${process.pid}.tmp`;
+  return yield* Effect.gen(function* () {
     yield* fs.makeDirectory(path.dirname(configPath), { recursive: true });
-    yield* fs.writeFileString(configPath, `${JSON.stringify({ anonymousId }, null, 2)}\n`);
-  }).pipe(Effect.catch(() => Effect.void));
-  return anonymousId;
+    yield* fs.writeFileString(
+      tmpPath,
+      `${JSON.stringify({ ...config, installationId }, null, 2)}\n`,
+    );
+    yield* fs.rename(tmpPath, configPath);
+    return installationId;
+  }).pipe(Effect.catch(() => Effect.succeed(undefined)));
 });
 
-const getCommonProperties = (): TelemetryProperties => ({
-  "cli-version": process.env.CREATE_PRISMA_CLI_VERSION ?? "0.0.0",
-  "node-version": process.version,
-  platform: process.platform,
-  arch: process.arch,
+const resolveInstallationIdEffect = Effect.fn("Telemetry.resolveInstallationId")(function* () {
+  const configPath = getPrismaUserConfigPath();
+  if (!configPath) return undefined;
+  const config = yield* readPrismaUserConfigEffect(configPath);
+  if (config.enableTelemetry === false) return undefined;
+  if (typeof config.installationId === "string" && config.installationId.length > 0) {
+    return config.installationId;
+  }
+  return yield* discloseAndMintEffect(configPath, config);
 });
 
-const sanitizeProperties = (properties: TelemetryProperties) =>
-  Object.fromEntries(
-    Object.entries(properties).filter(([, value]) => value !== undefined),
-  ) as Record<string, Exclude<TelemetryValue, undefined>>;
+function getRuntime(): { name: string; version: string } {
+  if (process.versions.bun !== undefined) return { name: "bun", version: process.versions.bun };
+  if (process.versions.deno !== undefined) return { name: "deno", version: process.versions.deno };
+  return { name: "node", version: process.versions.node };
+}
+
+// `pnpm/10.27.0 npm/? node/v24.13.0 darwin arm64` → `pnpm/10.27.0`
+function getInvokingPackageManager(userAgent = process.env.npm_config_user_agent): string | null {
+  const first = userAgent?.split(/\s+/)[0];
+  return first?.includes("/") ? first : null;
+}
+
+// Integration tests point the client at a local server, as they do for the Prisma CLI.
+function getTelemetryEndpoint(override = process.env.PRISMA_TELEMETRY_ENDPOINT): string {
+  try {
+    return new URL("/events", override || TELEMETRY_BACKEND_URL).toString();
+  } catch {
+    return new URL("/events", TELEMETRY_BACKEND_URL).toString();
+  }
+}
 
 export const trackCliTelemetryEffect = Effect.fn("Telemetry.track")(function* (
-  event: string,
-  properties: TelemetryProperties,
+  event: TelemetryEvent,
 ) {
-  if (shouldDisableTelemetry()) return;
-  const distinctId = yield* getAnonymousIdEffect();
+  if (isTelemetryDisabledByEnvironment()) return;
+  const installationId = yield* resolveInstallationIdEffect();
+  if (!installationId) return;
+  const agent = yield* Effect.promise(() =>
+    determineAgent().then(
+      (result) => (result.isAgent ? result.agent.name : null),
+      () => null,
+    ),
+  );
+  const runtime = getRuntime();
   yield* Effect.tryPromise(async (signal) => {
-    const response = await fetch(new URL("/i/v0/e/", TELEMETRY_HOST), {
+    const response = await fetch(getTelemetryEndpoint(), {
       method: "POST",
       headers: { "content-type": "application/json" },
       redirect: "error",
       body: JSON.stringify({
-        api_key: TELEMETRY_API_KEY,
-        distinct_id: distinctId,
-        event,
-        properties: sanitizeProperties({
-          ...getCommonProperties(),
-          ...properties,
-          $process_person_profile: false,
-          $geoip_disable: true,
-        }),
-        timestamp: new Date().toISOString(),
+        installationId,
+        version: getCliVersion(),
+        command: event.command,
+        flags: event.flags,
+        runtimeName: runtime.name,
+        runtimeVersion: runtime.version,
+        os: process.platform,
+        arch: process.arch,
+        packageManager: getInvokingPackageManager(),
+        databaseTarget: event.databaseTarget,
+        tsVersion: null,
+        agent,
+        extensions: [],
+        exitCode: event.exitCode,
       }),
       signal,
     });
     await response.body?.cancel();
   });
 });
-
-export function trackCliTelemetry(event: string, properties: TelemetryProperties): Promise<void> {
-  return applicationRuntime.runPromise(
-    trackCliTelemetryEffect(event, properties).pipe(
-      Effect.timeout(TELEMETRY_TIMEOUT_MS),
-      Effect.catch(() => Effect.void),
-    ),
-  );
-}
