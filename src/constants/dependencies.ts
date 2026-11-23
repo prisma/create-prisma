@@ -5,6 +5,9 @@ export const dependencyVersionMap = {
   "@elysia/node": "^1.4.6",
   "@prisma/composer": "0.40.0",
   "@prisma/composer-prisma-cloud": "0.40.0",
+  // Yarn apps install it themselves (see writePrismaDependencies). Must match the
+  // version the prisma CLI depends on; `bun run check:pins` verifies that.
+  "@prisma/cli-engine": "0.10.4",
   "@prisma/dev": "0.25.2",
   "@prisma/orm-mongo": "8.0.0-rc.25",
   // Must match both @prisma/composer-prisma-cloud's exact peerDependency (or npm

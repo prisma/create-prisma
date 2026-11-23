@@ -3,6 +3,7 @@ import { dependencyVersionMap } from "../src/constants/dependencies";
 export type Pins = Pick<
   typeof dependencyVersionMap,
   | "prisma"
+  | "@prisma/cli-engine"
   | "@prisma/composer"
   | "@prisma/composer-prisma-cloud"
   | "@prisma/orm-postgres"
@@ -45,6 +46,14 @@ export function findPinProblem(pins: Pins, registry: RegistryMetadata): string |
       `Version mismatch: prisma@${cliVersion} depends on @prisma/composer-cli@${composerCliVersion}, ` +
       `but scaffolds pin @prisma/composer to ${composerVersion}.\n` +
       `Bump the Composer pins to ${composerCliVersion}, or pin prisma to the release that depends on ${composerVersion}.`
+    );
+  }
+
+  const cliEngineVersion = registry.cliDependencies["@prisma/cli-engine"];
+  if (cliEngineVersion !== pins["@prisma/cli-engine"]) {
+    return (
+      `Version mismatch: prisma@${cliVersion} depends on @prisma/cli-engine@${cliEngineVersion}, ` +
+      `but Yarn scaffolds pin it to ${pins["@prisma/cli-engine"]}.`
     );
   }
 

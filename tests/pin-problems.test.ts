@@ -8,6 +8,7 @@ import { dependencyVersionMap } from "../src/constants/dependencies";
 
 const pins: Pins = {
   prisma: "8.0.0-rc.35",
+  "@prisma/cli-engine": "0.10.4",
   "@prisma/composer": "0.40.0",
   "@prisma/composer-prisma-cloud": "0.40.0",
   "@prisma/orm-postgres": "8.0.0-rc.25",
@@ -23,6 +24,7 @@ function registry(overrides: {
 }): RegistryMetadata {
   return {
     cliDependencies: {
+      "@prisma/cli-engine": "0.10.4",
       "@prisma/composer-cli": "0.40.0",
       "@prisma/orm-toolchain": "8.0.0-rc.25",
       ...overrides.cli,
@@ -58,6 +60,12 @@ describe("findPinProblem", () => {
     );
   });
 
+  test("rejects a prisma CLI on another CLI engine", () => {
+    expect(findPinProblem(pins, registry({ cli: { "@prisma/cli-engine": "0.10.3" } }))).toContain(
+      "@prisma/cli-engine@0.10.3",
+    );
+  });
+
   test("rejects Composer peering another ORM release", () => {
     expect(
       findPinProblem(pins, registry({ cloudPeers: { "@prisma/orm-postgres": "8.0.0-rc.20" } })),
@@ -78,6 +86,7 @@ async function runCheckPins(toolchainVersion: string) {
   const binDir = await mkdtemp(path.join(tmpdir(), "create-prisma-pins-"));
   const metadata = {
     [`prisma@${dependencyVersionMap.prisma}`]: {
+      "@prisma/cli-engine": dependencyVersionMap["@prisma/cli-engine"],
       "@prisma/composer-cli": dependencyVersionMap["@prisma/composer"],
       "@prisma/orm-toolchain": toolchainVersion,
     },

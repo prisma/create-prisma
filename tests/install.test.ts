@@ -163,10 +163,14 @@ describe("writePrismaDependencies", () => {
         const packageJson = await readPackageJson(projectDir);
 
         expect(packageJson.dependencies).toMatchObject({
+          "@prisma/orm-postgres": dependencyVersionMap["@prisma/orm-postgres"],
           pg: dependencyVersionMap.pg,
           "temporal-polyfill": dependencyVersionMap["temporal-polyfill"],
         });
-        expect(packageJson.devDependencies?.["@types/pg"]).toBe(dependencyVersionMap["@types/pg"]);
+        expect(packageJson.devDependencies).toMatchObject({
+          "@prisma/cli-engine": dependencyVersionMap["@prisma/cli-engine"],
+          "@types/pg": dependencyVersionMap["@types/pg"],
+        });
       });
     }
   });
@@ -180,8 +184,10 @@ describe("writePrismaDependencies", () => {
 
           expect(packageJson.dependencies?.pg).toBeUndefined();
           expect(packageJson.devDependencies?.["@types/pg"]).toBeUndefined();
+          expect(packageJson.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
           if (provider === "mongo") {
             expect(packageJson.dependencies?.["temporal-polyfill"]).toBeUndefined();
+            expect(packageJson.dependencies?.["@prisma/orm-postgres"]).toBeUndefined();
           }
         });
       }
@@ -508,7 +514,17 @@ describe("generated templates", () => {
                   expect(manifest.dependencies?.pg).toBe(
                     packageManager === "yarn" ? dependencyVersionMap.pg : undefined,
                   );
+                  expect(manifest.dependencies?.["@prisma/orm-postgres"]).toBe(
+                    provider === "postgres" || packageManager === "yarn"
+                      ? dependencyVersionMap["@prisma/orm-postgres"]
+                      : undefined,
+                  );
                 }
+                expect(root.devDependencies?.["@prisma/cli-engine"]).toBe(
+                  packageManager === "yarn"
+                    ? dependencyVersionMap["@prisma/cli-engine"]
+                    : undefined,
+                );
                 for (const name of ["arktype", "mongodb"] as const) {
                   expect(database.dependencies?.[name]).toBe(
                     provider === "mongo" ? dependencyVersionMap[name] : undefined,
