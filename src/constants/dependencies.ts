@@ -14,6 +14,7 @@ export const dependencyVersionMap = {
   "@prisma/orm-postgres": "8.0.0-rc.25",
   "@sveltejs/adapter-node": "^6.0.0",
   "@types/node": "^26.6.5",
+  "@types/pg": "^8.20.0",
   "@vitejs/devtools": "0.7.6",
   alchemy: "2.0.0-beta.87",
   arktype: "^2.2.9",
@@ -22,6 +23,7 @@ export const dependencyVersionMap = {
   mongodb: "^7.7.0",
   "mongodb-memory-server": "^11.3.0",
   nitro: "^3.0.260903-beta",
+  pg: "^8.22.0",
   // Must match the @prisma/composer-cli version this prisma release depends on.
   // `bun run check:pins` verifies that against the Composer pins above.
   prisma: "8.0.0-rc.35",

@@ -186,9 +186,20 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
     devDependencies.push("@prisma/dev");
   }
   if (provider === "mongo") databaseDependencies.push("arktype", "mongodb");
+  // Yarn does not install peer dependencies. pg is a peer of
+  // @prisma/composer-prisma-cloud and @prisma/orm-postgres, and
+  // temporal-polyfill of @prisma/orm-mongo.
+  const yarnPeerDependencies =
+    packageManager === "yarn" ? ["pg", ...(provider === "mongo" ? ["temporal-polyfill"] : [])] : [];
+  databaseDependencies.push(...yarnPeerDependencies);
+  if (packageManager === "yarn") devDependencies.push("@types/pg");
   const dependencies =
     options.template === "turborepo"
-      ? [getDbPackages(provider), ...(provider === "mongo" ? ["arktype"] : [])]
+      ? [
+          getDbPackages(provider),
+          ...(provider === "mongo" ? ["arktype"] : []),
+          ...yarnPeerDependencies,
+        ]
       : [...databaseDependencies];
   if (packageManager === "deno") dependencies.push("dotenv");
   yield* addPackageDependencyEffect({
