@@ -18,7 +18,6 @@ type Dependencies = Record<string, string | undefined>;
 export type RegistryMetadata = {
   cliDependencies: Dependencies;
   composerDependencies: Dependencies;
-  composerCloudDependencies: Dependencies;
   composerCloudPeerDependencies: Dependencies;
 };
 
@@ -81,20 +80,6 @@ export function findPinProblem(pins: Pins, registry: RegistryMetadata): string |
       `but Yarn scaffolds pin it to ${pins["@prisma/management-api-sdk"]}.\n` +
       `Pin @prisma/management-api-sdk to ${managementSdkVersion}.`
     );
-  }
-
-  for (const [composerPackage, dependencies] of [
-    ["@prisma/composer", registry.composerDependencies],
-    ["@prisma/composer-prisma-cloud", registry.composerCloudDependencies],
-  ] as const) {
-    const range = dependencies["@prisma/management-api-sdk"];
-    if (range && !Bun.semver.satisfies(managementSdkVersion, range)) {
-      return (
-        `${composerPackage}@${composerVersion} depends on @prisma/management-api-sdk@${range}, ` +
-        `but Yarn scaffolds force it to ${managementSdkVersion}, the version prisma@${cliVersion} ` +
-        `depends on.\nWait for a Composer and prisma release that agree on it.`
-      );
-    }
   }
 
   for (const name of ["alchemy", "effect"] as const) {

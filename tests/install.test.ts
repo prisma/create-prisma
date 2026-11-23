@@ -852,10 +852,7 @@ describe("generated templates", () => {
                   ].join("\n"),
                 );
               } else if (packageManager === "yarn") {
-                expect(packageJson.resolutions).toEqual({
-                  ...effectPins,
-                  "@prisma/management-api-sdk": dependencyVersionMap["@prisma/management-api-sdk"],
-                });
+                expect(packageJson.resolutions).toEqual(effectPins);
                 expect(await readFile(path.join(projectDir, ".yarnrc.yml"), "utf8")).toBe(
                   'nodeLinker: node-modules\nnpmPreapprovedPackages:\n  - "prisma"\n  - "@prisma/*"\n',
                 );

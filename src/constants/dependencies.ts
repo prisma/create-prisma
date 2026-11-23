@@ -10,10 +10,9 @@ export const dependencyVersionMap = {
   // `bun run check:pins` verifies that.
   "@prisma/cli-engine": "0.10.4",
   "@prisma/dev": "0.25.2",
-  // Yarn apps list it as a dev dependency, as the CLI engine's peer, and in
-  // resolutions, so the CLI, the engine and Composer share one copy. Must match the
-  // version the prisma CLI depends on and fit Composer's range;
-  // `bun run check:pins` verifies both.
+  // Yarn apps list it as a dev dependency, as the CLI engine's peer. Must match the
+  // version the prisma CLI depends on, so the CLI and the engine share one copy;
+  // `bun run check:pins` verifies that.
   "@prisma/management-api-sdk": "1.101.0",
   "@prisma/orm-mongo": "8.0.0-rc.25",
   // Must match both @prisma/composer-prisma-cloud's exact peerDependency (or npm
