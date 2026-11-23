@@ -116,6 +116,51 @@ test("declares the npm version it detected in the generated package.json", async
   });
 });
 
+test("adds the peers Yarn does not install before the first dependency installation", async () => {
+  await withTempProject(async (projectDir) => {
+    let installChecked = false;
+    const result = await applicationRuntime.runPromise(
+      runCreateCommandEffect({
+        name: path.relative(process.cwd(), path.join(projectDir, "app")),
+        template: "minimal",
+        packageManager: "yarn",
+        json: true,
+        deploy: false,
+      }).pipe(
+        Effect.provideService(CommandRunner, {
+          run: () => Effect.die("Unexpected unchecked command"),
+          runChecked: (spec) =>
+            Effect.gen(function* () {
+              expect(spec.command).toBe("yarn");
+              if (spec.args[0] === "--version") {
+                return { exitCode: 0, stdout: "4.12.0\n", stderr: "" };
+              }
+              expect(spec.args[0]).toBe("install");
+              const fs = yield* FileSystem.FileSystem;
+              const packageJson = JSON.parse(
+                yield* fs.readFileString(path.join(spec.cwd, "package.json")).pipe(Effect.orDie),
+              );
+              expect(Object.keys(packageJson.dependencies)).toContain("effect");
+              expect(Object.keys(packageJson.devDependencies)).toEqual(
+                expect.arrayContaining(["@prisma/cli-engine", "@prisma/management-api-sdk"]),
+              );
+              installChecked = true;
+              return yield* new CommandExecutionError({
+                command: spec.command,
+                args: [...spec.args],
+                exitCode: 1,
+                stdout: "",
+                stderr: "Stopped before installing test dependencies",
+              });
+            }),
+        }),
+      ),
+    );
+    expect(installChecked).toBe(true);
+    expect(result).toMatchObject({ ok: false, error: { stage: "install_dependencies" } });
+  });
+});
+
 test("rejects a missing package manager before writing project files", async () => {
   await withTempProject(async (projectDir) => {
     const targetDirectory = path.join(projectDir, "app");
