@@ -10,7 +10,10 @@ export const dependencyVersionMap = {
   // `bun run check:pins` verifies that.
   "@prisma/cli-engine": "0.10.4",
   "@prisma/dev": "0.25.2",
-  "@prisma/management-api-sdk": "^1.101.0",
+  // Yarn apps list it as a dev dependency, as the CLI engine's peer. Must match the
+  // version the prisma CLI depends on, so the engine and the CLI share one copy;
+  // `bun run check:pins` verifies that.
+  "@prisma/management-api-sdk": "1.101.0",
   "@prisma/orm-mongo": "8.0.0-rc.25",
   // Must match both @prisma/composer-prisma-cloud's exact peerDependency (or npm
   // install fails with ERESOLVE) and the @prisma/orm-toolchain the prisma CLI
@@ -59,16 +62,21 @@ export const PRISMA_DENO_CLI_PACKAGE = PRISMA_PLATFORM_CLI_PACKAGE;
 export type AvailableDependency = keyof typeof dependencyVersionMap;
 
 // Yarn does not install peer dependencies, so a Yarn app lists the required peers
-// of each package here in every package.json that lists the package.
-// `bun run check:pins` verifies each list and version against npm.
+// of each key here in every package.json that lists the key. The keys are the
+// Prisma packages create-prisma writes and alchemy; an empty list means the package
+// has no required peer. `bun run check:pins` verifies each list and its versions against npm, for
+// these keys only. The peers of other packages an app lists, such as pg, mongodb and
+// the framework packages, are not checked.
 export const yarnPeerDependencies = {
   "@prisma/cli-engine": ["@prisma/management-api-sdk"],
   "@prisma/composer": [],
   "@prisma/composer-prisma-cloud": ["@prisma/orm-postgres", "@types/pg", "pg"],
   "@prisma/dev": [],
+  "@prisma/management-api-sdk": [],
   "@prisma/orm-mongo": ["mongodb", "temporal-polyfill"],
   "@prisma/orm-postgres": ["@types/pg", "pg", "temporal-polyfill"],
-  // The peers of @prisma/orm-toolchain, which prisma.config.ts loads when the
+  alchemy: ["effect"],
+  // Also the peers of @prisma/orm-toolchain, which prisma.config.ts loads when the
   // prisma CLI runs it.
   prisma: ["@prisma/cli-engine"],
 } as const satisfies Partial<Record<AvailableDependency, readonly AvailableDependency[]>>;

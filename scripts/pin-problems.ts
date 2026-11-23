@@ -4,6 +4,7 @@ export type Pins = Pick<
   typeof dependencyVersionMap,
   | "prisma"
   | "@prisma/cli-engine"
+  | "@prisma/management-api-sdk"
   | "@prisma/composer"
   | "@prisma/composer-prisma-cloud"
   | "@prisma/orm-postgres"
@@ -65,6 +66,22 @@ export function findPinProblem(pins: Pins, registry: RegistryMetadata): string |
     );
   }
 
+  const managementSdkVersion = registry.cliDependencies["@prisma/management-api-sdk"];
+  if (!managementSdkVersion) {
+    return (
+      `prisma@${cliVersion} does not depend on @prisma/management-api-sdk, so Yarn scaffolds cannot ` +
+      `pin it to the CLI's version.\nCheck whether @prisma/cli-engine still peers on it and update ` +
+      `its pin in src/constants/dependencies.ts.`
+    );
+  }
+  if (managementSdkVersion !== pins["@prisma/management-api-sdk"]) {
+    return (
+      `Version mismatch: prisma@${cliVersion} depends on @prisma/management-api-sdk@${managementSdkVersion}, ` +
+      `but Yarn scaffolds pin it to ${pins["@prisma/management-api-sdk"]}.\n` +
+      `Pin @prisma/management-api-sdk to ${managementSdkVersion}.`
+    );
+  }
+
   for (const name of ["alchemy", "effect"] as const) {
     const composerPin = registry.composerDependencies[name];
     if (composerPin !== pins[name]) {
@@ -111,6 +128,7 @@ export type PeerMetadata = {
 export function findYarnPeerProblem(
   yarnPeers: Record<string, readonly string[]>,
   versions: Dependencies,
+  newestVersions: Dependencies,
   registry: Record<string, PeerMetadata>,
 ): string | undefined {
   const fixLocation = "yarnPeerDependencies in src/constants/dependencies.ts";
@@ -138,6 +156,16 @@ export function findYarnPeerProblem(
         return (
           `${packageSpec} requires ${name}@${range}, but scaffolds pin ${name} to ${pin}.\n` +
           `Pin ${name} to a version in ${range}.`
+        );
+      }
+      const newest = newestVersions[name];
+      if (!newest) {
+        return `No published version of ${name} was found for the pin ${pin}.`;
+      }
+      if (!Bun.semver.satisfies(newest, range ?? "")) {
+        return (
+          `${packageSpec} requires ${name}@${range}, but the pin ${pin} lets a fresh install ` +
+          `resolve ${name}@${newest}.\nPin ${name} to a range inside ${range}.`
         );
       }
     }
