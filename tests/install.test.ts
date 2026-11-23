@@ -154,6 +154,7 @@ describe("writePrismaDependencies", () => {
         "@prisma/orm-mongo": dependencyVersionMap["@prisma/orm-mongo"],
         arktype: dependencyVersionMap.arktype,
         mongodb: dependencyVersionMap.mongodb,
+        "temporal-polyfill": dependencyVersionMap["temporal-polyfill"],
       });
       expect(packageJson.dependencies?.["@prisma/orm-postgres"]).toBeUndefined();
       expect(packageJson.devDependencies?.["@prisma/dev"]).toBeUndefined();
@@ -605,6 +606,20 @@ describe("generated templates", () => {
                 "utf8",
               );
 
+              const dbPackageJson =
+                template === "turborepo"
+                  ? await readPackageJson(path.join(projectDir, "packages/database"))
+                  : packageJson;
+              expect(dbPackageJson.dependencies?.["temporal-polyfill"]).toBe(
+                dependencyVersionMap["temporal-polyfill"],
+              );
+              const polyfillImport = dbSource.indexOf('import "temporal-polyfill/global";');
+              expect(polyfillImport).toBeGreaterThanOrEqual(0);
+              if (provider === "mongo") {
+                expect(dbSource.indexOf('from "@prisma/orm-mongo/runtime";')).toBeGreaterThan(
+                  polyfillImport,
+                );
+              }
               expect(moduleSource).toContain('import { appRoot } from "@prisma/composer";');
               expect(moduleSource).toContain('export default appRoot("matrix-app",');
               expect(packageJson.scripts?.deploy).toBeDefined();
@@ -678,7 +693,7 @@ describe("generated templates", () => {
                   version("@types/pg", provider === "postgres" && yarn),
                 );
                 expect(database.dependencies?.["temporal-polyfill"]).toBe(
-                  version("temporal-polyfill", provider === "postgres" || yarn),
+                  dependencyVersionMap["temporal-polyfill"],
                 );
                 for (const name of ["arktype", "mongodb"] as const) {
                   expect(database.dependencies?.[name]).toBe(version(name, provider === "mongo"));
@@ -832,6 +847,7 @@ describe("generated templates", () => {
                     ...(template === "turborepo"
                       ? ["packages:", '  - "apps/*"', '  - "packages/*"']
                       : []),
+                    "autoInstallPeers: true",
                     "allowBuilds:",
                     "  esbuild: true",
                     "  msgpackr-extract: true",

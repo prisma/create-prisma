@@ -23,7 +23,7 @@ yarn dlx create-prisma@latest my-app
 bunx create-prisma@latest my-app
 ```
 
-The CLI initializes Prisma 8 with `prisma@latest`, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
+The CLI initializes Prisma 8 with the `prisma` version this create-prisma release pins, installs dependencies, emits the contract, and generates a deployable Composer app. PostgreSQL projects use Composer's native Prisma Postgres provider, including migrations and a typed runtime client.
 
 PostgreSQL apps with Composer include `@prisma/dev` as a project devDependency for
 local Postgres. In a monorepo it belongs at the root, where Composer runs. Prisma 8

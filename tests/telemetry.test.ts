@@ -379,7 +379,11 @@ describe("create telemetry", () => {
   test("tracks Composer's failure code from the deploy report", async () => {
     const { error, reportPath } = await failComposerDeploy(
       JSON.stringify({
-        version: 1,
+        version: 2,
+        outcome: "failed",
+        app: null,
+        environment: "production",
+        nodes: [],
         failure: { code: "DEPLOY.ENGINE_FAILED", message: "failed in /Users/jane/my-app" },
       }),
     );
@@ -391,7 +395,11 @@ describe("create telemetry", () => {
   });
 
   test("keeps the original deploy error when the report is missing or invalid", async () => {
-    for (const report of [undefined, "not json"]) {
+    const versionOneReport = JSON.stringify({
+      version: 1,
+      failure: { code: "DEPLOY.ENGINE_FAILED", message: "failed" },
+    });
+    for (const report of [undefined, "not json", versionOneReport]) {
       const { error } = await failComposerDeploy(report);
       expect(error).toMatchObject({ code: "CLI.CHILD_PROCESS_FAILED", exitCode: 1 });
       expect(error).not.toHaveProperty("causeCode");

@@ -182,10 +182,8 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
 ) {
   const databaseDependencies = [getDbPackages(provider)];
   const devDependencies = ["@types/node", "prisma"];
-  if (provider === "postgres" && packageManager !== "deno") {
-    databaseDependencies.push("temporal-polyfill");
-    devDependencies.push("@prisma/dev");
-  }
+  if (packageManager !== "deno") databaseDependencies.push("temporal-polyfill");
+  if (provider === "postgres" && packageManager !== "deno") devDependencies.push("@prisma/dev");
   if (provider === "mongo") databaseDependencies.push("arktype", "mongodb");
   const dependencies =
     options.template === "turborepo"

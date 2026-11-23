@@ -182,7 +182,7 @@ jobs:
           CREATE_PRISMA_TELEMETRY_API_KEY: ${{ steps.preview.outputs.publish_next == 'true' && secrets.CREATE_PRISMA_TELEMETRY_API_KEY || '' }}
           CREATE_PRISMA_TELEMETRY_HOST: ${{ steps.preview.outputs.publish_next == 'true' && vars.CREATE_PRISMA_TELEMETRY_HOST || '' }}
 
-      - name: Test packed CLI on the minimum Node version and its bundled npm
+      - name: Smoke-test the packed CLI with an npm Postgres app and a Yarn MongoDB app on the minimum Node version
         run: node scripts/smoke-node.mjs
 
       - name: Ensure npm version for trusted publishing
@@ -358,7 +358,7 @@ jobs:
         if: steps.check-version.outputs.exists == 'false'
         run: bun run build
 
-      - name: Test packed CLI on the minimum Node version and its bundled npm
+      - name: Smoke-test the packed CLI with an npm Postgres app and a Yarn MongoDB app on the minimum Node version
         if: steps.check-version.outputs.exists == 'false'
         run: node scripts/smoke-node.mjs
 

@@ -38,6 +38,8 @@ export const db =
     : postgres({ contract }));
 {{/if}}
 {{else}}
+import "temporal-polyfill/global";
+
 import mongo from "@prisma/orm-mongo/runtime";
 import { contractFromJson } from "@prisma/orm-mongo/static";
 
