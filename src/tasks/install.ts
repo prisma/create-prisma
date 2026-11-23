@@ -238,7 +238,11 @@ export const writeCreateTemplateDependenciesEffect = Effect.fn("Dependencies.wri
       return yield* Effect.fail(new Error("Dependency effect is missing from the version map."));
     const effectPins = Object.fromEntries(effectPackages.map((name) => [name, effectVersion]));
     if (opts.packageManager === "yarn") {
-      packageJson.resolutions = { ...packageJson.resolutions, ...effectPins };
+      packageJson.resolutions = {
+        ...packageJson.resolutions,
+        ...effectPins,
+        "@prisma/management-api-sdk": dependencyVersionMap["@prisma/management-api-sdk"],
+      };
     } else if (opts.packageManager !== "pnpm") {
       packageJson.overrides = { ...packageJson.overrides, ...effectPins };
     }

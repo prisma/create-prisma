@@ -27,6 +27,7 @@ const pins: Pins = {
 function registry(overrides: {
   cli?: RegistryMetadata["cliDependencies"];
   composer?: RegistryMetadata["composerDependencies"];
+  composerCloud?: RegistryMetadata["composerCloudDependencies"];
   cloudPeers?: RegistryMetadata["composerCloudPeerDependencies"];
 }): RegistryMetadata {
   return {
@@ -37,7 +38,16 @@ function registry(overrides: {
       "@prisma/orm-toolchain": "8.0.0-rc.25",
       ...overrides.cli,
     },
-    composerDependencies: { alchemy: "2.0.0-beta.87", effect: "4.1.4", ...overrides.composer },
+    composerDependencies: {
+      alchemy: "2.0.0-beta.87",
+      effect: "4.1.4",
+      "@prisma/management-api-sdk": "^1.80.0",
+      ...overrides.composer,
+    },
+    composerCloudDependencies: {
+      "@prisma/management-api-sdk": "^1.80.0",
+      ...overrides.composerCloud,
+    },
     composerCloudPeerDependencies: {
       "@prisma/orm-postgres": "8.0.0-rc.25",
       ...overrides.cloudPeers,
@@ -92,6 +102,17 @@ describe("findPinProblem", () => {
     expect(
       findPinProblem(pins, registry({ cli: { "@prisma/management-api-sdk": undefined } })),
     ).toContain("does not depend on @prisma/management-api-sdk");
+  });
+
+  test("rejects a management API SDK outside Composer's range", () => {
+    expect(
+      findPinProblem(
+        pins,
+        registry({ composerCloud: { "@prisma/management-api-sdk": "^1.110.0" } }),
+      ),
+    ).toContain(
+      "@prisma/composer-prisma-cloud@0.40.0 depends on @prisma/management-api-sdk@^1.110.0, but Yarn scaffolds force it to 1.101.0",
+    );
   });
 
   test("rejects Composer peering another ORM release", () => {
@@ -246,7 +267,10 @@ async function runCheckPins(
     [`@prisma/composer@${dependencyVersionMap["@prisma/composer"]} dependencies`]: {
       alchemy: dependencyVersionMap.alchemy,
       effect: dependencyVersionMap.effect,
+      "@prisma/management-api-sdk": "^1.80.0",
     },
+    [`@prisma/composer-prisma-cloud@${dependencyVersionMap["@prisma/composer-prisma-cloud"]} dependencies`]:
+      { "@prisma/management-api-sdk": "^1.80.0" },
     [`@prisma/composer-prisma-cloud@${dependencyVersionMap["@prisma/composer-prisma-cloud"]} peerDependencies`]:
       npmPeersToday["@prisma/composer-prisma-cloud"],
     ...peerResponses,

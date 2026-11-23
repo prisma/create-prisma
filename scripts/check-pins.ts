@@ -14,13 +14,17 @@ async function npmViewJson<T = Record<string, string>>(
   return (stdout.trim() ? JSON.parse(stdout) : {}) as T;
 }
 
-const [cliDependencies, composerDependencies, composerCloudPeerDependencies] = await Promise.all([
+const composerCloudSpec = `@prisma/composer-prisma-cloud@${dependencyVersionMap["@prisma/composer-prisma-cloud"]}`;
+const [
+  cliDependencies,
+  composerDependencies,
+  composerCloudDependencies,
+  composerCloudPeerDependencies,
+] = await Promise.all([
   npmViewJson(`prisma@${dependencyVersionMap.prisma}`, "dependencies"),
   npmViewJson(`@prisma/composer@${dependencyVersionMap["@prisma/composer"]}`, "dependencies"),
-  npmViewJson(
-    `@prisma/composer-prisma-cloud@${dependencyVersionMap["@prisma/composer-prisma-cloud"]}`,
-    "peerDependencies",
-  ),
+  npmViewJson(composerCloudSpec, "dependencies"),
+  npmViewJson(composerCloudSpec, "peerDependencies"),
 ]);
 
 function fail(problem: string): never {
@@ -31,6 +35,7 @@ function fail(problem: string): never {
 const pinProblem = findPinProblem(dependencyVersionMap, {
   cliDependencies,
   composerDependencies,
+  composerCloudDependencies,
   composerCloudPeerDependencies,
 });
 if (pinProblem) fail(pinProblem);
