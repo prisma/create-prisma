@@ -8,7 +8,7 @@ import { runPrismaJsonCommandEffect } from "../prisma-cli";
 // Only `failure.code` is read; the message can contain local paths.
 const ComposerRunReportSchema = Schema.fromJsonString(
   Schema.Struct({
-    version: Schema.Literal(1),
+    version: Schema.Literal(2),
     failure: Schema.NullOr(Schema.Struct({ code: Schema.String })),
   }),
 );
