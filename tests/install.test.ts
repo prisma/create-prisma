@@ -832,6 +832,7 @@ describe("generated templates", () => {
                     ...(template === "turborepo"
                       ? ["packages:", '  - "apps/*"', '  - "packages/*"']
                       : []),
+                    "autoInstallPeers: true",
                     "allowBuilds:",
                     "  esbuild: true",
                     "  msgpackr-extract: true",
