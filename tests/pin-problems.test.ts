@@ -7,13 +7,13 @@ import { findPinProblem, type Pins, type RegistryMetadata } from "../scripts/pin
 import { dependencyVersionMap } from "../src/constants/dependencies";
 
 const pins: Pins = {
-  prisma: "8.0.0-rc.33",
-  "@prisma/composer": "0.38.0",
-  "@prisma/composer-prisma-cloud": "0.38.0",
-  "@prisma/orm-postgres": "8.0.0-rc.23",
-  "@prisma/orm-mongo": "8.0.0-rc.23",
-  alchemy: "2.0.0-beta.84",
-  effect: "4.0.5",
+  prisma: "8.0.0-rc.35",
+  "@prisma/composer": "0.40.0",
+  "@prisma/composer-prisma-cloud": "0.40.0",
+  "@prisma/orm-postgres": "8.0.0-rc.25",
+  "@prisma/orm-mongo": "8.0.0-rc.25",
+  alchemy: "2.0.0-beta.87",
+  effect: "4.1.4",
 };
 
 function registry(overrides: {
@@ -23,13 +23,13 @@ function registry(overrides: {
 }): RegistryMetadata {
   return {
     cliDependencies: {
-      "@prisma/composer-cli": "0.38.0",
-      "@prisma/orm-toolchain": "8.0.0-rc.23",
+      "@prisma/composer-cli": "0.40.0",
+      "@prisma/orm-toolchain": "8.0.0-rc.25",
       ...overrides.cli,
     },
-    composerDependencies: { alchemy: "2.0.0-beta.84", effect: "4.0.5", ...overrides.composer },
+    composerDependencies: { alchemy: "2.0.0-beta.87", effect: "4.1.4", ...overrides.composer },
     composerCloudPeerDependencies: {
-      "@prisma/orm-postgres": "8.0.0-rc.23",
+      "@prisma/orm-postgres": "8.0.0-rc.25",
       ...overrides.cloudPeers,
     },
   };
