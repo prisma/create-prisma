@@ -173,16 +173,6 @@ const resolveAlchemyMongoPeerForNpm = Effect.fn("Dependencies.resolveAlchemyMong
   },
 );
 
-const addYarnPeerDependenciesEffect = Effect.fn("Dependencies.addYarnPeers")(function* (
-  projectDir: string,
-) {
-  const packageJson = yield* readPackageJson(path.join(projectDir, "package.json"));
-  yield* addPackageDependencyEffect({
-    ...getMissingYarnPeerDependencies(packageJson),
-    projectDir,
-  });
-});
-
 export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma")(function* (
   provider: DatabaseProvider,
   packageManager: PackageManager,
@@ -213,12 +203,6 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
       dependencies: databaseDependencies,
       projectDir: path.join(projectDir, "packages/database"),
     });
-  }
-  if (packageManager === "yarn") {
-    yield* addYarnPeerDependenciesEffect(projectDir);
-    if (options.template === "turborepo") {
-      yield* addYarnPeerDependenciesEffect(path.join(projectDir, "packages/database"));
-    }
   }
   if (provider === "mongo" && packageManager === "npm") {
     yield* resolveAlchemyMongoPeerForNpm(projectDir);
@@ -268,6 +252,24 @@ export const writeCreateTemplateDependenciesEffect = Effect.fn("Dependencies.wri
   },
 );
 
+export const writeYarnPeerDependenciesEffect = Effect.fn("Dependencies.writeYarnPeers")(
+  function* (opts: {
+    template: CreateTemplate;
+    packageManager: PackageManager;
+    projectDir: string;
+  }) {
+    if (opts.packageManager !== "yarn") return;
+    for (const target of getCreateTemplateDependencies(opts.template, opts.packageManager)) {
+      const projectDir = path.join(opts.projectDir, path.dirname(target.packageJsonPath));
+      const missing = getMissingYarnPeerDependencies(
+        yield* readPackageJson(path.join(projectDir, "package.json")),
+      );
+      if (missing.dependencies.length + missing.devDependencies.length === 0) continue;
+      yield* addPackageDependencyEffect({ ...missing, projectDir });
+    }
+  },
+);
+
 export const installProjectDependenciesEffect = Effect.fn("Dependencies.install")(function* (
   packageManager: PackageManager,
   projectDir = process.cwd(),
@@ -292,6 +294,9 @@ export const writePrismaDependencies = (
 export const writeCreateTemplateDependencies = (
   opts: Parameters<typeof writeCreateTemplateDependenciesEffect>[0],
 ) => applicationRuntime.runPromise(writeCreateTemplateDependenciesEffect(opts));
+export const writeYarnPeerDependencies = (
+  opts: Parameters<typeof writeYarnPeerDependenciesEffect>[0],
+) => applicationRuntime.runPromise(writeYarnPeerDependenciesEffect(opts));
 export const installProjectDependencies = (
   ...args: Parameters<typeof installProjectDependenciesEffect>
 ) => applicationRuntime.runPromise(installProjectDependenciesEffect(...args));

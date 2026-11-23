@@ -15,7 +15,11 @@ import { atCreateStage } from "../workflow/failure";
 import { getComposerDevBunWarningEffect } from "./composer/dev-bun";
 import { deployNewProjectWithComposerEffect } from "./deploy-with-composer";
 import { initializeGitRepositoryEffect, type GitInitializationResult } from "./initialize-git";
-import { installProjectDependenciesEffect, writePrismaDependenciesEffect } from "./install";
+import {
+  installProjectDependenciesEffect,
+  writePrismaDependenciesEffect,
+  writeYarnPeerDependenciesEffect,
+} from "./install";
 import { initializeAgentSkills, runPrismaCli, runPrismaInit } from "./prisma-setup/commands";
 import { collectPrismaSetupContextEffect } from "./prisma-setup/context";
 import {
@@ -71,6 +75,15 @@ export const executePrismaSetupContextEffect = Effect.fn("PrismaSetup.execute")(
         projectDir,
         { skillsSync: context.skillAgents.length > 0, template },
       ),
+      "configure_project",
+      "project_configuration_failed",
+    );
+    yield* atCreateStage(
+      writeYarnPeerDependenciesEffect({
+        template,
+        packageManager: context.packageManager,
+        projectDir,
+      }),
       "configure_project",
       "project_configuration_failed",
     );
