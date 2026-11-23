@@ -605,6 +605,7 @@ describe("generated templates", () => {
                 "utf8",
               );
 
+              expect(dbSource).toContain('import "temporal-polyfill/global";');
               expect(moduleSource).toContain('import { appRoot } from "@prisma/composer";');
               expect(moduleSource).toContain('export default appRoot("matrix-app",');
               expect(packageJson.scripts?.deploy).toBeDefined();
@@ -678,7 +679,7 @@ describe("generated templates", () => {
                   version("@types/pg", provider === "postgres" && yarn),
                 );
                 expect(database.dependencies?.["temporal-polyfill"]).toBe(
-                  version("temporal-polyfill", provider === "postgres" || yarn),
+                  dependencyVersionMap["temporal-polyfill"],
                 );
                 for (const name of ["arktype", "mongodb"] as const) {
                   expect(database.dependencies?.[name]).toBe(version(name, provider === "mongo"));
