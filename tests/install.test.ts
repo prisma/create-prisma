@@ -159,6 +159,11 @@ describe("writePrismaDependencies", () => {
   test("adds the peer dependencies Yarn does not install", async () => {
     for (const provider of databaseProviders) {
       await withPackageJson(async (projectDir) => {
+        await writeCreateTemplateDependencies({
+          template: "minimal",
+          packageManager: "yarn",
+          projectDir,
+        });
         await writePrismaDependencies(provider, "yarn", "psl", projectDir);
         const packageJson = await readPackageJson(projectDir);
 
@@ -169,6 +174,7 @@ describe("writePrismaDependencies", () => {
         });
         expect(packageJson.devDependencies).toMatchObject({
           "@prisma/cli-engine": dependencyVersionMap["@prisma/cli-engine"],
+          "@prisma/management-api-sdk": dependencyVersionMap["@prisma/management-api-sdk"],
           "@types/pg": dependencyVersionMap["@types/pg"],
         });
       });
@@ -176,15 +182,21 @@ describe("writePrismaDependencies", () => {
   });
 
   test("leaves peer dependencies to package managers that install them", async () => {
-    for (const packageManager of ["npm", "pnpm", "bun", "deno"] as const) {
+    for (const packageManager of packageManagers.filter((name) => name !== "yarn")) {
       for (const provider of databaseProviders) {
         await withPackageJson(async (projectDir) => {
+          await writeCreateTemplateDependencies({
+            template: "minimal",
+            packageManager,
+            projectDir,
+          });
           await writePrismaDependencies(provider, packageManager, "psl", projectDir);
           const packageJson = await readPackageJson(projectDir);
 
           expect(packageJson.dependencies?.pg).toBeUndefined();
           expect(packageJson.devDependencies?.["@types/pg"]).toBeUndefined();
           expect(packageJson.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
+          expect(packageJson.devDependencies?.["@prisma/management-api-sdk"]).toBeUndefined();
           if (provider === "mongo") {
             expect(packageJson.dependencies?.["temporal-polyfill"]).toBeUndefined();
             expect(packageJson.dependencies?.["@prisma/orm-postgres"]).toBeUndefined();
@@ -505,41 +517,43 @@ describe("generated templates", () => {
                 expect(database.dependencies).toHaveProperty(
                   provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
                 );
-                expect(database.dependencies?.["temporal-polyfill"]).toBe(
-                  provider === "postgres" || packageManager === "yarn"
-                    ? dependencyVersionMap["temporal-polyfill"]
-                    : undefined,
+                const yarn = packageManager === "yarn";
+                const version = (name: keyof typeof dependencyVersionMap, present: boolean) =>
+                  present ? dependencyVersionMap[name] : undefined;
+                expect(root.dependencies?.["@prisma/orm-postgres"]).toBe(
+                  version("@prisma/orm-postgres", provider === "postgres" || yarn),
                 );
-                for (const manifest of [root, database]) {
-                  expect(manifest.dependencies?.pg).toBe(
-                    packageManager === "yarn" ? dependencyVersionMap.pg : undefined,
-                  );
-                  expect(manifest.dependencies?.["@prisma/orm-postgres"]).toBe(
-                    provider === "postgres" || packageManager === "yarn"
-                      ? dependencyVersionMap["@prisma/orm-postgres"]
-                      : undefined,
-                  );
-                }
+                expect(root.dependencies?.pg).toBe(version("pg", yarn));
+                expect(root.devDependencies?.["@types/pg"]).toBe(version("@types/pg", yarn));
+                expect(root.dependencies?.["temporal-polyfill"]).toBe(
+                  version("temporal-polyfill", yarn),
+                );
+                expect(root.dependencies?.arktype).toBe(version("arktype", provider === "mongo"));
+                expect(root.dependencies?.mongodb).toBe(
+                  version("mongodb", provider === "mongo" && yarn),
+                );
                 expect(root.devDependencies?.["@prisma/cli-engine"]).toBe(
-                  packageManager === "yarn"
-                    ? dependencyVersionMap["@prisma/cli-engine"]
-                    : undefined,
+                  version("@prisma/cli-engine", yarn),
+                );
+                expect(root.devDependencies?.["@prisma/management-api-sdk"]).toBe(
+                  version("@prisma/management-api-sdk", yarn),
+                );
+                expect(database.dependencies?.["@prisma/orm-postgres"]).toBe(
+                  version("@prisma/orm-postgres", provider === "postgres"),
+                );
+                expect(database.dependencies?.pg).toBe(
+                  version("pg", provider === "postgres" && yarn),
+                );
+                expect(database.devDependencies?.["@types/pg"]).toBe(
+                  version("@types/pg", provider === "postgres" && yarn),
+                );
+                expect(database.dependencies?.["temporal-polyfill"]).toBe(
+                  version("temporal-polyfill", provider === "postgres" || yarn),
                 );
                 for (const name of ["arktype", "mongodb"] as const) {
-                  expect(database.dependencies?.[name]).toBe(
-                    provider === "mongo" ? dependencyVersionMap[name] : undefined,
-                  );
-                  expect(root.dependencies?.[name]).toBe(
-                    provider === "mongo" && name === "arktype"
-                      ? dependencyVersionMap.arktype
-                      : undefined,
-                  );
+                  expect(database.dependencies?.[name]).toBe(version(name, provider === "mongo"));
                 }
-                expect(root.dependencies?.["temporal-polyfill"]).toBe(
-                  provider === "mongo" && packageManager === "yarn"
-                    ? dependencyVersionMap["temporal-polyfill"]
-                    : undefined,
-                );
+                expect(database.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
                 expect(root.dependencies).toHaveProperty(
                   provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
                 );

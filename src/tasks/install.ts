@@ -6,6 +6,7 @@ import {
   effectPackages,
   getCreateTemplateDependencies,
   getDependencyVersion,
+  getMissingYarnPeerDependencies,
   PRISMA_DENO_CLI_PACKAGE,
 } from "../constants/dependencies";
 import { getDbPackages } from "../constants/db-packages";
@@ -172,6 +173,16 @@ const resolveAlchemyMongoPeerForNpm = Effect.fn("Dependencies.resolveAlchemyMong
   },
 );
 
+const addYarnPeerDependenciesEffect = Effect.fn("Dependencies.addYarnPeers")(function* (
+  projectDir: string,
+) {
+  const packageJson = yield* readPackageJson(path.join(projectDir, "package.json"));
+  yield* addPackageDependencyEffect({
+    ...getMissingYarnPeerDependencies(packageJson),
+    projectDir,
+  });
+});
+
 export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma")(function* (
   provider: DatabaseProvider,
   packageManager: PackageManager,
@@ -186,23 +197,9 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
     devDependencies.push("@prisma/dev");
   }
   if (provider === "mongo") databaseDependencies.push("arktype", "mongodb");
-  // Yarn does not install peer dependencies. pg is a peer of
-  // @prisma/composer-prisma-cloud and @prisma/orm-postgres, @prisma/orm-postgres
-  // of @prisma/composer-prisma-cloud, temporal-polyfill of both ORM packages, and
-  // @prisma/cli-engine of the @prisma/orm-toolchain that prisma.config.ts loads.
-  const yarnPeerDependencies =
-    packageManager === "yarn"
-      ? ["pg", ...(provider === "mongo" ? ["@prisma/orm-postgres", "temporal-polyfill"] : [])]
-      : [];
-  databaseDependencies.push(...yarnPeerDependencies);
-  if (packageManager === "yarn") devDependencies.push("@prisma/cli-engine", "@types/pg");
   const dependencies =
     options.template === "turborepo"
-      ? [
-          getDbPackages(provider),
-          ...(provider === "mongo" ? ["arktype"] : []),
-          ...yarnPeerDependencies,
-        ]
+      ? [getDbPackages(provider), ...(provider === "mongo" ? ["arktype"] : [])]
       : [...databaseDependencies];
   if (packageManager === "deno") dependencies.push("dotenv");
   yield* addPackageDependencyEffect({
@@ -216,6 +213,12 @@ export const writePrismaDependenciesEffect = Effect.fn("Dependencies.writePrisma
       dependencies: databaseDependencies,
       projectDir: path.join(projectDir, "packages/database"),
     });
+  }
+  if (packageManager === "yarn") {
+    yield* addYarnPeerDependenciesEffect(projectDir);
+    if (options.template === "turborepo") {
+      yield* addYarnPeerDependenciesEffect(path.join(projectDir, "packages/database"));
+    }
   }
   if (provider === "mongo" && packageManager === "npm") {
     yield* resolveAlchemyMongoPeerForNpm(projectDir);

@@ -101,3 +101,55 @@ export function findPinProblem(pins: Pins, registry: RegistryMetadata): string |
 
   return undefined;
 }
+
+export type PeerMetadata = {
+  packageSpec: string;
+  peerDependencies: Dependencies;
+  peerDependenciesMeta: Record<string, { optional?: boolean } | undefined>;
+};
+
+export function findYarnPeerProblem(
+  yarnPeers: Record<string, readonly string[]>,
+  versions: Dependencies,
+  registry: Record<string, PeerMetadata>,
+): string | undefined {
+  const fixLocation = "yarnPeerDependencies in src/constants/dependencies.ts";
+  for (const [owner, listedPeers] of Object.entries(yarnPeers)) {
+    const metadata = registry[owner];
+    if (!metadata) return `No npm metadata was fetched for the peers listed under ${owner}.`;
+    const { packageSpec, peerDependencies, peerDependenciesMeta } = metadata;
+    const requiredPeers = Object.entries(peerDependencies).filter(
+      ([name]) => !peerDependenciesMeta[name]?.optional,
+    );
+
+    for (const [name, range] of requiredPeers) {
+      if (!listedPeers.includes(name)) {
+        return (
+          `${packageSpec} requires the peer dependency ${name}@${range}, which Yarn apps do not declare.\n` +
+          `Add ${name} to the ${owner} entry of ${fixLocation}.`
+        );
+      }
+      const pin = versions[name];
+      const minimum = pin?.replace(/^[\^~]/, "");
+      if (!pin || !minimum || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(minimum)) {
+        return `${name} is pinned to "${pin}", so check:pins cannot tell whether it satisfies ${packageSpec}'s peer range ${range}.`;
+      }
+      if (!Bun.semver.satisfies(minimum, range ?? "")) {
+        return (
+          `${packageSpec} requires ${name}@${range}, but scaffolds pin ${name} to ${pin}.\n` +
+          `Pin ${name} to a version in ${range}.`
+        );
+      }
+    }
+
+    for (const name of listedPeers) {
+      if (!requiredPeers.some(([peer]) => peer === name)) {
+        return (
+          `${fixLocation} lists ${name} under ${owner}, but ${packageSpec} does not require it as a peer.\n` +
+          `Remove it from that entry.`
+        );
+      }
+    }
+  }
+  return undefined;
+}

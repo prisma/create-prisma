@@ -3,8 +3,14 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { findPinProblem, type Pins, type RegistryMetadata } from "../scripts/pin-problems";
-import { dependencyVersionMap } from "../src/constants/dependencies";
+import {
+  findPinProblem,
+  findYarnPeerProblem,
+  type PeerMetadata,
+  type Pins,
+  type RegistryMetadata,
+} from "../scripts/pin-problems";
+import { dependencyVersionMap, yarnPeerDependencies } from "../src/constants/dependencies";
 
 const pins: Pins = {
   prisma: "8.0.0-rc.35",
@@ -88,26 +94,98 @@ describe("findPinProblem", () => {
   });
 });
 
+describe("findYarnPeerProblem", () => {
+  const versions = { pg: "^8.22.0", "@types/pg": "^8.20.0", "temporal-polyfill": "^1.0.8" };
+  const yarnPeers = { "@prisma/orm-postgres": ["@types/pg", "pg", "temporal-polyfill"] };
+  function peerRegistry(
+    peerDependencies: PeerMetadata["peerDependencies"],
+    peerDependenciesMeta: PeerMetadata["peerDependenciesMeta"] = {},
+  ): Record<string, PeerMetadata> {
+    return {
+      "@prisma/orm-postgres": {
+        packageSpec: "@prisma/orm-postgres@8.0.0-rc.25",
+        peerDependencies,
+        peerDependenciesMeta,
+      },
+    };
+  }
+  const currentPeers = { pg: "^8.22.0", "@types/pg": "^8.20.0", "temporal-polyfill": "^1.0.8" };
+
+  test("accepts listed peers whose pins satisfy the peer ranges", () => {
+    expect(findYarnPeerProblem(yarnPeers, versions, peerRegistry(currentPeers))).toBeUndefined();
+  });
+
+  test("ignores optional peers", () => {
+    expect(
+      findYarnPeerProblem(
+        yarnPeers,
+        versions,
+        peerRegistry({ ...currentPeers, typescript: ">=5.9" }, { typescript: { optional: true } }),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("rejects a required peer that Yarn apps do not declare", () => {
+    expect(
+      findYarnPeerProblem(
+        yarnPeers,
+        versions,
+        peerRegistry({ ...currentPeers, mongodb: "^7.0.0" }),
+      ),
+    ).toContain("requires the peer dependency mongodb@^7.0.0, which Yarn apps do not declare");
+  });
+
+  test("rejects a pin outside the peer range", () => {
+    expect(
+      findYarnPeerProblem(yarnPeers, versions, peerRegistry({ ...currentPeers, pg: "^9.0.0" })),
+    ).toContain("requires pg@^9.0.0, but scaffolds pin pg to ^8.22.0");
+  });
+
+  test("rejects a listed peer the package no longer requires", () => {
+    const { "temporal-polyfill": _, ...withoutTemporal } = currentPeers;
+    expect(findYarnPeerProblem(yarnPeers, versions, peerRegistry(withoutTemporal))).toContain(
+      "lists temporal-polyfill under @prisma/orm-postgres",
+    );
+  });
+});
+
 async function runCheckPins(toolchainVersion: string) {
   const binDir = await mkdtemp(path.join(tmpdir(), "create-prisma-pins-"));
+  const peerSpecs: Record<string, string> = {
+    ...Object.fromEntries(
+      Object.keys(yarnPeerDependencies).map((owner) => [
+        owner,
+        `${owner}@${dependencyVersionMap[owner as keyof typeof dependencyVersionMap]}`,
+      ]),
+    ),
+    prisma: `@prisma/orm-toolchain@${toolchainVersion}`,
+  };
   const metadata = {
-    [`prisma@${dependencyVersionMap.prisma}`]: {
+    [`prisma@${dependencyVersionMap.prisma} dependencies`]: {
       "@prisma/cli-engine": dependencyVersionMap["@prisma/cli-engine"],
       "@prisma/composer-cli": dependencyVersionMap["@prisma/composer"],
       "@prisma/orm-toolchain": toolchainVersion,
     },
-    [`@prisma/composer@${dependencyVersionMap["@prisma/composer"]}`]: {
+    [`@prisma/composer@${dependencyVersionMap["@prisma/composer"]} dependencies`]: {
       alchemy: dependencyVersionMap.alchemy,
       effect: dependencyVersionMap.effect,
     },
-    [`@prisma/composer-prisma-cloud@${dependencyVersionMap["@prisma/composer-prisma-cloud"]}`]: {
-      "@prisma/orm-postgres": dependencyVersionMap["@prisma/orm-postgres"],
-    },
+    ...Object.fromEntries(
+      Object.entries(yarnPeerDependencies).map(([owner, peers]) => [
+        `${peerSpecs[owner]} peerDependencies`,
+        Object.fromEntries(
+          peers.map((peer) => [
+            peer,
+            dependencyVersionMap[peer as keyof typeof dependencyVersionMap],
+          ]),
+        ),
+      ]),
+    ),
   };
   const npmStub = path.join(binDir, "npm");
   await writeFile(
     npmStub,
-    `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify(${JSON.stringify(metadata)}[process.argv[3]]));\n`,
+    `#!/usr/bin/env node\nconst value = ${JSON.stringify(metadata)}[process.argv[3] + " " + process.argv[4]];\nif (value) process.stdout.write(JSON.stringify(value));\n`,
   );
   await chmod(npmStub, 0o755);
   try {
