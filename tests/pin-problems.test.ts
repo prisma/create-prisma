@@ -6,6 +6,10 @@ import path from "node:path";
 import {
   findPinProblem,
   findYarnPeerProblem,
+  isNoMatchingVersion,
+  newestPublishedVersion,
+  npmViewProblem,
+  readNpmViewFailure,
   type PeerMetadata,
   type Pins,
   type RegistryMetadata,
@@ -121,13 +125,11 @@ describe("findYarnPeerProblem", () => {
   function peerRegistry(
     peerDependencies: PeerMetadata["peerDependencies"],
     peerDependenciesMeta: PeerMetadata["peerDependenciesMeta"] = {},
-  ): Record<string, PeerMetadata> {
+  ): Record<string, PeerMetadata[]> {
     return {
-      "@prisma/orm-postgres": {
-        packageSpec: "@prisma/orm-postgres@8.0.0-rc.25",
-        peerDependencies,
-        peerDependenciesMeta,
-      },
+      "@prisma/orm-postgres": [
+        { packageSpec: "@prisma/orm-postgres@8.0.0-rc.25", peerDependencies, peerDependenciesMeta },
+      ],
     };
   }
   const currentPeers = { pg: "^8.22.0", "@types/pg": "^8.20.0", "temporal-polyfill": "^1.0.8" };
@@ -185,7 +187,8 @@ describe("findYarnPeerProblem", () => {
   test("rejects a pin with no published version", () => {
     const { pg: _, ...withoutPg } = newest;
     expect(findYarnPeerProblem(yarnPeers, versions, withoutPg, peerRegistry(currentPeers))).toBe(
-      "No published version of pg was found for the pin ^8.22.0.",
+      "No published version of pg matches its pin ^8.22.0.\n" +
+        "Change the pg pin in src/constants/dependencies.ts to a published version.",
     );
   });
 
@@ -206,11 +209,100 @@ describe("findYarnPeerProblem", () => {
     );
   });
 
+  test("rejects a peer one package requires, though another marks it optional", () => {
+    const registry = {
+      prisma: [
+        {
+          packageSpec: "prisma@8.0.0-rc.35",
+          peerDependencies: { typescript: ">=5.0" },
+          peerDependenciesMeta: { typescript: { optional: true } },
+        },
+        {
+          packageSpec: "@prisma/orm-toolchain@8.0.0-rc.25",
+          peerDependencies: { typescript: "^6.0.0" },
+          peerDependenciesMeta: {},
+        },
+      ],
+    };
+    expect(findYarnPeerProblem({ prisma: [] }, versions, newest, registry)).toContain(
+      "@prisma/orm-toolchain@8.0.0-rc.25 requires the peer dependency typescript@^6.0.0",
+    );
+  });
+
+  test("checks each package's range for a peer they both require", () => {
+    const registry = {
+      prisma: [
+        {
+          packageSpec: "prisma@8.0.0-rc.35",
+          peerDependencies: { pg: "~8.22.0" },
+          peerDependenciesMeta: {},
+        },
+        {
+          packageSpec: "@prisma/orm-toolchain@8.0.0-rc.25",
+          peerDependencies: { pg: "^8.0.0" },
+          peerDependenciesMeta: {},
+        },
+      ],
+    };
+    expect(findYarnPeerProblem({ prisma: ["pg"] }, versions, newest, registry)).toContain(
+      "prisma@8.0.0-rc.35 requires pg@~8.22.0, but the pin ^8.22.0 lets a fresh install resolve pg@8.23.1",
+    );
+  });
+
   test("rejects a listed peer the package no longer requires", () => {
     const { "temporal-polyfill": _, ...withoutTemporal } = currentPeers;
     expect(
       findYarnPeerProblem(yarnPeers, versions, newest, peerRegistry(withoutTemporal)),
     ).toContain("lists temporal-polyfill under @prisma/orm-postgres");
+  });
+});
+
+describe("newestPublishedVersion", () => {
+  test("picks the newest version by semver, not by position or string order", () => {
+    expect(newestPublishedVersion(JSON.stringify(["8.23.1", "8.9.0", "8.22.0"]))).toBe("8.23.1");
+    expect(
+      newestPublishedVersion(JSON.stringify(["8.0.0-rc.9", "8.0.0-rc.25", "8.0.0-rc.3"])),
+    ).toBe("8.0.0-rc.25");
+    expect(newestPublishedVersion(JSON.stringify(["8.0.0-rc.9", "8.0.0", "8.0.0-rc.25"]))).toBe(
+      "8.0.0",
+    );
+  });
+
+  test("reads the single version npm prints for an exact pin", () => {
+    expect(newestPublishedVersion('"8.22.0"\n')).toBe("8.22.0");
+  });
+
+  test("returns nothing when npm prints nothing", () => {
+    expect(newestPublishedVersion("")).toBeUndefined();
+  });
+});
+
+describe("npm view failures", () => {
+  const noMatch = JSON.stringify({
+    error: { code: "E404", summary: "No match found for version ^99.0.0", detail: "…" },
+  });
+
+  test("treats E404 as no published version matching the pin", () => {
+    expect(isNoMatchingVersion(readNpmViewFailure(noMatch, "npm error code E404"))).toBe(true);
+  });
+
+  test("names the spec, npm's summary and what to change for other failures", () => {
+    const failure = readNpmViewFailure(
+      JSON.stringify({ error: { code: "ENOTFOUND", summary: "request to registry failed" } }),
+      "",
+    );
+    expect(isNoMatchingVersion(failure)).toBe(false);
+    expect(npmViewProblem("prisma@8.0.0-rc.35", "dependencies", failure)).toBe(
+      "npm view prisma@8.0.0-rc.35 dependencies failed: request to registry failed\n" +
+        "Check that this version is published and that npm can reach the registry, " +
+        "then fix the pin in src/constants/dependencies.ts if needed.",
+    );
+  });
+
+  test("falls back to npm's first stderr line when stdout is not JSON", () => {
+    expect(readNpmViewFailure("", "\nnpm error code EAI_AGAIN\nnpm error more\n")).toEqual({
+      summary: "npm error code EAI_AGAIN",
+    });
   });
 });
 
@@ -229,7 +321,11 @@ const npmPeersToday: Record<string, Record<string, string>> = {
 };
 
 async function runCheckPins(
-  options: { toolchainVersion?: string; extraPeers?: Record<string, Record<string, string>> } = {},
+  options: {
+    toolchainVersion?: string;
+    extraPeers?: Record<string, Record<string, string>>;
+    publishedVersions?: Record<string, string[]>;
+  } = {},
 ) {
   const toolchainVersion = options.toolchainVersion ?? ormVersion;
   const binDir = await mkdtemp(path.join(tmpdir(), "create-prisma-pins-"));
@@ -262,6 +358,16 @@ async function runCheckPins(
       "#!/usr/bin/env node",
       "const [spec, field] = process.argv.slice(3, 5);",
       "if (field === 'version') {",
+      `  const published = ${JSON.stringify(options.publishedVersions ?? {})}[spec];`,
+      "  if (published && published.length === 0) {",
+      "    process.stdout.write(JSON.stringify({ error: { code: 'E404', summary: 'No match found for version ' + spec } }));",
+      "    process.stderr.write('npm error code E404\\n');",
+      "    process.exit(1);",
+      "  }",
+      "  if (published) {",
+      "    process.stdout.write(JSON.stringify(published));",
+      "    process.exit(0);",
+      "  }",
       "  const range = spec.slice(spec.lastIndexOf('@') + 1);",
       "  const version = range.replace(/^[\\^~]/, '');",
       "  process.stdout.write(JSON.stringify(range === version ? version : [version]));",
@@ -305,6 +411,29 @@ describe("check:pins", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain(
       `alchemy@${dependencyVersionMap.alchemy} requires the peer dependency ws@^8.21.0, which Yarn apps do not declare.`,
+    );
+  });
+
+  test("checks the newest version npm lists for a range pin", async () => {
+    const pgSpec = `pg@${dependencyVersionMap.pg}`;
+    const { exitCode, stderr } = await runCheckPins({
+      extraPeers: { "@prisma/orm-postgres": { pg: "~8.22.0" } },
+      publishedVersions: { [pgSpec]: ["8.23.0", "8.9.0", "8.23.1", "8.23.1-beta.2", "8.22.0"] },
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain(
+      `requires pg@~8.22.0, but the pin ${dependencyVersionMap.pg} lets a fresh install resolve pg@8.23.1.`,
+    );
+  });
+
+  test("names the package and pin when no published version matches", async () => {
+    const { exitCode, stderr } = await runCheckPins({
+      publishedVersions: { [`pg@${dependencyVersionMap.pg}`]: [] },
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe(
+      `No published version of pg matches its pin ${dependencyVersionMap.pg}.\n` +
+        "Change the pg pin in src/constants/dependencies.ts to a published version.\n",
     );
   });
 
