@@ -66,6 +66,12 @@ describe("findPinProblem", () => {
     );
   });
 
+  test("rejects a prisma CLI that does not list the CLI engine", () => {
+    expect(findPinProblem(pins, registry({ cli: { "@prisma/cli-engine": undefined } }))).toContain(
+      "does not depend on @prisma/cli-engine",
+    );
+  });
+
   test("rejects Composer peering another ORM release", () => {
     expect(
       findPinProblem(pins, registry({ cloudPeers: { "@prisma/orm-postgres": "8.0.0-rc.20" } })),

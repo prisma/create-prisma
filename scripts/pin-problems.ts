@@ -50,10 +50,18 @@ export function findPinProblem(pins: Pins, registry: RegistryMetadata): string |
   }
 
   const cliEngineVersion = registry.cliDependencies["@prisma/cli-engine"];
+  if (!cliEngineVersion) {
+    return (
+      `prisma@${cliVersion} does not depend on @prisma/cli-engine, so Yarn scaffolds cannot pin it ` +
+      `to the CLI's version.\nCheck which package now provides the CLI engine and update ` +
+      `yarnPeerDependencies in src/constants/dependencies.ts.`
+    );
+  }
   if (cliEngineVersion !== pins["@prisma/cli-engine"]) {
     return (
       `Version mismatch: prisma@${cliVersion} depends on @prisma/cli-engine@${cliEngineVersion}, ` +
-      `but Yarn scaffolds pin it to ${pins["@prisma/cli-engine"]}.`
+      `but Yarn scaffolds pin it to ${pins["@prisma/cli-engine"]}.\n` +
+      `Pin @prisma/cli-engine to ${cliEngineVersion}.`
     );
   }
 
