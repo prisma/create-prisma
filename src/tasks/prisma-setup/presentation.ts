@@ -51,7 +51,8 @@ export function buildNextSteps(
   if (context.databaseProvider === "mongo") {
     nextSteps.push({
       command: "Set MONGODB_URL in your environment",
-      description: "Composer uses this secret when deploying the MongoDB template.",
+      description:
+        "The app reads this secret when it starts. Set it in your shell for local runs and on Prisma Cloud before deploying.",
     });
   }
   if (showsComposerDevStep(context, options)) {

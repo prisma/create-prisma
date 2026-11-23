@@ -1,15 +1,15 @@
 {{#unless (eq packageManager "deno")}}
-import { module } from "@prisma/composer";
+import { appRoot } from "@prisma/composer";
 {{#if (eq provider "postgres")}}
 import { postgres } from "@prisma/composer-prisma-cloud/orm";
 
 import { appContract } from "./{{#if (eq template "turborepo")}}packages/database/src{{else}}src/prisma{{/if}}/composer.ts";
 {{else}}
-import { envSecret } from "@prisma/composer-prisma-cloud";
+import { variable } from "@prisma/composer-prisma-cloud";
 {{/if}}
 import app from "./service.ts";
 
-export default module("{{projectName}}", ({ provision }) => {
+export default appRoot("{{projectName}}", ({ provision }) => {
 {{#if (eq provider "postgres")}}
   const database = provision(
     postgres({
@@ -22,9 +22,9 @@ export default module("{{projectName}}", ({ provision }) => {
 
   provision(app, { deps: { database } });
 {{else}}
-  provision(app, {
-    input: { databaseUrl: envSecret("MONGODB_URL") },
-  });
+  const databaseUrl = provision(variable.secret({ name: "MONGODB_URL" }));
+
+  provision(app, { input: { databaseUrl } });
 {{/if}}
 });
 {{/unless}}

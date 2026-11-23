@@ -3,6 +3,8 @@ import { dependencyVersionMap } from "../src/constants/dependencies";
 export type Pins = Pick<
   typeof dependencyVersionMap,
   | "prisma"
+  | "@prisma/cli-engine"
+  | "@prisma/management-api-sdk"
   | "@prisma/composer"
   | "@prisma/composer-prisma-cloud"
   | "@prisma/orm-postgres"
@@ -48,6 +50,38 @@ export function findPinProblem(pins: Pins, registry: RegistryMetadata): string |
     );
   }
 
+  const cliEngineVersion = registry.cliDependencies["@prisma/cli-engine"];
+  if (!cliEngineVersion) {
+    return (
+      `prisma@${cliVersion} does not depend on @prisma/cli-engine, so Yarn scaffolds cannot pin it ` +
+      `to the CLI's version.\nCheck which package now provides the CLI engine and update ` +
+      `yarnPeerDependencies in src/constants/dependencies.ts.`
+    );
+  }
+  if (cliEngineVersion !== pins["@prisma/cli-engine"]) {
+    return (
+      `Version mismatch: prisma@${cliVersion} depends on @prisma/cli-engine@${cliEngineVersion}, ` +
+      `but Yarn scaffolds pin it to ${pins["@prisma/cli-engine"]}.\n` +
+      `Pin @prisma/cli-engine to ${cliEngineVersion}.`
+    );
+  }
+
+  const managementSdkVersion = registry.cliDependencies["@prisma/management-api-sdk"];
+  if (!managementSdkVersion) {
+    return (
+      `prisma@${cliVersion} does not depend on @prisma/management-api-sdk, so Yarn scaffolds cannot ` +
+      `pin it to the CLI's version.\nCheck whether @prisma/cli-engine still peers on it and update ` +
+      `its pin in src/constants/dependencies.ts.`
+    );
+  }
+  if (managementSdkVersion !== pins["@prisma/management-api-sdk"]) {
+    return (
+      `Version mismatch: prisma@${cliVersion} depends on @prisma/management-api-sdk@${managementSdkVersion}, ` +
+      `but Yarn scaffolds pin it to ${pins["@prisma/management-api-sdk"]}.\n` +
+      `Pin @prisma/management-api-sdk to ${managementSdkVersion}.`
+    );
+  }
+
   for (const name of ["alchemy", "effect"] as const) {
     const composerPin = registry.composerDependencies[name];
     if (composerPin !== pins[name]) {
@@ -82,5 +116,111 @@ export function findPinProblem(pins: Pins, registry: RegistryMetadata): string |
     );
   }
 
+  return undefined;
+}
+
+export type PeerMetadata = {
+  packageSpec: string;
+  peerDependencies: Dependencies;
+  peerDependenciesMeta: Record<string, { optional?: boolean } | undefined>;
+};
+
+export function newestPublishedVersion(npmViewOutput: string): string | undefined {
+  const published: unknown = npmViewOutput.trim() ? JSON.parse(npmViewOutput) : [];
+  const versions =
+    typeof published === "string" ? [published] : Array.isArray(published) ? published : [];
+  return versions.toSorted(Bun.semver.order).at(-1);
+}
+
+export type NpmViewFailure = { code?: string; summary: string };
+
+export function readNpmViewFailure(stdout: string, stderr: string): NpmViewFailure {
+  try {
+    const { error } = JSON.parse(stdout) as { error?: { code?: string; summary?: string } };
+    if (error?.summary) return { code: error.code, summary: error.summary };
+  } catch {}
+  return { summary: stderr.split("\n").find((line) => line.trim()) ?? "npm exited with an error" };
+}
+
+export function isNoMatchingVersion(failure: NpmViewFailure): boolean {
+  return failure.code === "E404";
+}
+
+export function npmViewProblem(
+  packageSpec: string,
+  field: string,
+  failure: NpmViewFailure,
+): string {
+  return (
+    `npm view ${packageSpec} ${field} failed: ${failure.summary}\n` +
+    `Check that this version is published and that npm can reach the registry, ` +
+    `then fix the pin in src/constants/dependencies.ts if needed.`
+  );
+}
+
+export function noPublishedVersionProblem(name: string, pin: string | undefined): string {
+  return (
+    `No published version of ${name} matches its pin ${pin}.\n` +
+    `Change the ${name} pin in src/constants/dependencies.ts to a published version.`
+  );
+}
+
+export function findYarnPeerProblem(
+  yarnPeers: Record<string, readonly string[]>,
+  versions: Dependencies,
+  newestVersions: Dependencies,
+  registry: Record<string, readonly PeerMetadata[]>,
+): string | undefined {
+  const fixLocation = "yarnPeerDependencies in src/constants/dependencies.ts";
+  for (const [owner, listedPeers] of Object.entries(yarnPeers)) {
+    const packages = registry[owner];
+    if (!packages?.length)
+      return `No npm metadata was fetched for the peers listed under ${owner}.`;
+    const requiredPeers = packages.flatMap(
+      ({ packageSpec, peerDependencies, peerDependenciesMeta }) =>
+        Object.entries(peerDependencies)
+          .filter(([name]) => !peerDependenciesMeta[name]?.optional)
+          .map(([name, range]) => ({ packageSpec, name, range })),
+    );
+
+    for (const { packageSpec, name, range } of requiredPeers) {
+      if (!listedPeers.includes(name)) {
+        return (
+          `${packageSpec} requires the peer dependency ${name}@${range}, which Yarn apps do not declare.\n` +
+          `Add ${name} to the ${owner} entry of ${fixLocation}.`
+        );
+      }
+      const pin = versions[name];
+      const minimum = pin?.replace(/^[\^~]/, "");
+      if (!pin || !minimum || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(minimum)) {
+        return `${name} is pinned to "${pin}", so check:pins cannot tell whether it satisfies ${packageSpec}'s peer range ${range}.`;
+      }
+      if (!Bun.semver.satisfies(minimum, range ?? "")) {
+        return (
+          `${packageSpec} requires ${name}@${range}, but scaffolds pin ${name} to ${pin}.\n` +
+          `Pin ${name} to a version in ${range}.`
+        );
+      }
+      const newest = newestVersions[name];
+      if (!newest) return noPublishedVersionProblem(name, pin);
+      if (!Bun.semver.satisfies(newest, range ?? "")) {
+        return (
+          `${packageSpec} requires ${name}@${range}, but the pin ${pin} lets a fresh install ` +
+          `resolve ${name}@${newest}.\nPin ${name} to a range inside ${range}.`
+        );
+      }
+    }
+
+    for (const name of listedPeers) {
+      if (!requiredPeers.some((peer) => peer.name === name)) {
+        const packageSpecs = packages.map(({ packageSpec }) => packageSpec);
+        return (
+          `${fixLocation} lists ${name} under ${owner}, but ${packageSpecs.join(" and ")} ` +
+          `${packageSpecs.length > 1 ? "do" : "does"} not require it as a peer.\n` +
+          `Remove it from that entry.`
+        );
+      }
+    }
+  }
   return undefined;
 }

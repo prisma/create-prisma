@@ -21,6 +21,7 @@ import {
   getComposerScriptMap,
   writeCreateTemplateDependencies,
   writePrismaDependencies,
+  writeYarnPeerDependencies,
 } from "../src/tasks/install";
 import {
   authoringStyles,
@@ -65,6 +66,10 @@ async function withPackageJson<T>(run: (projectDir: string) => Promise<T>): Prom
 
 async function readPackageJson(projectDir: string): Promise<PackageJson> {
   return JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8")) as PackageJson;
+}
+
+function pinned(names: (keyof typeof dependencyVersionMap)[]): Record<string, string> {
+  return Object.fromEntries(names.map((name) => [name, dependencyVersionMap[name]]));
 }
 
 function verifyPackageManager(
@@ -154,6 +159,180 @@ describe("writePrismaDependencies", () => {
       expect(packageJson.devDependencies?.["@prisma/dev"]).toBeUndefined();
       expect(packageJson.scripts?.["db:seed"]).toBeUndefined();
     });
+  });
+
+  test("adds the peer dependencies Yarn does not install", async () => {
+    const expected = {
+      postgres: {
+        dependencies: pinned([
+          "@prisma/composer",
+          "@prisma/composer-prisma-cloud",
+          "@prisma/orm-postgres",
+          "alchemy",
+          "effect",
+          "pg",
+          "temporal-polyfill",
+        ]),
+        devDependencies: pinned([
+          "@prisma/cli-engine",
+          "@prisma/dev",
+          "@prisma/management-api-sdk",
+          "@types/node",
+          "@types/pg",
+          "prisma",
+          "tsdown",
+          "tsx",
+          "typescript",
+        ]),
+      },
+      mongo: {
+        dependencies: pinned([
+          "@prisma/composer",
+          "@prisma/composer-prisma-cloud",
+          "@prisma/orm-mongo",
+          "@prisma/orm-postgres",
+          "alchemy",
+          "arktype",
+          "effect",
+          "mongodb",
+          "pg",
+          "temporal-polyfill",
+        ]),
+        devDependencies: pinned([
+          "@prisma/cli-engine",
+          "@prisma/management-api-sdk",
+          "@types/node",
+          "@types/pg",
+          "prisma",
+          "tsdown",
+          "tsx",
+          "typescript",
+        ]),
+      },
+    };
+    for (const provider of databaseProviders) {
+      await withPackageJson(async (projectDir) => {
+        const options = { template: "minimal", packageManager: "yarn", projectDir } as const;
+        await writeCreateTemplateDependencies(options);
+        await writePrismaDependencies(provider, "yarn", "psl", projectDir);
+        await writeYarnPeerDependencies(options);
+        const { dependencies, devDependencies } = await readPackageJson(projectDir);
+
+        expect({ dependencies, devDependencies }).toEqual(expected[provider]);
+      });
+    }
+  });
+
+  test("leaves peer dependencies to package managers that install them", async () => {
+    for (const packageManager of packageManagers.filter((name) => name !== "yarn")) {
+      for (const provider of databaseProviders) {
+        await withPackageJson(async (projectDir) => {
+          const options = { template: "minimal", packageManager, projectDir } as const;
+          await writeCreateTemplateDependencies(options);
+          await writePrismaDependencies(provider, packageManager, "psl", projectDir);
+          const before = await readPackageJson(projectDir);
+          await writeYarnPeerDependencies(options);
+
+          expect(await readPackageJson(projectDir)).toEqual(before);
+          expect(before.dependencies?.pg).toBeUndefined();
+          expect(before.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
+        });
+      }
+    }
+  });
+
+  test("adds Yarn peers to every package.json of a Turborepo app", async () => {
+    const expected = {
+      postgres: {
+        root: {
+          dependencies: pinned([
+            "@prisma/composer",
+            "@prisma/composer-prisma-cloud",
+            "@prisma/orm-postgres",
+            "alchemy",
+            "effect",
+            "pg",
+            "temporal-polyfill",
+          ]),
+          devDependencies: pinned([
+            "@prisma/cli-engine",
+            "@prisma/dev",
+            "@prisma/management-api-sdk",
+            "@types/node",
+            "@types/pg",
+            "prisma",
+            "turbo",
+            "typescript",
+          ]),
+        },
+        database: {
+          dependencies: pinned(["@prisma/orm-postgres", "pg", "temporal-polyfill"]),
+          devDependencies: pinned(["@types/pg", "typescript"]),
+        },
+      },
+      mongo: {
+        root: {
+          dependencies: pinned([
+            "@prisma/composer",
+            "@prisma/composer-prisma-cloud",
+            "@prisma/orm-mongo",
+            "@prisma/orm-postgres",
+            "alchemy",
+            "arktype",
+            "effect",
+            "mongodb",
+            "pg",
+            "temporal-polyfill",
+          ]),
+          devDependencies: pinned([
+            "@prisma/cli-engine",
+            "@prisma/management-api-sdk",
+            "@types/node",
+            "@types/pg",
+            "prisma",
+            "turbo",
+            "typescript",
+          ]),
+        },
+        database: {
+          dependencies: pinned(["@prisma/orm-mongo", "arktype", "mongodb", "temporal-polyfill"]),
+          devDependencies: pinned(["typescript"]),
+        },
+      },
+    };
+    const server = {
+      dependencies: { "@repo/database": "workspace:*" },
+      devDependencies: pinned(["@types/node", "tsdown", "tsx", "typescript"]),
+    };
+    for (const provider of databaseProviders) {
+      const projectDir = await mkdtemp(path.join(tmpdir(), "create-prisma-yarn-turborepo-"));
+      try {
+        const options = { template: "turborepo", packageManager: "yarn", projectDir } as const;
+        await scaffoldCreateTemplate({
+          ...options,
+          projectName: "yarn-turborepo",
+          provider,
+          authoring: "psl",
+        });
+        await writeCreateTemplateDependencies(options);
+        await writePrismaDependencies(provider, "yarn", "psl", projectDir, {
+          template: "turborepo",
+        });
+        await writeYarnPeerDependencies(options);
+        const sections = async (relativeDir: string) => {
+          const { dependencies, devDependencies } = await readPackageJson(
+            path.join(projectDir, relativeDir),
+          );
+          return { dependencies, devDependencies };
+        };
+
+        expect(await sections(".")).toEqual(expected[provider].root);
+        expect(await sections("apps/server")).toEqual(server);
+        expect(await sections("packages/database")).toEqual(expected[provider].database);
+      } finally {
+        await rm(projectDir, { recursive: true, force: true });
+      }
+    }
   });
 
   test("writes Deno-native Prisma scripts without Composer dependencies", async () => {
@@ -366,6 +545,7 @@ describe("generated templates", () => {
               await writePrismaDependencies(provider, packageManager, authoring, projectDir, {
                 template,
               });
+              await writeYarnPeerDependencies({ template, packageManager, projectDir });
 
               const packageJson = await readPackageJson(projectDir);
               expect(packageJson.devDependencies?.["@prisma/dev"]).toBe(
@@ -425,6 +605,8 @@ describe("generated templates", () => {
                 "utf8",
               );
 
+              expect(moduleSource).toContain('import { appRoot } from "@prisma/composer";');
+              expect(moduleSource).toContain('export default appRoot("matrix-app",');
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
               expect(packageJson.dependencies).toHaveProperty("alchemy");
@@ -465,20 +647,43 @@ describe("generated templates", () => {
                 expect(database.dependencies).toHaveProperty(
                   provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
                 );
+                const yarn = packageManager === "yarn";
+                const version = (name: keyof typeof dependencyVersionMap, present: boolean) =>
+                  present ? dependencyVersionMap[name] : undefined;
+                expect(root.dependencies?.["@prisma/orm-postgres"]).toBe(
+                  version("@prisma/orm-postgres", provider === "postgres" || yarn),
+                );
+                expect(root.dependencies?.pg).toBe(version("pg", yarn));
+                expect(root.devDependencies?.["@types/pg"]).toBe(version("@types/pg", yarn));
+                expect(root.dependencies?.["temporal-polyfill"]).toBe(
+                  version("temporal-polyfill", yarn),
+                );
+                expect(root.dependencies?.arktype).toBe(version("arktype", provider === "mongo"));
+                expect(root.dependencies?.mongodb).toBe(
+                  version("mongodb", provider === "mongo" && yarn),
+                );
+                expect(root.devDependencies?.["@prisma/cli-engine"]).toBe(
+                  version("@prisma/cli-engine", yarn),
+                );
+                expect(root.devDependencies?.["@prisma/management-api-sdk"]).toBe(
+                  version("@prisma/management-api-sdk", yarn),
+                );
+                expect(database.dependencies?.["@prisma/orm-postgres"]).toBe(
+                  version("@prisma/orm-postgres", provider === "postgres"),
+                );
+                expect(database.dependencies?.pg).toBe(
+                  version("pg", provider === "postgres" && yarn),
+                );
+                expect(database.devDependencies?.["@types/pg"]).toBe(
+                  version("@types/pg", provider === "postgres" && yarn),
+                );
                 expect(database.dependencies?.["temporal-polyfill"]).toBe(
-                  provider === "postgres" ? dependencyVersionMap["temporal-polyfill"] : undefined,
+                  version("temporal-polyfill", provider === "postgres" || yarn),
                 );
                 for (const name of ["arktype", "mongodb"] as const) {
-                  expect(database.dependencies?.[name]).toBe(
-                    provider === "mongo" ? dependencyVersionMap[name] : undefined,
-                  );
-                  expect(root.dependencies?.[name]).toBe(
-                    provider === "mongo" && name === "arktype"
-                      ? dependencyVersionMap.arktype
-                      : undefined,
-                  );
+                  expect(database.dependencies?.[name]).toBe(version(name, provider === "mongo"));
                 }
-                expect(root.dependencies?.["temporal-polyfill"]).toBeUndefined();
+                expect(database.devDependencies?.["@prisma/cli-engine"]).toBeUndefined();
                 expect(root.dependencies).toHaveProperty(
                   provider === "postgres" ? "@prisma/orm-postgres" : "@prisma/orm-mongo",
                 );
@@ -580,7 +785,10 @@ describe("generated templates", () => {
                   expect(composerSource).toContain("dataContract<Contract>(contractJson)");
                 }
               } else {
-                expect(moduleSource).toContain('envSecret("MONGODB_URL")');
+                expect(moduleSource).toContain(
+                  'provision(variable.secret({ name: "MONGODB_URL" }))',
+                );
+                expect(moduleSource).toContain("provision(app, { input: { databaseUrl } })");
                 expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).not.toContain(".prisma-composer");
               }
