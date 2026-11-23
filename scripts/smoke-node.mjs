@@ -27,6 +27,68 @@ async function scaffold(cli, parentDirectory, args, scaffoldEnv) {
   return path.join(parentDirectory, "app");
 }
 
+async function expectPackageManager(appDirectory, expected) {
+  const { packageManager } = JSON.parse(
+    await readFile(path.join(appDirectory, "package.json"), "utf8"),
+  );
+  if (packageManager !== expected) {
+    throw new Error(`Generated packageManager is ${packageManager}, expected ${expected}`);
+  }
+}
+
+async function installPackedCli() {
+  const packed = await execa("npm", [
+    "pack",
+    "--ignore-scripts",
+    "--pack-destination",
+    directory,
+    "--json",
+  ]);
+  const [{ filename }] = JSON.parse(packed.stdout);
+  await execa(
+    "npm",
+    [
+      "install",
+      "--prefix",
+      npmDirectory,
+      path.join(directory, filename),
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+    ],
+    {
+      env: { ...env, npm_config_engine_strict: "true" },
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  );
+  return path.join(npmDirectory, "node_modules/create-prisma/dist/cli.mjs");
+}
+
+async function smokeNpmPostgresApp(cli) {
+  const appDirectory = await scaffold(
+    cli,
+    npmDirectory,
+    [
+      "--template",
+      "minimal",
+      "--provider",
+      "postgres",
+      "--authoring",
+      "psl",
+      "--package-manager",
+      "npm",
+    ],
+    env,
+  );
+  const { stdout: npmVersion } = await execa("npm", ["--version"], { cwd: appDirectory });
+  await expectPackageManager(appDirectory, `npm@${npmVersion}`);
+  const options = { cwd: appDirectory, env, stdout: "inherit", stderr: "inherit" };
+  await execa("npm", ["run", "build"], options);
+  await execa("npm", ["exec", "--", "tsc", "--noEmit"], options);
+  return npmVersion;
+}
+
 // Yarn does not install peer dependencies, so this app catches a peer missing from the
 // generated package.json. It is created outside the npm prefix, whose package.json Yarn
 // would take as the app's project root.
@@ -57,6 +119,7 @@ async function smokeYarnMongoApp(cli) {
     ],
     yarnEnv,
   );
+  await expectPackageManager(appDirectory, `yarn@${YARN_VERSION}`);
   const options = { cwd: appDirectory, env: yarnEnv, stdout: "inherit", stderr: "inherit" };
   await execa("yarn", ["run", "contract:emit"], options);
   await execa("yarn", ["run", "build"], options);
@@ -64,57 +127,8 @@ async function smokeYarnMongoApp(cli) {
 }
 
 try {
-  const packed = await execa("npm", [
-    "pack",
-    "--ignore-scripts",
-    "--pack-destination",
-    directory,
-    "--json",
-  ]);
-  const [{ filename }] = JSON.parse(packed.stdout);
-  await execa(
-    "npm",
-    [
-      "install",
-      "--prefix",
-      npmDirectory,
-      path.join(directory, filename),
-      "--ignore-scripts",
-      "--no-audit",
-      "--no-fund",
-    ],
-    {
-      env: { ...env, npm_config_engine_strict: "true" },
-      stdout: "inherit",
-      stderr: "inherit",
-    },
-  );
-  const cli = path.join(npmDirectory, "node_modules/create-prisma/dist/cli.mjs");
-  const appDirectory = await scaffold(
-    cli,
-    npmDirectory,
-    [
-      "--template",
-      "minimal",
-      "--provider",
-      "postgres",
-      "--authoring",
-      "psl",
-      "--package-manager",
-      "npm",
-    ],
-    env,
-  );
-  const { stdout: npmVersion } = await execa("npm", ["--version"], { cwd: appDirectory });
-  const { packageManager } = JSON.parse(
-    await readFile(path.join(appDirectory, "package.json"), "utf8"),
-  );
-  if (packageManager !== `npm@${npmVersion}`) {
-    throw new Error(`Generated packageManager is ${packageManager}, expected npm@${npmVersion}`);
-  }
-  const options = { cwd: appDirectory, env, stdout: "inherit", stderr: "inherit" };
-  await execa("npm", ["run", "build"], options);
-  await execa("npm", ["exec", "--", "tsc", "--noEmit"], options);
+  const cli = await installPackedCli();
+  const npmVersion = await smokeNpmPostgresApp(cli);
   await smokeYarnMongoApp(cli);
   console.log(
     `Packed CLI engine check, scaffold, npm install, build and typecheck passed on Node ${process.versions.node} with npm ${npmVersion}; a Yarn ${YARN_VERSION} MongoDB app installed, emitted its contract, built and typechecked.`,
