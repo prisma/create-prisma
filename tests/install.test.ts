@@ -425,6 +425,8 @@ describe("generated templates", () => {
                 "utf8",
               );
 
+              expect(moduleSource).toContain('import { appRoot } from "@prisma/composer";');
+              expect(moduleSource).toContain('export default appRoot("matrix-app",');
               expect(packageJson.scripts?.deploy).toBeDefined();
               expect(packageJson.dependencies).toHaveProperty("@prisma/composer");
               expect(packageJson.dependencies).toHaveProperty("alchemy");
@@ -580,7 +582,10 @@ describe("generated templates", () => {
                   expect(composerSource).toContain("dataContract<Contract>(contractJson)");
                 }
               } else {
-                expect(moduleSource).toContain('envSecret("MONGODB_URL")');
+                expect(moduleSource).toContain(
+                  'provision(variable.secret({ name: "MONGODB_URL" }))',
+                );
+                expect(moduleSource).toContain("provision(app, { input: { databaseUrl } })");
                 expect(prismaConfig).toContain("connection: process.env.DATABASE_URL!");
                 expect(seedSource).not.toContain(".prisma-composer");
               }
