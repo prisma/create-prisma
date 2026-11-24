@@ -15,7 +15,7 @@ describe("Prisma 8 dependency versions", () => {
     expect(getDependencyVersion("prisma")).toBe("8.0.0-rc.35");
     expect(getDependencyVersion("alchemy")).toBe("2.0.0-beta.87");
     expect(getDependencyVersion("effect")).toBe("4.1.4");
-    expect(getDependencyVersion("turbo")).toBe("2.11.10");
+    expect(getDependencyVersion("turbo")).toBe("2.11.13");
     expect(getDependencyVersion("typescript")).toBe("^6.0.3");
   });
 

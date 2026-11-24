@@ -1,7 +1,7 @@
 import type { CreateTemplate, PackageManager } from "../types";
 
 export const dependencyVersionMap = {
-  "@astrojs/node": "^11.1.9",
+  "@astrojs/node": "^11.1.14",
   "@elysia/node": "^1.4.6",
   "@prisma/composer": "0.40.0",
   "@prisma/composer-prisma-cloud": "0.40.0",
@@ -20,25 +20,25 @@ export const dependencyVersionMap = {
   // bundles (or `prisma contract emit` rejects the ORM packages).
   // `bun run check:pins` verifies both.
   "@prisma/orm-postgres": "8.0.0-rc.25",
-  "@sveltejs/adapter-node": "^6.0.0",
-  "@types/node": "^26.6.5",
-  "@types/pg": "^8.20.0",
-  "@vitejs/devtools": "0.7.6",
+  "@sveltejs/adapter-node": "^6.0.5",
+  "@types/node": "^26.6.6",
+  "@types/pg": "^8.23.1",
+  "@vitejs/devtools": "0.8.3",
   alchemy: "2.0.0-beta.87",
-  arktype: "^2.2.9",
-  dotenv: "^18.0.9",
+  arktype: "^2.2.10",
+  dotenv: "^18.0.10",
   effect: "4.1.4",
-  mongodb: "^7.7.0",
-  "mongodb-memory-server": "^11.3.0",
-  nitro: "^3.0.260903-beta",
-  pg: "^8.22.0",
+  mongodb: "^7.9.1",
+  "mongodb-memory-server": "^11.4.0",
+  nitro: "^3.0.261103-rc",
+  pg: "^8.23.1",
   // Must match the @prisma/composer-cli version this prisma release depends on.
   // `bun run check:pins` verifies that against the Composer pins above.
   prisma: "8.0.0-rc.35",
   // Node 22 and 24, and Node 26 builds without Temporal, need it for Temporal-backed date fields.
   "temporal-polyfill": "^1.0.8",
-  tsdown: "^0.23.1",
-  turbo: "2.11.10",
+  tsdown: "^0.23.7",
+  turbo: "2.11.13",
   tsx: "^4.23.15",
   typescript: "^6.0.3",
 } as const;
