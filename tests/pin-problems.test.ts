@@ -417,12 +417,12 @@ describe("check:pins", () => {
   test("checks the newest version npm lists for a range pin", async () => {
     const pgSpec = `pg@${dependencyVersionMap.pg}`;
     const { exitCode, stderr } = await runCheckPins({
-      extraPeers: { "@prisma/orm-postgres": { pg: "~8.22.0" } },
-      publishedVersions: { [pgSpec]: ["8.23.0", "8.9.0", "8.23.1", "8.23.1-beta.2", "8.22.0"] },
+      extraPeers: { "@prisma/orm-postgres": { pg: "~8.23.0" } },
+      publishedVersions: { [pgSpec]: ["8.24.0", "8.9.0", "8.24.1", "8.24.1-beta.2", "8.23.1"] },
     });
     expect(exitCode).toBe(1);
     expect(stderr).toContain(
-      `requires pg@~8.22.0, but the pin ${dependencyVersionMap.pg} lets a fresh install resolve pg@8.23.1.`,
+      `requires pg@~8.23.0, but the pin ${dependencyVersionMap.pg} lets a fresh install resolve pg@8.24.1.`,
     );
   });
 
